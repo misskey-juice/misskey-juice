@@ -422,15 +422,35 @@ function stampAt(ctx: CanvasRenderingContext2D, stroke: StrokeShape, x: number, 
 		return;
 	}
 	const r = Math.max(0.5, width / 2);
-	const [cr, cg, cb] = hexToRgb(stroke.color);
-	const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+	// JUICE: 筆跡ごとにグラデーションを作ると重い(線が多い絵の描き直しで数秒かかる)ので、色ごとに作っておいた筆跡の絵を
+	// 大きさに合わせて置く
+	ctx.drawImage(softStampOf(stroke.color), x - r, y - r, r * 2, r * 2);
+}
+
+// JUICE: にじみ筆の筆跡の絵(色ごと)。使う色が多すぎたら作り直す
+const SOFT_STAMP_SIZE = 128;
+const softStampCache = new Map<string, HTMLCanvasElement>();
+
+function softStampOf(color: string): HTMLCanvasElement {
+	let stamp = softStampCache.get(color);
+	if (stamp != null) return stamp;
+	if (softStampCache.size >= 32) softStampCache.clear();
+	stamp = createScratch();
+	stamp.width = SOFT_STAMP_SIZE;
+	stamp.height = SOFT_STAMP_SIZE;
+	const sctx = stamp.getContext('2d')!;
+	const c = SOFT_STAMP_SIZE / 2;
+	const [cr, cg, cb] = hexToRgb(color);
+	const gradient = sctx.createRadialGradient(c, c, 0, c, c, c);
 	gradient.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${SOFT_STAMP_ALPHA})`);
 	gradient.addColorStop(0.6, `rgba(${cr}, ${cg}, ${cb}, ${SOFT_STAMP_ALPHA * 0.5})`);
 	gradient.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
-	ctx.fillStyle = gradient;
-	ctx.beginPath();
-	ctx.arc(x, y, r, 0, Math.PI * 2);
-	ctx.fill();
+	sctx.fillStyle = gradient;
+	sctx.beginPath();
+	sctx.arc(c, c, c, 0, Math.PI * 2);
+	sctx.fill();
+	softStampCache.set(color, stamp);
+	return stamp;
 }
 
 /**
@@ -1205,10 +1225,19 @@ export class DrawCanvasEngine {
 		const splits: { id: string; pieces: CanvasStroke[] }[] = [];
 		const layer = this.layers.get(userId);
 		if (layer == null || shapes.length === 0) return { selected, splits };
-		const inside = (x: number, y: number) => shapes.some(shape => pointInPolygon(x, y, shape));
+		// JUICE: 選んだ形を囲む範囲の外の点・線は、多角形の内外を調べない(線や頂点が多いと重いため)
+		let bounds: Rect | null = null;
+		for (const shape of shapes) {
+			for (let i = 0; i < shape.length; i += 2) bounds = unionRect(bounds, { x0: shape[i], y0: shape[i + 1], x1: shape[i], y1: shape[i + 1] });
+		}
+		if (bounds == null) return { selected, splits };
+		const b = bounds;
+		const inside = (x: number, y: number) => x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1 && shapes.some(shape => pointInPolygon(x, y, shape));
 		// 送る形式と同じ細かさにそろえる(自分の画面とほかの人の画面で切れ目の位置がずれないように)
 		const q = (v: number) => Math.round(v * POINT_SCALE) / POINT_SCALE;
 		for (const stroke of layer.strokes) {
+			const r = strokeRect(stroke);
+			if (r == null || !rectsIntersect(r, { x0: b.x0 - 1, y0: b.y0 - 1, x1: b.x1 + 1, y1: b.y1 + 1 })) continue;
 			const p = stroke.points;
 			const count = Math.floor(p.length / 3);
 			if (count === 0) continue;
@@ -1256,9 +1285,23 @@ export class DrawCanvasEngine {
 		const map = new Map(splits.map(split => [split.id, split.pieces]));
 		// このレイヤーに無い線なら何もしない(その人の全てのレイヤーに同じ操作をすることがあるため)
 		if (!layer.strokes.some(stroke => map.has(stroke.id))) return;
+		// JUICE: 置き換える前と後の線の範囲だけを描き直す(レイヤー全体を描き直すと、線が多いときに重いため)
+		let rect: Rect | null = null;
+		for (const stroke of layer.strokes) {
+			const pieces = map.get(stroke.id);
+			if (pieces == null) continue;
+			rect = unionRect(rect, strokeRect(stroke));
+			for (const piece of pieces) rect = unionRect(rect, strokeRect(piece));
+		}
 		layer.strokes = layer.strokes.flatMap(stroke => map.get(stroke.id) ?? [stroke]);
-		this.redrawCommitted(layer);
-		this.requestRender();
+		this.redrawStrokesRegion(layer, rect);
+	}
+
+	// JUICE: 線が変わった範囲だけを描き直して表示する(範囲が無ければ何もしない)
+	private redrawStrokesRegion(layer: Layer, rect: Rect | null): void {
+		if (rect == null) return;
+		this.redrawCommitted(layer, rect);
+		this.requestRender(rect);
 	}
 
 	/**
@@ -1318,46 +1361,132 @@ export class DrawCanvasEngine {
 		const layer = this.layers.get(userId);
 		if (layer == null || (dx === 0 && dy === 0)) return;
 		if (ids != null && !layer.strokes.some(stroke => ids.has(stroke.id))) return;
-		layer.strokes = layer.strokes.map(stroke => (ids == null || ids.has(stroke.id) ? {
-			...stroke,
-			points: shiftPoints(stroke.points, dx, dy),
-			...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, dx, dy) } : {}),
-		} : stroke));
-		this.redrawCommitted(layer);
-		this.requestRender();
+		// JUICE: 選んだ線を動かしたときは、動かす前と後の範囲だけを描き直す(レイヤー全体を動かしたときは全体)
+		let rect: Rect | null = null;
+		layer.strokes = layer.strokes.map(stroke => {
+			if (ids != null && !ids.has(stroke.id)) return stroke;
+			const moved = {
+				...stroke,
+				points: shiftPoints(stroke.points, dx, dy),
+				...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, dx, dy) } : {}),
+			};
+			if (ids != null) rect = unionRect(unionRect(rect, strokeRect(stroke)), strokeRect(moved));
+			return moved;
+		});
+		if (ids == null) {
+			this.redrawCommitted(layer);
+			this.requestRender();
+			return;
+		}
+		this.redrawStrokesRegion(layer, rect);
 	}
 
 	public deleteStrokes(userId: string, ids: Set<string>): void {
 		const layer = this.layers.get(userId);
 		if (layer == null) return;
-		const before = layer.strokes.length;
+		let rect: Rect | null = null;
+		for (const stroke of layer.strokes) {
+			if (ids.has(stroke.id)) rect = unionRect(rect, strokeRect(stroke));
+		}
+		if (rect == null) return;
 		layer.strokes = layer.strokes.filter(stroke => !ids.has(stroke.id));
-		if (layer.strokes.length === before) return;
-		this.redrawCommitted(layer);
-		this.requestRender();
+		this.redrawStrokesRegion(layer, rect);
 	}
 
 	// 移動ツールでドラッグしている間の表示。動かす線と動かさない線を別々のキャンバスに描いておき、
 	// 表示するときに動かす線だけをずらして重ねる(ドラッグのたびに全部の線を描き直さないように)
-	private moving: { userId: string; still: HTMLCanvasElement; moving: HTMLCanvasElement; dx: number; dy: number; angle: number; pivotX: number; pivotY: number } | null = null;
+	// JUICE: 動かす線は、その線を囲む範囲だけの小さいキャンバス(origin=その左上のキャンバス座標)に描く。動かさない線は、
+	// 描き終わった絵を写してから、動かす線の範囲だけを描き直して作る(線が多いときに、全部の線を描き直さないように)。
+	// 表示するときは、前に描いた範囲と今の範囲だけを重ね直す
+	private moving: {
+		userId: string;
+		still: HTMLCanvasElement | null;
+		moving: HTMLCanvasElement;
+		originX: number;
+		originY: number;
+		dx: number;
+		dy: number;
+		angle: number;
+		pivotX: number;
+		pivotY: number;
+		// 前に表示した、動かす線の範囲(nullなら全体を描き直す)
+		lastRect: Rect | null;
+	} | null = null;
 
 	public beginMove(userId: string, ids: Set<string> | null): void {
 		const layer = this.layers.get(userId);
 		if (layer == null) return;
-		const still = createCanvas(this.width, this.height);
-		const moving = createCanvas(this.width, this.height);
-		const stillCtx = still.getContext('2d')!;
+		if (ids == null) {
+			// レイヤー全体: 描き終わった絵をそのまま動かす
+			const moving = createCanvas(this.width, this.height);
+			moving.getContext('2d')!.drawImage(layer.committed, 0, 0);
+			this.moving = { userId, still: null, moving, originX: 0, originY: 0, dx: 0, dy: 0, angle: 0, pivotX: 0, pivotY: 0, lastRect: null };
+			this.requestRender();
+			return;
+		}
+		let rect: Rect | null = null;
+		for (const stroke of layer.strokes) {
+			if (ids.has(stroke.id)) rect = unionRect(rect, strokeRect(stroke));
+		}
+		const r = rect ?? { x0: 0, y0: 0, x1: 1, y1: 1 };
+		const x0 = Math.floor(r.x0);
+		const y0 = Math.floor(r.y0);
+		const moving = createCanvas(Math.max(1, Math.ceil(r.x1) - x0), Math.max(1, Math.ceil(r.y1) - y0));
 		const movingCtx = moving.getContext('2d')!;
-		for (const stroke of layer.strokes) drawStroke(ids == null || ids.has(stroke.id) ? movingCtx : stillCtx, stroke);
-		this.moving = { userId, still, moving, dx: 0, dy: 0, angle: 0, pivotX: 0, pivotY: 0 };
+		movingCtx.translate(-x0, -y0);
+		const still = createCanvas(this.width, this.height);
+		const stillCtx = still.getContext('2d')!;
+		stillCtx.drawImage(layer.committed, 0, 0);
+		// 動かす線の範囲だけ、動かさない線で描き直す
+		stillCtx.save();
+		stillCtx.beginPath();
+		stillCtx.rect(x0, y0, moving.width, moving.height);
+		stillCtx.clip();
+		stillCtx.clearRect(x0, y0, moving.width, moving.height);
+		for (const stroke of layer.strokes) {
+			if (ids.has(stroke.id)) {
+				drawStroke(movingCtx, stroke);
+			} else {
+				const sr = strokeRect(stroke);
+				if (sr != null && rectsIntersect(sr, r)) drawStroke(stillCtx, stroke);
+			}
+		}
+		stillCtx.restore();
+		this.moving = { userId, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, pivotX: 0, pivotY: 0, lastRect: null };
 		this.requestRender();
+	}
+
+	// 動かしている線の、今表示する範囲(回転も含めて囲む範囲)
+	private movingRect(): Rect | null {
+		const m = this.moving;
+		if (m == null) return null;
+		const cos = Math.cos(m.angle);
+		const sin = Math.sin(m.angle);
+		let rect: Rect | null = null;
+		for (const [cx, cy] of [[m.originX, m.originY], [m.originX + m.moving.width, m.originY], [m.originX, m.originY + m.moving.height], [m.originX + m.moving.width, m.originY + m.moving.height]]) {
+			const x = m.pivotX + (cx - m.pivotX) * cos - (cy - m.pivotY) * sin + m.dx;
+			const y = m.pivotY + (cx - m.pivotX) * sin + (cy - m.pivotY) * cos + m.dy;
+			rect = unionRect(rect, { x0: Math.floor(x) - 2, y0: Math.floor(y) - 2, x1: Math.ceil(x) + 2, y1: Math.ceil(y) + 2 });
+		}
+		return rect;
+	}
+
+	// 動かしている線の表示を変えた(前の範囲と今の範囲だけを表示し直す。レイヤー全体を動かしているときは全体)
+	private movingChanged(): void {
+		const m = this.moving;
+		if (m == null) return;
+		if (m.still == null) {
+			this.requestRender();
+			return;
+		}
+		this.requestRender(unionRect(m.lastRect, this.movingRect()));
 	}
 
 	public updateMove(dx: number, dy: number): void {
 		if (this.moving == null) return;
 		this.moving.dx = dx;
 		this.moving.dy = dy;
-		this.requestRender();
+		this.movingChanged();
 	}
 
 	/**
@@ -1368,12 +1497,15 @@ export class DrawCanvasEngine {
 		this.moving.angle = angle;
 		this.moving.pivotX = pivotX;
 		this.moving.pivotY = pivotY;
-		this.requestRender();
+		this.movingChanged();
 	}
 
 	public endMove(): void {
+		const m = this.moving;
 		this.moving = null;
-		this.requestRender();
+		// 動かしていた範囲だけを表示し直す(描き終わった絵の描き直しは、この後の線の移動・置き換えで行う)
+		if (m != null && m.still != null) this.requestRender(unionRect(m.lastRect, { x0: m.originX, y0: m.originY, x1: m.originX + m.moving.width, y1: m.originY + m.moving.height }));
+		else this.requestRender();
 	}
 	//#endregion
 
@@ -1405,18 +1537,36 @@ export class DrawCanvasEngine {
 	private layerImage(layer: Layer): HTMLCanvasElement {
 		// 移動ツールでドラッグしている間は、動かさない線の上に動かす線をずらして重ねる
 		if (this.moving != null && this.moving.userId === layer.key) {
+			const m = this.moving;
+			const first = layer.live == null || m.lastRect == null || m.still == null;
 			layer.live ??= this.takeLiveCanvas();
 			const ctx = layer.live.getContext('2d')!;
-			ctx.globalCompositeOperation = 'copy';
-			ctx.drawImage(this.moving.still, 0, 0);
-			ctx.globalCompositeOperation = 'source-over';
-			const m = this.moving;
+			const now = this.movingRect();
 			ctx.save();
+			if (first) {
+				ctx.globalCompositeOperation = 'copy';
+				if (m.still != null) ctx.drawImage(m.still, 0, 0);
+				else ctx.clearRect(0, 0, this.width, this.height);
+			} else {
+				// 前に描いた範囲と今の範囲だけを、動かさない線の絵に戻してから描く
+				const dirty = unionRect(m.lastRect, now)!;
+				const x = Math.max(0, dirty.x0);
+				const y = Math.max(0, dirty.y0);
+				const w = Math.min(this.width, dirty.x1) - x;
+				const h = Math.min(this.height, dirty.y1) - y;
+				ctx.beginPath();
+				ctx.rect(x, y, Math.max(0, w), Math.max(0, h));
+				ctx.clip();
+				ctx.globalCompositeOperation = 'copy';
+				if (w > 0 && h > 0) ctx.drawImage(m.still!, x, y, w, h, x, y, w, h);
+			}
+			ctx.globalCompositeOperation = 'source-over';
 			ctx.translate(m.pivotX + m.dx, m.pivotY + m.dy);
 			ctx.rotate(m.angle);
 			ctx.translate(-m.pivotX, -m.pivotY);
-			ctx.drawImage(m.moving, 0, 0);
+			ctx.drawImage(m.moving, m.originX, m.originY);
 			ctx.restore();
+			m.lastRect = now;
 			layer.liveDirty = 'full';
 			return layer.live;
 		}
