@@ -405,8 +405,11 @@ export class DrawRoomChannel extends Channel {
 					return;
 				}
 				// idを先頭にする(Redisの処理で、大きな点の列をたどらずにidを取り出せるように)
-				const added = await this.drawRoomService.addStroke(room.id, user.id, { id: body.id, ...stroke });
-				if (!added) this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
+				const result = await this.drawRoomService.addStroke(room.id, user.id, { id: body.id, ...stroke });
+				if (result === 'added') break;
+				this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
+				// JUICE: 上限に達して描けなかったことを、描いた本人に知らせる(黙って線が消えないように)
+				if (result === 'strokes' || result === 'bytes') this.send('strokeLimitReached', { kind: result });
 				break;
 			}
 			case 'undo':

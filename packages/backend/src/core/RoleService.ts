@@ -84,6 +84,9 @@ export type RolePolicies = {
 	canCreateDrawRoom: boolean;
 	// JUICE: 絵チャで作れる(途中で変えられる)キャンバスの幅・高さの上限(px)
 	drawRoomMaxCanvasSize: number;
+	// JUICE: 絵チャで1人が1つの部屋に置ける線の本数と、線のデータ量(MB)の上限
+	drawRoomMaxStrokes: number;
+	drawRoomMaxStrokeMegabytes: number;
 	canApproveEmojiRequests: boolean;
 	canApproveAvatarDecorationRequests: boolean;
 	canApproveSignups: boolean;
@@ -143,6 +146,8 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	announcementReactionTypeLimit: 20,
 	canCreateDrawRoom: true,
 	drawRoomMaxCanvasSize: 3840,
+	drawRoomMaxStrokes: 30000,
+	drawRoomMaxStrokeMegabytes: 64,
 	canApproveEmojiRequests: false,
 	canApproveAvatarDecorationRequests: false,
 	canApproveSignups: false,
@@ -485,6 +490,8 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			announcementReactionTypeLimit: calc('announcementReactionTypeLimit', vs => Math.max(...vs)),
 			canCreateDrawRoom: calc('canCreateDrawRoom', vs => vs.some(v => v === true)),
 			drawRoomMaxCanvasSize: calc('drawRoomMaxCanvasSize', vs => Math.max(...vs)),
+			drawRoomMaxStrokes: calc('drawRoomMaxStrokes', vs => Math.max(...vs)),
+			drawRoomMaxStrokeMegabytes: calc('drawRoomMaxStrokeMegabytes', vs => Math.max(...vs)),
 			canApproveEmojiRequests: calc('canApproveEmojiRequests', vs => vs.some(v => v === true)),
 			canApproveAvatarDecorationRequests: calc('canApproveAvatarDecorationRequests', vs => vs.some(v => v === true)),
 			canApproveSignups: calc('canApproveSignups', vs => vs.some(v => v === true)),

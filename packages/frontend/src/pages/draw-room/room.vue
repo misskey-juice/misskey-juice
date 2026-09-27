@@ -225,6 +225,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<rect v-if="selecting && selection != null" :x="selection.x" :y="selection.y" :width="selection.width" :height="selection.height" :class="$style.selectionOutline"/>
 					</svg>
 				</div>
+				<!-- JUICE: デバッグ情報(表示のメニューでオンにしたとき) -->
+				<div v-if="showDebugInfo && debugInfo != null && room != null" :class="$style.debugInfo" aria-hidden="true">
+					<div>{{ i18n.ts._drawRoom.debugMyStrokes }}: {{ debugInfo.myStrokes }} / {{ $i.policies.drawRoomMaxStrokes }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMyBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }} / {{ $i.policies.drawRoomMaxStrokeMegabytes }}MB</div>
+					<template v-if="debugInfo.layers.length > 1">
+						<div v-for="(layer, i) in debugInfo.layers" :key="i">&nbsp;&nbsp;{{ layer.name }}: {{ layer.strokes }}</div>
+					</template>
+					<div>{{ i18n.ts._drawRoom.debugRoomStrokes }}: {{ debugInfo.roomStrokes }} ({{ debugInfo.roomLayers }} {{ i18n.ts._drawRoom.debugLayers }})</div>
+					<div>{{ i18n.ts._drawRoom.debugPending }}: {{ debugInfo.pending }}</div>
+					<div>{{ i18n.ts._drawRoom.debugCanvas }}: {{ room.canvasWidth }}×{{ room.canvasHeight }} / {{ Math.round(view.scale * 100) }}% / {{ rotationDegrees }}°</div>
+					<div>{{ i18n.ts._drawRoom.debugRedraw }}: {{ debugInfo.lastRedrawMs.toFixed(1) }}ms ({{ debugInfo.lastRedrawFull ? i18n.ts._drawRoom.debugRedrawFull : i18n.ts._drawRoom.debugRedrawRegion }})</div>
+					<div>{{ i18n.ts._drawRoom.debugRender }}: {{ debugInfo.lastRenderMs.toFixed(1) }}ms</div>
+					<div>{{ i18n.ts._drawRoom.debugOnline }}: {{ onlineUserIds.size }}</div>
+				</div>
 				<!-- JUICE: ほかの人のカーソル(位置の点と、丸いアイコン) -->
 				<!-- 表示・濃さは、表示のメニューで変えられる(このブラウザに覚える) -->
 				<template v-if="showCursors">
@@ -1300,6 +1314,12 @@ function connect(): void {
 	}));
 	// JUICE: 自分の線の移動・削除・置き換えがサーバーで断られた(レイヤーの上限を超えた等)。
 	// 自分の画面では先に反映しているので、線を取り直してサーバーの状態に戻す
+	// JUICE: 線の本数・データ量の上限に達して、描いた線が受け付けられなかった
+	c.on('strokeLimitReached', payload => {
+		os.toast(payload.kind === 'strokes'
+			? i18n.tsx._drawRoom.strokeLimitReached({ n: $i.policies.drawRoomMaxStrokes })
+			: i18n.tsx._drawRoom.strokeBytesLimitReached({ n: $i.policies.drawRoomMaxStrokeMegabytes }));
+	});
 	c.on('operationRejected', () => {
 		clearStrokeSelection();
 		os.toast(i18n.ts._drawRoom.operationRejected);
@@ -1672,6 +1692,64 @@ const MIN_ZOOM = 0.1;
 
 // JUICE: 表示の好み(プロファイルに覚える。バックアップ・復元で戻る)。ほかの人のカーソルの表示・濃さ、横のパネルをしまう
 const showCursors = prefer.model('drawRoomShowCursors');
+
+//#region デバッグ情報(JUICE)
+const showDebugInfo = prefer.model('drawRoomShowDebugInfo');
+type DebugInfo = {
+	myStrokes: number;
+	myBytes: number;
+	layers: { name: string; strokes: number }[];
+	roomStrokes: number;
+	roomLayers: number;
+	pending: number;
+	lastRedrawMs: number;
+	lastRedrawFull: boolean;
+	lastRenderMs: number;
+};
+const debugInfo = ref<DebugInfo | null>(null);
+
+// 線のデータ量の見積もり(サーバーに保存する形のJSONの大きさ。点1つが5バイトで、base64にすると4/3倍)
+function estimateStrokeBytes(stroke: CanvasStroke): number {
+	const base64 = (points: number) => Math.ceil((Math.floor(points / 3) * 5) / 3) * 4;
+	return 140 + base64(stroke.points.length) + (stroke.clip != null ? base64(stroke.clip.length) : 0);
+}
+
+function updateDebugInfo(): void {
+	const e = engine.value;
+	if (e == null || !showDebugInfo.value) {
+		debugInfo.value = null;
+		return;
+	}
+	let myStrokes = 0;
+	let myBytes = 0;
+	const layers = myLayers.value.map(meta => {
+		const strokes = e.strokesOf(keyFor($i.id, meta.id));
+		myStrokes += strokes.length;
+		for (const stroke of strokes) myBytes += estimateStrokeBytes(stroke);
+		return { name: layerName($i.id, meta), strokes: strokes.length };
+	});
+	const summary = e.debugSummary();
+	debugInfo.value = {
+		myStrokes,
+		myBytes,
+		layers,
+		roomStrokes: summary.strokes,
+		roomLayers: summary.layers,
+		pending: summary.pending,
+		lastRedrawMs: e.stats.lastRedrawMs,
+		lastRedrawFull: e.stats.lastRedrawFull,
+		lastRenderMs: e.stats.lastRenderMs,
+	};
+}
+
+useInterval(updateDebugInfo, 1000, { immediate: true, afterMounted: true });
+watch(showDebugInfo, updateDebugInfo);
+
+function formatMegabytes(bytes: number): string {
+	return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+//#endregion
 const cursorOpacity = computed({
 	get: () => Math.min(1, Math.max(0.1, prefer.r.drawRoomCursorOpacity.value)),
 	set: (v: number) => prefer.commit('drawRoomCursorOpacity', v),
@@ -1801,6 +1879,11 @@ function openZoomMenu(ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.cursorOpacity,
 		ref: cursorOpacity,
 		options: [1, 0.7, 0.4, 0.2].map(value => ({ label: `${value * 100}%`, value })),
+	}, { type: 'divider' }, {
+		// JUICE: 線の本数・データ量などのデバッグ情報
+		type: 'switch',
+		text: i18n.ts._drawRoom.showDebugInfo,
+		ref: showDebugInfo,
 	}], (ev.currentTarget ?? ev.target) as HTMLElement);
 }
 
@@ -3806,6 +3889,22 @@ definePage(() => ({
 	pointer-events: none;
 	// まとめて届く間隔(0.1秒)に合わせて、次の位置までなめらかに動かす
 	transition: transform 0.1s linear;
+}
+
+.debugInfo {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1;
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 80%, transparent);
+	color: var(--MI_THEME-fg);
+	font-family: monospace;
+	font-size: 11px;
+	line-height: 1.5;
+	pointer-events: none;
+	white-space: nowrap;
 }
 
 .cursorHand {

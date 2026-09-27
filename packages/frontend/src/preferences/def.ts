@@ -241,6 +241,10 @@ export const PREF_DEF = definePreferences({
 	drawRoomGapClose: {
 		default: 'off' as 'off' | 'small' | 'medium' | 'large',
 	},
+	// 線の本数・データ量・描き直しの時間などのデバッグ情報を、キャンバスの上に出す
+	drawRoomShowDebugInfo: {
+		default: false,
+	},
 	// 画像を保存する形式
 	drawRoomImageFormat: {
 		default: 'png' as 'png' | 'webp' | 'jpeg',

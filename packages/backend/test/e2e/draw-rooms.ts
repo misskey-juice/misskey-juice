@@ -337,6 +337,27 @@ describe('絵チャ', () => {
 		await call('admin/roles/unassign', { userId: dave.id, roleId: limited.id }, alice);
 	});
 
+	test('ロールのdrawRoomMaxStrokesを超える線は受け付けず、描いた本人に上限に達したことが届く', async () => {
+		const limited = await role(alice, { isModerator: false, name: 'Draw Room Few Strokes' }, {
+			drawRoomMaxStrokes: { priority: 0, useDefault: false, value: 2 },
+		});
+		await call('admin/roles/assign', { userId: dave.id, roleId: limited.id }, alice);
+		const room = await createRoom(dave);
+		const reached: string[] = [];
+		const daveWs = await connectStream(dave, 'drawRoom', (msg) => {
+			if (msg.type === 'strokeLimitReached') reached.push(msg.body.kind);
+		}, { roomId: room.id });
+		try {
+			for (const id of ['k1', 'k2', 'k3']) sendToChannel(daveWs, 'stroke', stroke(id));
+			await vi.waitFor(() => assert.deepStrictEqual(reached, ['strokes']), { timeout: 5000, interval: 200 });
+			assert.deepStrictEqual(((await layersOf(room, dave)).find(l => l.userId === dave.id)?.strokes ?? []).map(s => s.id), ['k1', 'k2']);
+		} finally {
+			daveWs.close();
+		}
+		await call('draw-rooms/end', { roomId: room.id }, dave);
+		await call('admin/roles/unassign', { userId: dave.id, roleId: limited.id }, alice);
+	});
+
 	test('部屋主は自分を外せず、終了した部屋ではメンバーを外せない。幅・高さの片方だけの指定はエラー', async () => {
 		const onlyWidth = await call('draw-rooms/create', { title: 'x', visibility: 'local', maxMembers: 2, canvasWidth: 800 }, alice);
 		assert.strictEqual(onlyWidth.body.error.code, 'INVALID_CANVAS_SIZE');

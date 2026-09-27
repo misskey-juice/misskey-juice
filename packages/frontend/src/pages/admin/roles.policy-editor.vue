@@ -465,6 +465,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</XFolder>
 
+		<XFolder v-if="matchQuery([i18n.ts._role._options.drawRoomMaxStrokes, 'drawRoomMaxStrokes'])" v-model:policyMeta="policyMetaModel.drawRoomMaxStrokes" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.drawRoomMaxStrokes }}<span class="_juice">JUICE</span></template>
+			<template #valueText>{{ valuesModel.drawRoomMaxStrokes }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.drawRoomMaxStrokes" type="number" :disabled="disabled" :min="1" :max="200000">
+					<template #caption>{{ i18n.ts._role._options.drawRoomMaxStrokesCaption }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
+		<XFolder v-if="matchQuery([i18n.ts._role._options.drawRoomMaxStrokeMegabytes, 'drawRoomMaxStrokeMegabytes'])" v-model:policyMeta="policyMetaModel.drawRoomMaxStrokeMegabytes" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.drawRoomMaxStrokeMegabytes }}<span class="_juice">JUICE</span></template>
+			<template #valueText>{{ valuesModel.drawRoomMaxStrokeMegabytes }}MB</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.drawRoomMaxStrokeMegabytes" type="number" :disabled="disabled" :min="1" :max="512">
+					<template #suffix>MB</template>
+					<template #caption>{{ i18n.ts._role._options.drawRoomMaxStrokeMegabytesCaption }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
 		<XFolder v-if="matchQuery([i18n.ts._role._options.canApproveEmojiRequests, 'canApproveEmojiRequests'])" v-model:policyMeta="policyMetaModel.canApproveEmojiRequests" :isBaseRole="isBaseRole" :readonly="readonly">
 			<template #label>{{ i18n.ts._role._options.canApproveEmojiRequests }}<span class="_juice">JUICE</span></template>
 			<template #valueText>{{ valuesModel.canApproveEmojiRequests ? i18n.ts.yes : i18n.ts.no }}</template>

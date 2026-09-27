@@ -8524,6 +8524,22 @@ export interface Locale extends ILocale {
              */
             "drawRoomMaxCanvasSizeCaption": string;
             /**
+             * 絵チャで1人が描ける線の本数の上限
+             */
+            "drawRoomMaxStrokes": string;
+            /**
+             * 1つの部屋で、1人が持つ全てのレイヤーの線の合計です(1〜200000)。ペンを下ろしてから離すまで・塗りつぶし・消しゴムがそれぞれ1本です
+             */
+            "drawRoomMaxStrokesCaption": string;
+            /**
+             * 絵チャで1人が描ける線のデータ量の上限
+             */
+            "drawRoomMaxStrokeMegabytes": string;
+            /**
+             * 1つの部屋で、1人が持つ全てのレイヤーの線のデータ量の合計です(1〜512MB)。大きくすると、サーバーのRedisのメモリと、保存する部屋のデータが増えます
+             */
+            "drawRoomMaxStrokeMegabytesCaption": string;
+            /**
              * 絵文字申請の承認・却下
              */
             "canApproveEmojiRequests": string;
@@ -9777,6 +9793,62 @@ export interface Locale extends ILocale {
          * ほかの人のカーソルの濃さ
          */
         "cursorOpacity": string;
+        /**
+         * デバッグ情報を表示
+         */
+        "showDebugInfo": string;
+        /**
+         * 自分の線
+         */
+        "debugMyStrokes": string;
+        /**
+         * 自分の線のデータ量
+         */
+        "debugMyBytes": string;
+        /**
+         * 部屋の線(全員)
+         */
+        "debugRoomStrokes": string;
+        /**
+         * レイヤー
+         */
+        "debugLayers": string;
+        /**
+         * 描いている途中の線
+         */
+        "debugPending": string;
+        /**
+         * キャンバス
+         */
+        "debugCanvas": string;
+        /**
+         * 最後の描き直し
+         */
+        "debugRedraw": string;
+        /**
+         * 全体
+         */
+        "debugRedrawFull": string;
+        /**
+         * 一部
+         */
+        "debugRedrawRegion": string;
+        /**
+         * 最後の表示の更新
+         */
+        "debugRender": string;
+        /**
+         * 部屋を開いている人
+         */
+        "debugOnline": string;
+        /**
+         * 描ける線の本数の上限({n}本)に達したため、線を描けませんでした。いらない線を消すと、また描けます
+         */
+        "strokeLimitReached": ParameterizedString<"n">;
+        /**
+         * 描ける線のデータ量の上限({n}MB)に達したため、線を描けませんでした。いらない線を消すと、また描けます
+         */
+        "strokeBytesLimitReached": ParameterizedString<"n">;
         /**
          * 横のパネルを表示
          */

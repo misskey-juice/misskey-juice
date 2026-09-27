@@ -280,6 +280,8 @@ export const rolePolicies = [
 	'announcementReactionTypeLimit',
 	'canCreateDrawRoom',
 	'drawRoomMaxCanvasSize',
+	'drawRoomMaxStrokes',
+	'drawRoomMaxStrokeMegabytes',
 	'canApproveEmojiRequests',
 	'canApproveAvatarDecorationRequests',
 	'canApproveSignups',

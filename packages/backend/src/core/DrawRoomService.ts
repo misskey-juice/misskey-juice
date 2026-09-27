@@ -69,14 +69,13 @@ export function decodeDrawPoints(encoded: string, maxPoints: number): number[] |
 	return points;
 }
 export const DRAW_CHAT_MAX_LENGTH = 500;
-// 1人のレイヤーに置ける線の本数と、線のデータ量(JSONのバイト数)の上限。描き続けてRedisや
-// 終了時のDB保存(1レイヤー=1行)が際限なく膨らまないようにする
-const LAYER_MAX_STROKES = 3000;
-export const DRAW_LAYER_MAX_STROKES = LAYER_MAX_STROKES;
+// 1人が1つの部屋に置ける線の本数と、線のデータ量(JSONのバイト数)の上限。描き続けてRedisや
+// 終了時のDB保存(1人=1行)が際限なく膨らまないようにする。
+// JUICE: 上限はロールのポリシー(drawRoomMaxStrokes・drawRoomMaxStrokeMegabytes)で決め、ここはその最大値(ロールでもこれより大きくはできない)
+export const DRAW_LAYER_MAX_STROKES = 200000;
+export const DRAW_LAYER_MAX_BYTES = 512 * 1024 * 1024;
 // JUICE: 1人が持てるレイヤーの数の上限
 export const DRAW_USER_MAX_LAYERS = 8;
-export const DRAW_LAYER_MAX_BYTES = 8 * 1024 * 1024;
-const LAYER_MAX_BYTES = DRAW_LAYER_MAX_BYTES;
 // JUICE: 取り消し・やり直しの履歴の上限(1人・1部屋ごと。取り消しとやり直しの両方を合わせた大きさ)。
 // 履歴は線の写しを持つので、Redisの使用量が増えすぎないよう、レイヤーの上限の半分にする
 const HISTORY_MAX_BYTES = 4 * 1024 * 1024;
@@ -229,7 +228,7 @@ end
 // 線を自分のレイヤーに追加する。部屋が終了していれば何もしない(終了処理と同時に届いた線が、
 // 保存し終わった後のRedisにキーを作り直して取り残されないように、確認と書き込みを1回で行う)
 // KEYS: ended, strokes, bytes, drawers, lastActivity, layers, history, redo, historyBytes, redoBytes / ARGV: stroke(JSON), userId, now, maxStrokes, maxBytes, ttl, layerId, strokeId
-// 返り値: 1=追加した・3=追加した(下描きのレイヤー)・0=終了済み・-1=上限・-2=無いレイヤー
+// 返り値: 1=追加した・3=追加した(下描きのレイヤー)・0=終了済み・-1=本数の上限・-3=データ量の上限・-2=無いレイヤー
 const ADD_STROKE_SCRIPT = LAYER_OF_STROKE_LUA + HISTORY_LUA + `
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
 -- JUICE: 描いた人のレイヤーの一覧に無いレイヤーへの線は入れない(消したレイヤーに線が残り続けないように)。
@@ -251,7 +250,8 @@ elseif ARGV[7] ~= '0' then
 end
 if redis.call('LLEN', KEYS[2]) >= tonumber(ARGV[4]) then return -1 end
 local bytes = tonumber(redis.call('GET', KEYS[3]) or '0')
-if bytes + string.len(ARGV[1]) > tonumber(ARGV[5]) then return -1 end
+-- JUICE: 本数の上限(-1)と、データ量の上限(-3)を分けて返す(描いた人に、どちらの上限か知らせるため)
+if bytes + string.len(ARGV[1]) > tonumber(ARGV[5]) then return -3 end
 redis.call('RPUSH', KEYS[2], ARGV[1])
 redis.call('INCRBY', KEYS[3], string.len(ARGV[1]))
 redis.call('SADD', KEYS[4], ARGV[2])
@@ -1256,20 +1256,36 @@ export class DrawRoomService implements OnApplicationShutdown {
 	}
 
 	/**
-	 * 描き終わった線を自分のレイヤーに追加する(呼び出し側で、メンバーかを確認済みであること)。
-	 * 部屋が終了していたり、レイヤーの上限に達していたりしたら追加せずfalseを返す
+	 * JUICE: その人が1つの部屋に置ける線の本数・データ量(バイト)の上限(ロールのポリシー)
 	 */
 	@bindThis
-	public async addStroke(roomId: MiDrawRoom['id'], userId: MiUser['id'], stroke: DrawStroke): Promise<boolean> {
+	public async strokeLimits(userId: MiUser['id']): Promise<{ strokes: number; bytes: number }> {
+		const { drawRoomMaxStrokes, drawRoomMaxStrokeMegabytes } = await this.roleService.getUserPolicies(userId);
+		return {
+			strokes: Math.max(1, Math.min(DRAW_LAYER_MAX_STROKES, Math.floor(drawRoomMaxStrokes))),
+			bytes: Math.max(1024 * 1024, Math.min(DRAW_LAYER_MAX_BYTES, Math.floor(drawRoomMaxStrokeMegabytes * 1024 * 1024))),
+		};
+	}
+
+	/**
+	 * 描き終わった線を自分のレイヤーに追加する(呼び出し側で、メンバーかを確認済みであること)。
+	 * 部屋が終了していたり、上限に達していたりしたら追加しない。
+	 * JUICE: 返り値は、追加したか・本数の上限('strokes')・データ量の上限('bytes')・それ以外で断った('rejected')
+	 */
+	@bindThis
+	public async addStroke(roomId: MiDrawRoom['id'], userId: MiUser['id'], stroke: DrawStroke): Promise<'added' | 'strokes' | 'bytes' | 'rejected'> {
+		const limits = await this.strokeLimits(userId);
 		const result = await this.redisClient.eval(
 			ADD_STROKE_SCRIPT, 10,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
-			JSON.stringify(stroke), userId, Date.now().toString(), LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0', stroke.id,
+			JSON.stringify(stroke), userId, Date.now().toString(), limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0', stroke.id,
 		) as number;
+		if (result === -1) return 'strokes';
+		if (result === -3) return 'bytes';
 		// 下描きのレイヤーかどうかは、線を入れたのと同じ処理の中で決めている(3)
-		if (result !== 1 && result !== 3) return false;
+		if (result !== 1 && result !== 3) return 'rejected';
 		this.globalEventService.publishDrawRoomStream(roomId, 'stroke', { userId, stroke, ...(result === 3 ? { private: true } : {}) });
-		return true;
+		return 'added';
 	}
 
 	/**
@@ -1398,10 +1414,11 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async undoRedo(roomId: MiDrawRoom['id'], userId: MiUser['id'], direction: 'undo' | 'redo'): Promise<boolean> {
+		const limits = await this.strokeLimits(userId);
 		const [result, stepsRaw, layersRaw, layersChanged] = await this.redisClient.eval(
 			UNDO_REDO_SCRIPT, 8,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
-			direction === 'undo' ? 'u' : 'r', LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(), DRAW_USER_MAX_LAYERS.toString(),
+			direction === 'undo' ? 'u' : 'r', limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(), DRAW_USER_MAX_LAYERS.toString(),
 		) as [number, string, string, number];
 		if (result === -2) return false;
 		if (result !== 1) return true;
@@ -1427,10 +1444,11 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async moveStrokes(roomId: MiDrawRoom['id'], userId: MiUser['id'], strokeIds: string[] | null, dx: number, dy: number, mergeHistory = false): Promise<boolean> {
+		const limits = await this.strokeLimits(userId);
 		const moved = await this.redisClient.eval(
 			MOVE_STROKES_SCRIPT, 7,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), ...this.historyKeys(roomId, userId),
-			dx.toString(), dy.toString(), strokeIds == null ? '*' : JSON.stringify(strokeIds), REDIS_KEY_TTL_SEC.toString(), LAYER_MAX_BYTES.toString(), mergeHistory ? '1' : '0',
+			dx.toString(), dy.toString(), strokeIds == null ? '*' : JSON.stringify(strokeIds), REDIS_KEY_TTL_SEC.toString(), limits.bytes.toString(), mergeHistory ? '1' : '0',
 		) as number;
 		// 大きさの上限を超える(-2)ときは断ったことを返す(動かした本人の画面を戻すため)
 		if (moved === -2) return false;
@@ -1446,12 +1464,13 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async splitStrokes(roomId: MiDrawRoom['id'], userId: MiUser['id'], splits: { id: string; pieces: DrawStroke[] }[]): Promise<{ ok: boolean; recorded: boolean }> {
+		const limits = await this.strokeLimits(userId);
 		const map: Record<string, string[]> = {};
 		for (const split of splits) map[split.id] = split.pieces.map(piece => JSON.stringify(piece));
 		const [replaced, layersRaw, recorded] = await this.redisClient.eval(
 			SPLIT_STROKES_SCRIPT, 8,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
-			JSON.stringify(map), LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(),
+			JSON.stringify(map), limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(),
 			JSON.stringify(splits.flatMap(split => split.pieces.map(piece => piece.id))),
 		) as [number, string, number];
 		if (replaced <= 0) return { ok: false, recorded: false };

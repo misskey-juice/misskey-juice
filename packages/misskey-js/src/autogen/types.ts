@@ -6288,6 +6288,8 @@ export type components = {
             announcementReactionTypeLimit: number;
             canCreateDrawRoom: boolean;
             drawRoomMaxCanvasSize: number;
+            drawRoomMaxStrokes: number;
+            drawRoomMaxStrokeMegabytes: number;
             canApproveEmojiRequests: boolean;
             canApproveAvatarDecorationRequests: boolean;
             canApproveSignups: boolean;

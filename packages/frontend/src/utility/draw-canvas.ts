@@ -1031,17 +1031,36 @@ export class DrawCanvasEngine {
 	 * 描き終わった線を描き直す。rectを渡すと、その範囲にかかる線だけをその範囲で描き直す(1本の線を取り消したときなど)
 	 */
 	private redrawCommitted(layer: Layer, rect?: Rect | null): void {
+		const startedAt = performance.now();
 		if (rect != null) {
 			this.redrawCommittedRegion(layer, rect);
-			return;
+		} else {
+			this.markLayerDirty(layer);
+			this.invalidateLive(layer);
+			const ctx = layer.committed.getContext('2d')!;
+			ctx.clearRect(0, 0, this.width, this.height);
+			for (const stroke of layer.strokes) drawStroke(ctx, stroke);
+			this.redrawThumb(layer);
+			this.committedChanged();
 		}
-		this.markLayerDirty(layer);
-		this.invalidateLive(layer);
-		const ctx = layer.committed.getContext('2d')!;
-		ctx.clearRect(0, 0, this.width, this.height);
-		for (const stroke of layer.strokes) drawStroke(ctx, stroke);
-		this.redrawThumb(layer);
-		this.committedChanged();
+		this.stats.lastRedrawMs = performance.now() - startedAt;
+		this.stats.lastRedrawFull = rect == null;
+	}
+
+	// JUICE: デバッグ情報の表示用(描き直しにかかった時間など)
+	public stats = { lastRedrawMs: 0, lastRedrawFull: false, lastRenderMs: 0 };
+
+	/**
+	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数
+	 */
+	public debugSummary(): { layers: number; strokes: number; pending: number } {
+		let strokes = 0;
+		let pending = 0;
+		for (const layer of this.layers.values()) {
+			strokes += layer.strokes.length;
+			pending += layer.pending.size;
+		}
+		return { layers: this.layers.size, strokes, pending };
 	}
 
 	/**
@@ -1755,7 +1774,9 @@ export class DrawCanvasEngine {
 		window.requestAnimationFrame(() => {
 			this.renderRequested = false;
 			if (this.display == null) return;
+			const startedAt = performance.now();
 			this.renderDisplay(this.display.getContext('2d')!);
+			this.stats.lastRenderMs = performance.now() - startedAt;
 		});
 	}
 
