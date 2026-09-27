@@ -152,6 +152,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { store } from '@/store.js';
+import { prefer } from '@/preferences.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import { userPage } from '@/filters/user.js';
 import { notePage } from '@/filters/note.js';
@@ -293,25 +294,24 @@ watch(novelFile, (file) => {
 		novelFileError.value = null;
 	}
 }, { immediate: true });
-// JUICE: store.sはPizzaxの非リアクティブなスナップショット(プレーンオブジェクト)なので、
-// テンプレートで使う値は必ずリアクティブなstore.r.xxx.valueから読む(mediaTimelineSrc等の
-// 既存箇所もprefer.r.xxx.valueを使っている慣習に合わせる)。store.sはイベントハンドラ内での
-// 単発読み取り(saveProgress/resetPager等)にのみ使う
-const writingMode = computed(() => store.r.novelViewerWritingMode.value);
+// JUICE: 表示の設定はプロファイル(prefer)に持つ(バックアップ・復元で戻るように)。prefer.s・store.sは
+// 非リアクティブなので、テンプレートで使う値は必ずリアクティブなprefer.r.xxx.valueから読む。
+// 続きから読む位置(novelViewerProgress)は表示の設定ではないので、今まで通りstoreに置く
+const writingMode = computed(() => prefer.r.novelViewerWritingMode.value);
 const fontSize = computed({
-	get: () => store.r.novelViewerFontSize.value,
-	set: (v: number) => store.set('novelViewerFontSize', v),
+	get: () => prefer.r.novelViewerFontSize.value,
+	set: (v: number) => prefer.commit('novelViewerFontSize', v),
 });
 const theme = computed({
-	get: () => store.r.novelViewerTheme.value,
-	set: (v: 'auto' | 'light' | 'sepia' | 'dark' | 'custom') => store.set('novelViewerTheme', v),
+	get: () => prefer.r.novelViewerTheme.value,
+	set: (v: 'auto' | 'light' | 'sepia' | 'dark' | 'custom') => prefer.commit('novelViewerTheme', v),
 });
 const fontFamily = computed({
-	get: () => store.r.novelViewerFontFamily.value,
-	set: (v: 'default' | 'mincho' | 'gothic') => store.set('novelViewerFontFamily', v),
+	get: () => prefer.r.novelViewerFontFamily.value,
+	set: (v: 'default' | 'mincho' | 'gothic') => prefer.commit('novelViewerFontFamily', v),
 });
-const customTextColor = computed(() => store.r.novelViewerCustomTextColor.value);
-const customBgColor = computed(() => store.r.novelViewerCustomBgColor.value);
+const customTextColor = computed(() => prefer.r.novelViewerCustomTextColor.value);
+const customBgColor = computed(() => prefer.r.novelViewerCustomBgColor.value);
 
 // JUICE: フォントサイズ・書体・(カスタムテーマ時の)文字色/背景色をまとめてinline styleで適用する。
 // data-theme="custom"はプリセット4色と違ってSCSS側で固定値を持てないため、ここで直接上書きする
@@ -332,12 +332,12 @@ const bodyStyle = computed(() => {
 });
 
 const paragraphIndent = computed({
-	get: () => store.r.novelViewerParagraphIndent.value,
-	set: (v: boolean) => store.set('novelViewerParagraphIndent', v),
+	get: () => prefer.r.novelViewerParagraphIndent.value,
+	set: (v: boolean) => prefer.commit('novelViewerParagraphIndent', v),
 });
 const aozoraNotation = computed({
-	get: () => store.r.novelViewerAozoraNotation.value,
-	set: (v: boolean) => store.set('novelViewerAozoraNotation', v),
+	get: () => prefer.r.novelViewerAozoraNotation.value,
+	set: (v: boolean) => prefer.commit('novelViewerAozoraNotation', v),
 });
 
 // JUICE: 青空文庫形式のテキストによくある入力者注記を解釈する。対応するのはルビと字下げブロックのみ
@@ -1206,7 +1206,7 @@ watch(() => props.noteId, fetchNote, {
 });
 
 function toggleWritingMode(): void {
-	store.set('novelViewerWritingMode', store.s.novelViewerWritingMode === 'vertical' ? 'horizontal' : 'vertical');
+	prefer.commit('novelViewerWritingMode', prefer.s.novelViewerWritingMode === 'vertical' ? 'horizontal' : 'vertical');
 }
 
 const writingModeToggleLabel = computed(() => (writingMode.value === 'vertical' ? i18n.ts._juice.novelViewerHorizontalMode : i18n.ts._juice.novelViewerVerticalMode));

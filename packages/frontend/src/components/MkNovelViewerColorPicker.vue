@@ -18,22 +18,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed } from 'vue';
 import MkColorInput from '@/components/MkColorInput.vue';
 import { i18n } from '@/i18n.js';
-import { store } from '@/store.js';
+import { prefer } from '@/preferences.js';
 
 // JUICE: 小説ビューワーの表示設定メニューに埋め込む、カスタムテーマの色選択部品。
 // 色を選んだ時点でnovelViewerThemeも'custom'に切り替え、即座に反映されるようにする
 const textColor = computed({
-	get: () => store.r.novelViewerCustomTextColor.value,
+	get: () => prefer.r.novelViewerCustomTextColor.value,
 	set: (v: string) => {
-		store.set('novelViewerCustomTextColor', v);
-		store.set('novelViewerTheme', 'custom');
+		prefer.commit('novelViewerCustomTextColor', v);
+		prefer.commit('novelViewerTheme', 'custom');
 	},
 });
 const bgColor = computed({
-	get: () => store.r.novelViewerCustomBgColor.value,
+	get: () => prefer.r.novelViewerCustomBgColor.value,
 	set: (v: string) => {
-		store.set('novelViewerCustomBgColor', v);
-		store.set('novelViewerTheme', 'custom');
+		prefer.commit('novelViewerCustomBgColor', v);
+		prefer.commit('novelViewerTheme', 'custom');
 	},
 });
 </script>

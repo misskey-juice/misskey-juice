@@ -8,10 +8,10 @@
 
 import { computed, reactive, ref, watch } from 'vue';
 import { i18n } from '@/i18n.js';
+import { prefer } from '@/preferences.js';
 
 const WORKS_STORAGE_KEY = 'juice:novelEditorWorks';
 const CURRENT_STORAGE_KEY = 'juice:novelEditorCurrentWork';
-const SETTINGS_STORAGE_KEY = 'juice:novelEditorSettings';
 
 export type NovelWork = {
 	id: string;
@@ -154,7 +154,8 @@ export function deleteWork(id: string): void {
 	if (currentWorkId.value === id) currentWorkId.value = [...novelWorks].sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
 }
 
-// JUICE: エディターの表示・入力の設定(このブラウザだけ)
+// JUICE: エディターの表示・入力の設定。バックアップ・復元で戻るよう、プロファイル(prefer)に持つ
+// (以前はlocalStorageにあった。前の値はjuice-boot-preferences.tsで1回だけ取り込む)
 export type NovelEditorSettings = {
 	fontFamily: 'default' | 'mincho' | 'gothic';
 	fontSize: number;
@@ -181,10 +182,11 @@ const DEFAULT_SETTINGS: NovelEditorSettings = {
 
 function loadSettings(): NovelEditorSettings {
 	try {
-		const saved = JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? 'null');
+		// 形が正しいものだけを使う(プロファイルは読み込み・復元で書き換えられうるため)
+		const saved = prefer.s.novelEditorSettings as Partial<Record<keyof NovelEditorSettings, unknown>> | null;
 		if (saved != null && typeof saved === 'object') {
 			const result = { ...DEFAULT_SETTINGS };
-			if (['default', 'mincho', 'gothic'].includes(saved.fontFamily)) result.fontFamily = saved.fontFamily;
+			if (saved.fontFamily === 'default' || saved.fontFamily === 'mincho' || saved.fontFamily === 'gothic') result.fontFamily = saved.fontFamily;
 			if (typeof saved.fontSize === 'number' && saved.fontSize >= 12 && saved.fontSize <= 32) result.fontSize = saved.fontSize;
 			if (typeof saved.lineHeight === 'number' && saved.lineHeight >= 1.2 && saved.lineHeight <= 3) result.lineHeight = saved.lineHeight;
 			for (const key of ['autoIndent', 'autoCloseBrackets', 'typewriter', 'sidePreview'] as const) {
@@ -199,10 +201,13 @@ function loadSettings(): NovelEditorSettings {
 export const novelEditorSettings = reactive<NovelEditorSettings>(loadSettings());
 
 watch(novelEditorSettings, () => {
-	try {
-		window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(novelEditorSettings));
-	} catch { /* 保存できなくても、開いている間は使える */ }
+	prefer.commit('novelEditorSettings', { ...novelEditorSettings });
 }, { deep: true });
+
+// 別のタブで変えた・プロファイルを読み込んだなど、プロファイルの方が変わったら取り込む(古い値で上書きしないように)
+watch(prefer.r.novelEditorSettings, () => {
+	Object.assign(novelEditorSettings, loadSettings());
+});
 
 // JUICE: 文字数(空白・改行と、ルビのよみ・注記などの記法は数えない)
 export function countNovelChars(text: string): number {
