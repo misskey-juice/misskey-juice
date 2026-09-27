@@ -10,7 +10,6 @@ import { bindThis } from '@/decorators.js';
 import {
 	DRAW_CHAT_MAX_LENGTH,
 	DRAW_ROOM_PRESENCE_HEARTBEAT_MS,
-	DRAW_LAYER_MAX_BYTES,
 	DRAW_LAYER_MAX_STROKES,
 	DRAW_USER_MAX_LAYERS,
 	DRAW_STROKE_MAX_POINTS,
@@ -272,8 +271,9 @@ export class DrawRoomChannel extends Channel {
 	 * 移動ツールで動かした線はキャンバスの外寄りにあることもあるので、座標の範囲は広めに許す。不正ならundefined
 	 */
 	@bindThis
-	private parseSplits(value: JsonValue | undefined): { id: string; pieces: DrawStroke[] }[] | undefined {
-		if (this.room == null || !Array.isArray(value) || value.length > DRAW_LAYER_MAX_STROKES) return undefined;
+	private parseSplits(value: JsonValue | undefined, limits: { strokes: number; bytes: number }): { id: string; pieces: DrawStroke[] }[] | undefined {
+		// JUICE: 1回の操作で置き換える線の本数・大きさも、その人が描ける上限までにする
+		if (this.room == null || !Array.isArray(value) || value.length > limits.strokes) return undefined;
 		const margin = Math.max(this.room.canvasWidth, this.room.canvasHeight);
 		const splits: { id: string; pieces: DrawStroke[] }[] = [];
 		let total = 0;
@@ -289,7 +289,7 @@ export class DrawRoomChannel extends Channel {
 			for (const piece of split.pieces) {
 				if (!isJsonObject(piece) || !this.isValidStrokeId(piece.id) || pieceIds.has(piece.id)) return undefined;
 				bytes += (typeof piece.points === 'string' ? piece.points.length : 0) + (typeof piece.clip === 'string' ? piece.clip.length : 0);
-				if (bytes > DRAW_LAYER_MAX_BYTES) return undefined;
+				if (bytes > limits.bytes) return undefined;
 				pieceIds.add(piece.id);
 				const parsed = this.parseStrokeBody(piece, DRAW_STROKE_MAX_POINTS, margin);
 				if (parsed == null) return undefined;
@@ -297,7 +297,7 @@ export class DrawRoomChannel extends Channel {
 				pieces.push({ id: piece.id, ...parsed });
 			}
 			total += pieces.length;
-			if (total > DRAW_LAYER_MAX_STROKES) return undefined;
+			if (total > limits.strokes) return undefined;
 			splits.push({ id: split.id, pieces });
 		}
 		return splits;
@@ -409,7 +409,7 @@ export class DrawRoomChannel extends Channel {
 				if (result === 'added') break;
 				this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
 				// JUICE: 上限に達して描けなかったことを、描いた本人に知らせる(黙って線が消えないように)
-				if (result === 'strokes' || result === 'bytes') this.send('strokeLimitReached', { kind: result });
+				if (result === 'strokes' || result === 'bytes' || result === 'room') this.send('strokeLimitReached', { kind: result });
 				break;
 			}
 			case 'undo':
@@ -442,10 +442,11 @@ export class DrawRoomChannel extends Channel {
 				const limit = Math.max(room.canvasWidth, room.canvasHeight) * 2;
 				if (typeof dx !== 'number' || typeof dy !== 'number' || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
 				if (Math.abs(dx) > limit || Math.abs(dy) > limit) return;
+				// JUICE: 大きなメッセージを読み解く前に、回数制限を確かめる
+				if (!await rate('other')) return;
 				const ids = strokeIds === null ? null : this.parseStrokeIds(strokeIds);
 				// 選択範囲の境目で切った線があれば、先に置き換えてから動かす(同じ操作の中で順に行う)
-				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits);
-				if (!await rate('other')) return;
+				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits, await this.drawRoomService.strokeLimits(user.id));
 				// 送った本人の画面では既に動かしているので、断るときは知らせて線を取り直してもらう
 				if (ids === undefined || splits === undefined) return this.rejectOperation();
 				// 境目で切ってから動かしたときは、取り消しで1回に戻せるよう、履歴を1件にまとめる
@@ -464,17 +465,17 @@ export class DrawRoomChannel extends Channel {
 			case 'replaceStrokes': {
 				// JUICE: 選んだ線を回転するなど、線を別の線(の並び)に置き換える
 				if (!this.canDraw() || !isJsonObject(body)) return;
-				const replacements = this.parseSplits(body.replacements);
 				if (!await rate('other')) return;
+				const replacements = this.parseSplits(body.replacements, await this.drawRoomService.strokeLimits(user.id));
 				if (replacements == null || replacements.length === 0) return this.rejectOperation();
 				if (!(await this.drawRoomService.splitStrokes(room.id, user.id, replacements)).ok) return this.rejectOperation();
 				break;
 			}
 			case 'deleteStrokes': {
 				if (!this.canDraw() || !isJsonObject(body)) return;
-				const ids = this.parseStrokeIds(body.strokeIds);
-				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits);
 				if (!await rate('other')) return;
+				const ids = this.parseStrokeIds(body.strokeIds);
+				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits, await this.drawRoomService.strokeLimits(user.id));
 				if (ids == null || splits === undefined) return this.rejectOperation();
 				let splitRecorded = false;
 				if (splits.length > 0) {

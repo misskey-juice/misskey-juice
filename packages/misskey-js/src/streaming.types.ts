@@ -320,7 +320,7 @@ export type Channels = {
 			// JUICE: 自分が送った線の移動・削除・置き換えが断られた(本人にだけ届く。線を取り直してサーバーの状態に合わせる)
 			operationRejected: (payload: Record<string, never>) => void;
 			// JUICE: 線の本数・データ量の上限に達して、送った線を受け付けなかった(本人にだけ届く)
-			strokeLimitReached: (payload: { kind: 'strokes' | 'bytes'; }) => void;
+			strokeLimitReached: (payload: { kind: 'strokes' | 'bytes' | 'room'; }) => void;
 			chat: (payload: { message: DrawRoomChatMessage; user: UserLite; }) => void;
 			memberJoined: (payload: { user: UserLite; }) => void;
 			memberLeft: (payload: { userId: User['id']; kicked: boolean; }) => void;

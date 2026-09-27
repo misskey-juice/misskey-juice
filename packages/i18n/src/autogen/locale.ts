@@ -8536,7 +8536,7 @@ export interface Locale extends ILocale {
              */
             "drawRoomMaxStrokeMegabytes": string;
             /**
-             * 1つの部屋で、1人が持つ全てのレイヤーの線のデータ量の合計です(1〜512MB)。大きくすると、サーバーのRedisのメモリと、保存する部屋のデータが増えます
+             * 1つの部屋で、1人が持つ全てのレイヤーの線のデータ量の合計です(1〜128MB)。大きくすると、サーバーのRedisのメモリと、保存する部屋のデータが増えます
              */
             "drawRoomMaxStrokeMegabytesCaption": string;
             /**
@@ -9853,6 +9853,10 @@ export interface Locale extends ILocale {
          * 描ける線のデータ量の上限({n}MB)に達したため、線を描けませんでした。いらない線を消すと、また描けます
          */
         "strokeBytesLimitReached": ParameterizedString<"n">;
+        /**
+         * この部屋の全員の線のデータ量が上限(256MB)に達したため、線を描けませんでした
+         */
+        "roomBytesLimitReached": string;
         /**
          * 横のパネルを表示
          */

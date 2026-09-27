@@ -227,8 +227,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<!-- JUICE: デバッグ情報(表示のメニューでオンにしたとき) -->
 				<div v-if="showDebugInfo && debugInfo != null && room != null" :class="$style.debugInfo" aria-hidden="true">
-					<div>{{ i18n.ts._drawRoom.debugMyStrokes }}: {{ debugInfo.myStrokes }} / {{ $i.policies.drawRoomMaxStrokes }}</div>
-					<div>{{ i18n.ts._drawRoom.debugMyBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }} / {{ $i.policies.drawRoomMaxStrokeMegabytes }}MB</div>
+					<div>{{ i18n.ts._drawRoom.debugMyStrokes }}: {{ debugInfo.myStrokes }} / {{ strokeLimits.strokes }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMyBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }} / {{ strokeLimits.megabytes }}MB</div>
 					<template v-if="debugInfo.layers.length > 1">
 						<div v-for="(layer, i) in debugInfo.layers" :key="i">&nbsp;&nbsp;{{ layer.name }}: {{ layer.strokes }}</div>
 					</template>
@@ -1314,14 +1314,19 @@ function connect(): void {
 		const ids = payload.strokeIds == null ? null : new Set(payload.strokeIds);
 		forKeys(payload.userId, key => engine.value?.moveStrokes(key, ids, payload.dx, payload.dy));
 	}));
-	// JUICE: 自分の線の移動・削除・置き換えがサーバーで断られた(レイヤーの上限を超えた等)。
-	// 自分の画面では先に反映しているので、線を取り直してサーバーの状態に戻す
 	// JUICE: 線の本数・データ量の上限に達して、描いた線が受け付けられなかった
 	c.on('strokeLimitReached', payload => {
+		// 描き続けても何度も出さないよう、少し間を空ける
+		if (Date.now() - lastLimitToastAt < 5000) return;
+		lastLimitToastAt = Date.now();
 		os.toast(payload.kind === 'strokes'
-			? i18n.tsx._drawRoom.strokeLimitReached({ n: $i.policies.drawRoomMaxStrokes })
-			: i18n.tsx._drawRoom.strokeBytesLimitReached({ n: $i.policies.drawRoomMaxStrokeMegabytes }));
+			? i18n.tsx._drawRoom.strokeLimitReached({ n: strokeLimits.value.strokes })
+			: payload.kind === 'bytes'
+				? i18n.tsx._drawRoom.strokeBytesLimitReached({ n: strokeLimits.value.megabytes })
+				: i18n.ts._drawRoom.roomBytesLimitReached);
 	});
+	// JUICE: 自分の線の移動・削除・置き換えがサーバーで断られた(レイヤーの上限を超えた等)。
+	// 自分の画面では先に反映しているので、線を取り直してサーバーの状態に戻す
 	c.on('operationRejected', () => {
 		clearStrokeSelection();
 		os.toast(i18n.ts._drawRoom.operationRejected);
@@ -1709,6 +1714,15 @@ type DebugInfo = {
 	lastRenderMs: number;
 };
 const debugInfo = ref<DebugInfo | null>(null);
+
+// 上限に達した知らせを最後に出した時刻
+let lastLimitToastAt = 0;
+
+// 描ける線の上限(サーバーと同じく、ロールの値を範囲に収めたもの)
+const strokeLimits = computed(() => ({
+	strokes: Math.max(1, Math.min(200000, Math.floor(Number.isFinite($i.policies.drawRoomMaxStrokes) ? $i.policies.drawRoomMaxStrokes : 30000))),
+	megabytes: Math.max(1, Math.min(128, Math.floor(Number.isFinite($i.policies.drawRoomMaxStrokeMegabytes) ? $i.policies.drawRoomMaxStrokeMegabytes : 64))),
+}));
 
 // 線のデータ量の見積もり(サーバーに保存する形のJSONの大きさ。点1つが5バイトで、base64にすると4/3倍)
 function estimateStrokeBytes(stroke: CanvasStroke): number {

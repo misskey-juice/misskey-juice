@@ -19,7 +19,7 @@ import { CacheService } from '@/core/CacheService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { RoleService } from '@/core/RoleService.js';
+import { DEFAULT_POLICIES, RoleService } from '@/core/RoleService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
 
@@ -73,11 +73,15 @@ export const DRAW_CHAT_MAX_LENGTH = 500;
 // 終了時のDB保存(1人=1行)が際限なく膨らまないようにする。
 // JUICE: 上限はロールのポリシー(drawRoomMaxStrokes・drawRoomMaxStrokeMegabytes)で決め、ここはその最大値(ロールでもこれより大きくはできない)
 export const DRAW_LAYER_MAX_STROKES = 200000;
-export const DRAW_LAYER_MAX_BYTES = 512 * 1024 * 1024;
+// (終了後に保存する部屋では1人分を1行のjsonbに入れるので、jsonbに入る大きさより十分小さくする)
+export const DRAW_LAYER_MAX_BYTES = 128 * 1024 * 1024;
+// JUICE: 1つの部屋の全員の線のデータ量の合計の上限。線は全員分をまとめて読み出す(途中参加・保存した部屋の表示)ので、
+// 1回の応答・読み込みが大きくなりすぎないようにする
+export const DRAW_ROOM_MAX_BYTES = 256 * 1024 * 1024;
 // JUICE: 1人が持てるレイヤーの数の上限
 export const DRAW_USER_MAX_LAYERS = 8;
 // JUICE: 取り消し・やり直しの履歴の上限(1人・1部屋ごと。取り消しとやり直しの両方を合わせた大きさ)。
-// 履歴は線の写しを持つので、Redisの使用量が増えすぎないよう、レイヤーの上限の半分にする
+// 履歴は線の写しを持つので、Redisの使用量が増えすぎないよう、線の上限とは別に小さくしておく
 const HISTORY_MAX_BYTES = 4 * 1024 * 1024;
 const HISTORY_MAX_ENTRIES = 100;
 const CHAT_LOG_LENGTH = 100;
@@ -228,7 +232,8 @@ end
 // 線を自分のレイヤーに追加する。部屋が終了していれば何もしない(終了処理と同時に届いた線が、
 // 保存し終わった後のRedisにキーを作り直して取り残されないように、確認と書き込みを1回で行う)
 // KEYS: ended, strokes, bytes, drawers, lastActivity, layers, history, redo, historyBytes, redoBytes / ARGV: stroke(JSON), userId, now, maxStrokes, maxBytes, ttl, layerId, strokeId
-// 返り値: 1=追加した・3=追加した(下描きのレイヤー)・0=終了済み・-1=本数の上限・-3=データ量の上限・-2=無いレイヤー
+// 返り値: 1=追加した・3=追加した(下描きのレイヤー)・0=終了済み・-1=本数の上限・-3=データ量の上限・-4=部屋の合計の上限・-2=無いレイヤー
+// ARGV[9]は描いた人ごとの大きさのキーの前半(drawroom:{部屋}:bytes:)、ARGV[10]は部屋の合計の上限
 const ADD_STROKE_SCRIPT = LAYER_OF_STROKE_LUA + HISTORY_LUA + `
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
 -- JUICE: 描いた人のレイヤーの一覧に無いレイヤーへの線は入れない(消したレイヤーに線が残り続けないように)。
@@ -252,6 +257,12 @@ if redis.call('LLEN', KEYS[2]) >= tonumber(ARGV[4]) then return -1 end
 local bytes = tonumber(redis.call('GET', KEYS[3]) or '0')
 -- JUICE: 本数の上限(-1)と、データ量の上限(-3)を分けて返す(描いた人に、どちらの上限か知らせるため)
 if bytes + string.len(ARGV[1]) > tonumber(ARGV[5]) then return -3 end
+-- JUICE: 部屋の全員の線のデータ量の合計の上限(-4)。描いた人それぞれの大きさのキーを足す
+local roomBytes = 0
+for _, drawer in ipairs(redis.call('SMEMBERS', KEYS[4])) do
+	roomBytes = roomBytes + tonumber(redis.call('GET', ARGV[9] .. drawer) or '0')
+end
+if roomBytes + string.len(ARGV[1]) > tonumber(ARGV[10]) then return -4 end
 redis.call('RPUSH', KEYS[2], ARGV[1])
 redis.call('INCRBY', KEYS[3], string.len(ARGV[1]))
 redis.call('SADD', KEYS[4], ARGV[2])
@@ -370,7 +381,10 @@ for _, step in ipairs(entry[ARGV[1]]) do
 end
 local bytes = 0
 for _, s in ipairs(list) do bytes = bytes + string.len(s) end
-if #list > tonumber(ARGV[2]) or bytes > tonumber(ARGV[3]) then
+-- 上限を超えるのは、増えるときだけ断る(上限を下げられた人も、減らす取り消しはできるように)
+local beforeBytes = tonumber(redis.call('GET', KEYS[3]) or '0')
+local beforeCount = redis.call('LLEN', KEYS[2])
+if (#list > tonumber(ARGV[2]) and #list > beforeCount) or (bytes > tonumber(ARGV[3]) and bytes > beforeBytes) then
 	redis.call('RPUSH', fromKey, raw)
 	return { -2, '', '', 0 }
 end
@@ -545,8 +559,17 @@ for i, raw in ipairs(list) do
 	end
 end
 if #updates == 0 then return 0 end
-if (tonumber(redis.call('GET', KEYS[3]) or '0') + delta) > tonumber(ARGV[5]) then return -2 end
-for _, u in ipairs(updates) do redis.call('LSET', KEYS[2], u[1], u[2]) end
+if delta > 0 and (tonumber(redis.call('GET', KEYS[3]) or '0') + delta) > tonumber(ARGV[5]) then return -2 end
+-- 動かす線が少なければその線だけを書き換え、多ければ並びごと書き直す(LSETは1回ごとに並びをたどるので、線が多いと重い)
+if #updates <= 50 then
+	for _, u in ipairs(updates) do redis.call('LSET', KEYS[2], u[1], u[2]) end
+else
+	for _, u in ipairs(updates) do list[u[1] + 1] = u[2] end
+	redis.call('DEL', KEYS[2])
+	for i = 1, #list, 500 do
+		redis.call('RPUSH', KEYS[2], unpack(list, i, math.min(i + 499, #list)))
+	end
+end
 if delta ~= 0 then redis.call('INCRBY', KEYS[3], delta) end
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[3], tonumber(ARGV[4]))
@@ -587,8 +610,8 @@ local result = {}
 local bytes = 0
 local replaced = 0
 for _, raw in ipairs(list) do
-	local s = cjson.decode(raw)
-	local pieces = splits[s.id]
+	local sid = strokeIdOf(raw)
+	local pieces = splits[sid]
 	if pieces then
 		replaced = replaced + 1
 		for _, piece in ipairs(pieces) do
@@ -597,13 +620,15 @@ for _, raw in ipairs(list) do
 		end
 	else
 		-- 置き換えない線と同じidの線ができると、後の移動・削除で両方が対象になるので断る
-		if pieceIds[s.id] then return { -2, '', 0 } end
+		if pieceIds[sid] then return { -2, '', 0 } end
 		table.insert(result, raw)
 		bytes = bytes + string.len(raw)
 	end
 end
 if replaced == 0 then return { 0, '', 0 } end
-if #result > tonumber(ARGV[2]) or bytes > tonumber(ARGV[3]) then return { -2, '', 0 } end
+-- 上限を超えるのは、増えるときだけ断る
+local beforeBytes = tonumber(redis.call('GET', KEYS[3]) or '0')
+if (#result > tonumber(ARGV[2]) and #result > #list) or (bytes > tonumber(ARGV[3]) and bytes > beforeBytes) then return { -2, '', 0 } end
 redis.call('DEL', KEYS[2])
 for i = 1, #result, 500 do
 	redis.call('RPUSH', KEYS[2], unpack(result, i, math.min(i + 499, #result)))
@@ -1033,15 +1058,17 @@ export class DrawRoomService implements OnApplicationShutdown {
 				if (locked.keepAfterEnd) {
 					// JUICE: 下描き(本人だけに見える)のレイヤーと線もそのまま残す(描いた本人は後から見られる)。
 					// ほかの人には、読み出すとき(getLayers)に除く
-					const layers = await this.getStrokesFromRedis(room.id);
-					for (const layer of layers) {
-						if (layer.strokes.length === 0) continue;
+					// JUICE: 全員分を一度に読み込まず、1人ずつ読み込んで保存する(大きな部屋でメモリを使いすぎないように)
+					const drawers = await this.redisClient.smembers(this.drawersKey(room.id));
+					for (const userId of drawers) {
+						const strokes = (await this.redisClient.lrange(this.strokesKey(room.id, userId), 0, -1)).map(x => JSON.parse(x) as DrawStroke);
+						if (strokes.length === 0) continue;
 						await em.insert(MiDrawRoomLayer, {
 							id: this.idService.gen(),
 							roomId: room.id,
-							userId: layer.userId,
-							strokes: layer.strokes,
-							layers: layer.layers,
+							userId,
+							strokes,
+							layers: await this.getUserLayers(room.id, userId),
 						});
 					}
 					await em.update(MiDrawRoom, room.id, { isEnded: true, endedAt, chatLog: await this.getChatFromRedis(room.id) });
@@ -1261,9 +1288,12 @@ export class DrawRoomService implements OnApplicationShutdown {
 	@bindThis
 	public async strokeLimits(userId: MiUser['id']): Promise<{ strokes: number; bytes: number }> {
 		const { drawRoomMaxStrokes, drawRoomMaxStrokeMegabytes } = await this.roleService.getUserPolicies(userId);
+		// ロールの値は管理者が入れるので、数でなければ既定の値にする
+		const strokes = Number.isFinite(drawRoomMaxStrokes) ? drawRoomMaxStrokes : DEFAULT_POLICIES.drawRoomMaxStrokes;
+		const megabytes = Number.isFinite(drawRoomMaxStrokeMegabytes) ? drawRoomMaxStrokeMegabytes : DEFAULT_POLICIES.drawRoomMaxStrokeMegabytes;
 		return {
-			strokes: Math.max(1, Math.min(DRAW_LAYER_MAX_STROKES, Math.floor(drawRoomMaxStrokes))),
-			bytes: Math.max(1024 * 1024, Math.min(DRAW_LAYER_MAX_BYTES, Math.floor(drawRoomMaxStrokeMegabytes * 1024 * 1024))),
+			strokes: Math.max(1, Math.min(DRAW_LAYER_MAX_STROKES, Math.floor(strokes))),
+			bytes: Math.max(1024 * 1024, Math.min(DRAW_LAYER_MAX_BYTES, Math.floor(megabytes * 1024 * 1024))),
 		};
 	}
 
@@ -1273,15 +1303,17 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 * JUICE: 返り値は、追加したか・本数の上限('strokes')・データ量の上限('bytes')・それ以外で断った('rejected')
 	 */
 	@bindThis
-	public async addStroke(roomId: MiDrawRoom['id'], userId: MiUser['id'], stroke: DrawStroke): Promise<'added' | 'strokes' | 'bytes' | 'rejected'> {
+	public async addStroke(roomId: MiDrawRoom['id'], userId: MiUser['id'], stroke: DrawStroke): Promise<'added' | 'strokes' | 'bytes' | 'room' | 'rejected'> {
 		const limits = await this.strokeLimits(userId);
 		const result = await this.redisClient.eval(
 			ADD_STROKE_SCRIPT, 10,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
 			JSON.stringify(stroke), userId, Date.now().toString(), limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0', stroke.id,
+			this.bytesKey(roomId, ''), DRAW_ROOM_MAX_BYTES.toString(),
 		) as number;
 		if (result === -1) return 'strokes';
 		if (result === -3) return 'bytes';
+		if (result === -4) return 'room';
 		// 下描きのレイヤーかどうかは、線を入れたのと同じ処理の中で決めている(3)
 		if (result !== 1 && result !== 3) return 'rejected';
 		this.globalEventService.publishDrawRoomStream(roomId, 'stroke', { userId, stroke, ...(result === 3 ? { private: true } : {}) });

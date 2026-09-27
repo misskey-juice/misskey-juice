@@ -479,7 +479,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts._role._options.drawRoomMaxStrokeMegabytes }}<span class="_juice">JUICE</span></template>
 			<template #valueText>{{ valuesModel.drawRoomMaxStrokeMegabytes }}MB</template>
 			<template #default="{ disabled }">
-				<MkInput v-model="valuesModel.drawRoomMaxStrokeMegabytes" type="number" :disabled="disabled" :min="1" :max="512">
+				<MkInput v-model="valuesModel.drawRoomMaxStrokeMegabytes" type="number" :disabled="disabled" :min="1" :max="128">
 					<template #suffix>MB</template>
 					<template #caption>{{ i18n.ts._role._options.drawRoomMaxStrokeMegabytesCaption }}</template>
 				</MkInput>

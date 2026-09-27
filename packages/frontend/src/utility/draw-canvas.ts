@@ -1452,10 +1452,15 @@ export class DrawCanvasEngine {
 		const y0 = Math.floor(r.y0);
 		const moving = createCanvas(Math.max(1, Math.ceil(r.x1) - x0), Math.max(1, Math.ceil(r.y1) - y0));
 		const movingCtx = moving.getContext('2d')!;
-		movingCtx.translate(-x0, -y0);
-		const still = createCanvas(this.width, this.height);
+		// 動かさない線の絵は、全体の大きさのキャンバスを使い回す(ドラッグのたびに作って捨てると重いため)
+		const still = this.moveStillSpare != null && this.moveStillSpare.width === this.width && this.moveStillSpare.height === this.height
+			? this.moveStillSpare
+			: createCanvas(this.width, this.height);
+		this.moveStillSpare = null;
 		const stillCtx = still.getContext('2d')!;
+		stillCtx.globalCompositeOperation = 'copy';
 		stillCtx.drawImage(layer.committed, 0, 0);
+		stillCtx.globalCompositeOperation = 'source-over';
 		// 動かす線の範囲だけ、動かさない線で描き直す
 		stillCtx.save();
 		stillCtx.beginPath();
@@ -1464,7 +1469,13 @@ export class DrawCanvasEngine {
 		stillCtx.clearRect(x0, y0, moving.width, moving.height);
 		for (const stroke of layer.strokes) {
 			if (ids.has(stroke.id)) {
-				drawStroke(movingCtx, stroke);
+				// 小さいキャンバスの左上に合わせて、線の点をずらして描く(キャンバスを移動して描くと、半透明・透明度ロックの線の
+				// 描く範囲の計算がキャンバスの大きさに合わず、消えたり切れたりするため)。ずらす量は整数なので、ドットもずれない
+				drawStroke(movingCtx, {
+					...stroke,
+					points: shiftPoints(stroke.points, -x0, -y0),
+					...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, -x0, -y0) } : {}),
+				});
 			} else {
 				const sr = strokeRect(stroke);
 				if (sr != null && rectsIntersect(sr, r)) drawStroke(stillCtx, stroke);
@@ -1522,10 +1533,14 @@ export class DrawCanvasEngine {
 	public endMove(): void {
 		const m = this.moving;
 		this.moving = null;
-		// 動かしていた範囲だけを表示し直す(描き終わった絵の描き直しは、この後の線の移動・置き換えで行う)
-		if (m != null && m.still != null) this.requestRender(unionRect(m.lastRect, { x0: m.originX, y0: m.originY, x1: m.originX + m.moving.width, y1: m.originY + m.moving.height }));
-		else this.requestRender();
+		if (m?.still != null) this.moveStillSpare = m.still;
+		// 全体を表示し直す(動かしている間にそのレイヤーの線がほかから変わっていても、古いまま残らないように。
+		// 3枚を重ねるだけなので軽い。描き終わった絵の描き直しは、この後の線の移動・置き換えで行う)
+		this.requestRender();
 	}
+
+	// 動かさない線の絵に使うキャンバスの予備(次のドラッグで使い回す)
+	private moveStillSpare: HTMLCanvasElement | null = null;
 	//#endregion
 
 	/**
@@ -1917,6 +1932,7 @@ export class DrawCanvasEngine {
 
 	public dispose(): void {
 		this.moving = null;
+		this.moveStillSpare = null;
 		this.referenceCache = null;
 		this.groupCanvas = { below: null, above: null };
 		this.display = null;
