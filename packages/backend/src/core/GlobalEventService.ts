@@ -150,8 +150,8 @@ export interface NoteEventTypes {
 	novelChanged: {
 		isNovel: boolean;
 	};
-	// JUICE: リモートで編集された投稿を反映した(表示を差し替える内容)
-	edited: Pick<Packed<'Note'>, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
+	// JUICE: 編集日時だけ配る(内容は見る人ごとに見られるかを確かめるため、受け取った側がnotes/showで取り直す)
+	edited: { updatedAt: string };
 }
 type NoteStreamEventTypes = {
 	[key in keyof NoteEventTypes]: {

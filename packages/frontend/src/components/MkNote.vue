@@ -399,7 +399,7 @@ const keymap = {
 			renoteCollapsed.value = false;
 		} else if (appearNote.cw != null) {
 			showContent.value = !showContent.value;
-		} else if (isLong) {
+		} else if (isLong.value) {
 			collapsed.value = !collapsed.value;
 		}
 	},

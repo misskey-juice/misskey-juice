@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { RemoteAvatarDecorationService } from '@/core/RemoteAvatarDecorationService.js';
 import type { MiRemoteUser } from '@/models/User.js';
+import { StatusError } from '@/misc/status-error.js';
 
 // JUICE: リモートのアイコンのデコレーションの取り込み(相手のサーバーのusers/showから、形の正しいものだけ持つ)
 describe('RemoteAvatarDecorationService', () => {
@@ -88,6 +89,25 @@ describe('RemoteAvatarDecorationService', () => {
 		softwareName = null;
 		await service.refresh(user);
 		expect(send).toHaveBeenCalled();
+	});
+
+	test('Misskey系でなくなったサーバー・相手にいないユーザーは、前に取ったデコレーションを外す', async () => {
+		const decorated = { ...user, avatarDecorations: [{ id: 'd1', url: 'https://remote.example.com/d1.png' }] } as MiRemoteUser;
+		softwareName = 'mastodon';
+		await service.refresh(decorated);
+		expect(update).toHaveBeenLastCalledWith('u1', { avatarDecorations: [] });
+
+		softwareName = 'misskey';
+		update.mockReset();
+		send.mockRejectedValueOnce(new StatusError('404 Not Found', 404));
+		await service.refresh(decorated);
+		expect(update).toHaveBeenLastCalledWith('u1', { avatarDecorations: [] });
+
+		// 一時的な失敗ではそのまま
+		update.mockReset();
+		send.mockRejectedValueOnce(new StatusError('503 Service Unavailable', 503));
+		await service.refresh(decorated);
+		expect(update).not.toHaveBeenCalled();
 	});
 
 	test('取得に失敗したり形が違ったりしたら何もしない', async () => {

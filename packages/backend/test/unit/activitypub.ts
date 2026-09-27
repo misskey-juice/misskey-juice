@@ -26,7 +26,7 @@ import { GlobalModule } from '@/GlobalModule.js';
 import { CoreModule } from '@/core/CoreModule.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { LoggerService } from '@/core/LoggerService.js';
-import { MiMeta, MiNote, NotesRepository, UserProfilesRepository } from '@/models/_.js';
+import { MiMeta, MiNote, NotesRepository, PollsRepository, UserProfilesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DownloadService } from '@/core/DownloadService.js';
@@ -95,6 +95,7 @@ async function createRandomRemoteUser(
 describe('ActivityPub', () => {
 	let userProfilesRepository: UserProfilesRepository;
 	let notesRepository: NotesRepository;
+	let pollsRepository: PollsRepository;
 	let imageService: ApImageService;
 	let noteService: ApNoteService;
 	let personService: ApPersonService;
@@ -148,6 +149,7 @@ describe('ActivityPub', () => {
 
 		userProfilesRepository = app.get(DI.userProfilesRepository);
 		notesRepository = app.get(DI.notesRepository);
+		pollsRepository = app.get(DI.pollsRepository);
 
 		noteService = app.get<ApNoteService>(ApNoteService);
 		personService = app.get<ApPersonService>(ApPersonService);
@@ -264,6 +266,68 @@ describe('ActivityPub', () => {
 			const { user } = await setup();
 			assert.strictEqual(await noteService.updateNote(unknown, user, resolver), 'skip: note not found');
 			assert.strictEqual(await notesRepository.countBy({ uri: unknown.id }), 0);
+		});
+
+		test('センシティブワードを含む編集は、公開をホームに下げる', async () => {
+			const { post, note, user } = await setup();
+			assert.strictEqual(note.visibility, 'public');
+			updateMeta({ ...metaInitial, sensitiveWords: ['sensitive'] });
+			try {
+				const updated = new Date(Date.now() - 1000).toISOString();
+				assert.strictEqual(await noteService.updateNote({ ...post, content: 'now sensitive', updated }, user, resolver), 'ok: Note updated');
+				assert.strictEqual((await notesRepository.findOneByOrFail({ id: note.id })).visibility, 'home');
+			} finally {
+				updateMeta({ ...metaInitial });
+			}
+		});
+
+		test('ハッシュタグは作成時と同じく、長すぎるものを除いて32個までにする', async () => {
+			const { post, note, user } = await setup();
+			const tag = [
+				{ type: 'Hashtag', name: `#${'a'.repeat(129)}` },
+				...Array.from({ length: 40 }, (_, i) => ({ type: 'Hashtag', name: `#tag${i}` })),
+			];
+			const updated = new Date(Date.now() - 1000).toISOString();
+			assert.strictEqual(await noteService.updateNote({ ...post, content: 'tags', tag, updated }, user, resolver), 'ok: Note updated');
+			const after = await notesRepository.findOneByOrFail({ id: note.id });
+			assert.strictEqual(after.tags.length, 32);
+			assert.ok(after.tags.every(t => t.length <= 128));
+		});
+
+		test('普通のリノートは編集できない', async () => {
+			const { post: target } = await setup();
+			const { post, note, user } = await setup();
+			const targetNote = await notesRepository.findOneByOrFail({ uri: target.id });
+			// 受け取ったリノート(Announce)と同じ形にする
+			await notesRepository.update(note.id, { renoteId: targetNote.id, text: null });
+			const updated = new Date(Date.now() - 1000).toISOString();
+			assert.strictEqual(await noteService.updateNote({ ...post, content: 'now a quote', updated }, user, resolver), 'skip: pure renote cannot be edited');
+			assert.strictEqual((await notesRepository.findOneByOrFail({ id: note.id })).text, null);
+		});
+
+		test('アンケートの選択肢が変わったら、選択肢と票を差し替える', async () => {
+			const { post, note, user } = await setup({
+				type: 'Question',
+				oneOf: [
+					{ type: 'Note', name: 'A', replies: { type: 'Collection', totalItems: 3 } },
+					{ type: 'Note', name: 'B', replies: { type: 'Collection', totalItems: 1 } },
+				],
+			});
+			const updated = new Date(Date.now() - 1000).toISOString();
+			const result = await noteService.updateNote({
+				...post,
+				content: 'changed poll',
+				oneOf: [
+					{ type: 'Note', name: 'X', replies: { type: 'Collection', totalItems: 0 } },
+					{ type: 'Note', name: 'Y', replies: { type: 'Collection', totalItems: 0 } },
+					{ type: 'Note', name: 'Z', replies: { type: 'Collection', totalItems: 0 } },
+				],
+				updated,
+			} as IObject, user, resolver);
+			assert.strictEqual(result, 'ok: Note updated');
+			const poll = await pollsRepository.findOneByOrFail({ noteId: note.id });
+			assert.deepStrictEqual(poll.choices, ['X', 'Y', 'Z']);
+			assert.deepStrictEqual(poll.votes, [0, 0, 0]);
 		});
 	});
 

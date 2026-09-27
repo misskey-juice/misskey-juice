@@ -17,6 +17,7 @@ import { LoggerService } from '@/core/LoggerService.js';
 import type Logger from '@/logger.js';
 import { appendQuery, query } from '@/misc/prelude/url.js';
 import { bindThis } from '@/decorators.js';
+import { StatusError } from '@/misc/status-error.js';
 
 // JUICE: アイコンのデコレーションはActivityPubでは送られてこないので、デコレーションを持つ実装(Misskey系)の
 // ユーザーは、相手のサーバーのAPI(users/show)から取ってくる
@@ -78,7 +79,8 @@ export class RemoteAvatarDecorationService {
 		// 初めて見るサーバーは、ソフトウェアの情報がまだ取れていない(ユーザーの登録と並行して取りに行く)ので、そのときは試してみる。
 		// Misskey系でなければusers/showが無く、デコレーションを取り出せないだけ
 		const instance = await this.federatedInstanceService.fetch(user.host);
-		if (instance?.softwareName != null && !SUPPORTED_SOFTWARE.includes(instance.softwareName.toLowerCase())) return;
+		// Misskey系でなくなったサーバーのユーザーは、前に取ったデコレーションを外す
+		if (instance?.softwareName != null && !SUPPORTED_SOFTWARE.includes(instance.softwareName.toLowerCase())) return await this.save(user, []);
 
 		let body: unknown;
 		try {
@@ -95,13 +97,18 @@ export class RemoteAvatarDecorationService {
 			body = await res.json();
 		} catch (err) {
 			this.logger.debug(`failed to fetch avatar decorations of ${user.username}@${user.host}: ${err}`);
+			// 相手のサーバーにユーザーがいない(消された等)ときは外す。一時的な失敗(タイムアウト・5xx等)ではそのまま
+			if (err instanceof StatusError && (err.statusCode === 404 || err.statusCode === 410)) await this.save(user, []);
 			return;
 		}
 
 		const decorations = this.parseDecorations(body);
 		if (decorations == null) return;
-		if (JSON.stringify(decorations) === JSON.stringify(user.avatarDecorations)) return;
+		await this.save(user, decorations);
+	}
 
+	private async save(user: MiRemoteUser, decorations: RemoteDecoration[]): Promise<void> {
+		if (JSON.stringify(decorations) === JSON.stringify(user.avatarDecorations)) return;
 		await this.usersRepository.update(user.id, { avatarDecorations: decorations });
 		this.globalEventService.publishInternalEvent('remoteUserUpdated', { id: user.id });
 	}

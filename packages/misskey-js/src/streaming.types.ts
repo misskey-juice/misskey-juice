@@ -427,9 +427,11 @@ export type NoteUpdatedEvent = { id: Note['id'] } & ({
 		isNovel: boolean;
 	};
 } | {
-	// JUICE: リモートで編集された投稿を反映した(表示を差し替える内容)
+	// JUICE: リモートで編集された投稿を反映した。内容はnotes/showで取り直す
 	type: 'edited';
-	body: Pick<Note, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
+	body: {
+		updatedAt: string;
+	};
 });
 
 export type BroadcastEvents = {

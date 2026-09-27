@@ -16,7 +16,21 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
 
-type NoteEditedBody = Pick<Misskey.entities.Note, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
+type NoteEditedBody = Pick<Misskey.entities.Note, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'poll' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
+
+// JUICE: 編集された投稿の取り直し。同じ投稿を表示している部品が複数あっても、1回の編集につき1回だけ取る
+const editedNoteFetches = new Map<string, Promise<Misskey.entities.Note | null>>();
+
+function fetchEditedNote(id: string, updatedAt: string): Promise<Misskey.entities.Note | null> {
+	const key = `${id}:${updatedAt}`;
+	let fetching = editedNoteFetches.get(key);
+	if (fetching == null) {
+		fetching = misskeyApi('notes/show', { noteId: id }).catch(() => null);
+		editedNoteFetches.set(key, fetching);
+		window.setTimeout(() => editedNoteFetches.delete(key), 1000 * 10);
+	}
+	return fetching;
+}
 
 export const noteEvents = new EventEmitter<{
 	[ev: `reacted:${string}`]: (ctx: { userId: Misskey.entities.User['id']; reaction: string; emoji?: { name: string; url: string; } | null; }) => void;
@@ -179,8 +193,24 @@ function realtimeSubscribe(props: {
 			}
 
 			case 'edited': {
-				// JUICE
-				noteEvents.emit(`edited:${id}`, body);
+				// JUICE: 配られるのは編集日時だけ。内容は、見られるかをサーバーで確かめてもらうため取り直す
+				fetchEditedNote(id, body.updatedAt).then(edited => {
+					if (edited == null) return;
+					noteEvents.emit(`edited:${id}`, {
+						text: edited.text,
+						cw: edited.cw,
+						lang: edited.lang,
+						fileIds: edited.fileIds,
+						files: edited.files,
+						emojis: edited.emojis,
+						tags: edited.tags,
+						mentions: edited.mentions,
+						poll: edited.poll,
+						isAIGenerated: edited.isAIGenerated,
+						isNovel: edited.isNovel,
+						updatedAt: edited.updatedAt,
+					});
+				});
 				break;
 			}
 		}
@@ -330,10 +360,10 @@ export function useNoteCapture(props: {
 	}
 
 	// JUICE: リモートで編集された投稿の内容に差し替える。本文・CW・添付などはノートのデータを直接書き換え、
-	// 編集日時をリアクティブにして、それを表示している画面を描き直させる
-	// (URLのプレビューや長い投稿の折りたたみは、表示したときのまま。読み込み直すと反映される)
+	// 編集日時をリアクティブにして、それを表示している画面(本文・URLのプレビュー・長い投稿の判定)を作り直させる
 	function onEdited(ctx: NoteEditedBody): void {
 		Object.assign(note, ctx);
+		$note.pollChoices = ctx.poll?.choices ?? [];
 		$note.isAIGenerated = ctx.isAIGenerated;
 		$note.isNovel = ctx.isNovel;
 		$note.updatedAt = ctx.updatedAt;

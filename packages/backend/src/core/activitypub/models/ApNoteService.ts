@@ -7,7 +7,7 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { In } from 'typeorm';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
-import type { PollsRepository, EmojisRepository, MiMeta, NotesRepository, UserProfilesRepository } from '@/models/_.js';
+import type { PollsRepository, PollVotesRepository, EmojisRepository, MiMeta, NotesRepository, UserProfilesRepository, UsersRepository } from '@/models/_.js';
 import type { IMentionedRemoteUsers } from '@/models/Note.js';
 import type { Config } from '@/config.js';
 import type { MiRemoteUser } from '@/models/User.js';
@@ -26,9 +26,11 @@ import { bindThis } from '@/decorators.js';
 import { checkHttps } from '@/misc/check-https.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
-import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { SearchService } from '@/core/SearchService.js';
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
+import { RoleService } from '@/core/RoleService.js';
+import { isQuote, isRenote } from '@/misc/is-renote.js';
+import { DB_MAX_NOTE_TEXT_LENGTH } from '@/const.js';
 import { getOneApId, getApId, getOneApHrefNullable, validPost, isEmoji, getApType } from '../type.js';
 import { ApLoggerService } from '../ApLoggerService.js';
 import { ApMfmService } from '../ApMfmService.js';
@@ -69,6 +71,12 @@ export class ApNoteService {
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
 
+		@Inject(DI.pollVotesRepository)
+		private pollVotesRepository: PollVotesRepository,
+
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
+
 		private idService: IdService,
 		private apMfmService: ApMfmService,
 		private apResolverService: ApResolverService,
@@ -87,8 +95,8 @@ export class ApNoteService {
 		private apDbResolverService: ApDbResolverService,
 		private apLoggerService: ApLoggerService,
 		private globalEventService: GlobalEventService,
-		private noteEntityService: NoteEntityService,
 		private searchService: SearchService,
+		private roleService: RoleService,
 	) {
 		this.logger = this.apLoggerService.logger;
 	}
@@ -358,6 +366,10 @@ export class ApNoteService {
 	 * - 本文・CW・言語・添付ファイル・カスタム絵文字・メンション・ハッシュタグ・JUICEのフラグを差し替える。
 	 *   公開範囲・返信先・引用は変えない(Mastodon等でも編集では変わらない)
 	 * - 編集日時(updated)が今の編集日時より新しいときだけ反映する(遅れて届いた古い編集で戻さないように)
+	 * - 作成時と同じ整形・制限をかける(センシティブワード・公開ノートの権限で公開をホームに下げる、本文の長さ、
+	 *   ハッシュタグの数と長さ、メディアサイレンスしたサーバーの絵文字、メンションの上限)
+	 * - 普通のリノートは編集できない(本文を足して引用に変えたり、引用を普通のリノートの形にしたりさせない)
+	 * - アンケートの選択肢が変わったら、選択肢と票を差し替える(Mastodonと同じく、それまでの投票は消える)
 	 */
 	@bindThis
 	public async updateNote(value: IObject, actor: MiRemoteUser, resolver: Resolver): Promise<string> {
@@ -365,6 +377,7 @@ export class ApNoteService {
 		const exists = await this.fetchNote(uri);
 		if (exists == null) return 'skip: note not found';
 		if (exists.userId !== actor.id) return 'skip: actor is not the author';
+		if (isRenote(exists) && !isQuote(exists)) return 'skip: pure renote cannot be edited';
 
 		const err = this.validateNote(value, uri, actor);
 		if (err) return `skip: ${err.message}`;
@@ -377,10 +390,13 @@ export class ApNoteService {
 		const editedAt = updatedAt.getTime() > Date.now() ? new Date() : updatedAt;
 		if (exists.updatedAt != null && editedAt.getTime() <= exists.updatedAt.getTime()) return 'skip: older or same edit';
 
-		const { cw, text, lang } = this.parseNoteContent(note);
-		if (this.noteCreateService.checkProhibitedWordsContain({ cw, text })) {
+		const { cw, text: rawText, lang } = this.parseNoteContent(note);
+		if (this.noteCreateService.checkProhibitedWordsContain({ cw, text: rawText })) {
 			return 'skip: note contains prohibited words';
 		}
+		// 作成時と同じく、長すぎる本文は切り詰め、空白だけなら無しにする
+		const trimmedText = rawText?.slice(0, DB_MAX_NOTE_TEXT_LENGTH).trim() ?? '';
+		const text = trimmedText === '' ? null : trimmedText;
 
 		const files: MiDriveFile[] = [];
 		for (const attach of toArray(note.attachment)) {
@@ -389,12 +405,52 @@ export class ApNoteService {
 			if (file) files.push(file);
 		}
 
-		const emojis = await this.extractEmojis(note.tag ?? [], actor.host).catch(e => {
+		// 編集で普通のリノートの形(本文・CW・添付・アンケートが無い)にはしない
+		if (exists.renoteId != null && text == null && cw == null && files.length === 0 && exists.replyId == null && !exists.hasPoll) {
+			return 'skip: edit would turn the quote into a pure renote';
+		}
+
+		// メディアサイレンスしたサーバーのカスタム絵文字は付けない(作成時と同じ)
+		const emojis = this.utilityService.isMediaSilencedHost(this.meta.mediaSilencedHosts, actor.host) ? [] : await this.extractEmojis(note.tag ?? [], actor.host).catch(e => {
 			this.logger.info(`extractEmojis: ${e}`);
 			return [];
 		});
 		const mentionedUsers = await this.apMentionService.extractApMentions(note.tag, resolver);
-		const tags = extractApHashtags(note.tag).map(tag => normalizeForSearch(tag));
+		const apMentionRawCount = new Set(this.apMentionService.extractApMentionObjects(note.tag).map(x => x.href)).size;
+		const tags = unique(extractApHashtags(note.tag).map(tag => normalizeForSearch(tag))).filter(tag => Array.from(tag).length <= 128).slice(0, 32);
+
+		// 返信先の人と、指名した相手は、本文でメンションしていなくてもメンションに入れておく(作成時と同じ)
+		const keepUserIds = [
+			...(exists.replyUserId != null && exists.replyUserId !== exists.userId ? [exists.replyUserId] : []),
+			...(exists.visibility === 'specified' ? exists.visibleUserIds : []),
+		].filter(id => !mentionedUsers.some(u => u.id === id));
+		if (keepUserIds.length > 0) mentionedUsers.push(...await this.usersRepository.findBy({ id: In(keepUserIds) }));
+
+		const policies = await this.roleService.getUserPolicies(actor.id);
+		const effectiveMentionCount = Math.max(mentionedUsers.length, apMentionRawCount);
+		if (effectiveMentionCount > 0 && effectiveMentionCount > policies.mentionLimit) {
+			return 'skip: note contains too many mentions';
+		}
+
+		// センシティブワードを含む・公開ノートを作れない人の編集は、公開をホームに下げる(作成時と同じ。上げることはしない)
+		const visibility = exists.visibility === 'public' && (this.utilityService.isKeyWordIncluded(cw ?? text ?? '', this.meta.sensitiveWords) || !policies.canPublicNote)
+			? 'home'
+			: exists.visibility;
+
+		// アンケートの選択肢が変わったとき
+		if (exists.hasPoll && getApType(note) === 'Question') {
+			const poll = await this.apQuestionService.extractPollFromQuestion(note, resolver).catch(() => null);
+			const current = await this.pollsRepository.findOneBy({ noteId: exists.id });
+			if (poll != null && current != null && poll.choices.length > 0 && JSON.stringify(poll.choices) !== JSON.stringify(current.choices)) {
+				await this.pollsRepository.update({ noteId: exists.id }, {
+					choices: poll.choices,
+					votes: poll.choices.map((_, i) => poll.votes?.[i] ?? 0),
+					multiple: poll.multiple ?? false,
+					expiresAt: poll.expiresAt ?? null,
+				});
+				await this.pollVotesRepository.delete({ noteId: exists.id });
+			}
+		}
 
 		// メンションしたリモートの人(本文のリンクを表示するため)。NoteCreateServiceの作成時と同じ形
 		const profiles = mentionedUsers.length > 0 ? await this.userProfilesRepository.findBy({ userId: In(mentionedUsers.map(u => u.id)) }) : [];
@@ -409,11 +465,12 @@ export class ApNoteService {
 			text,
 			cw,
 			lang,
+			visibility,
 			fileIds: files.map(file => file.id),
 			attachedFileTypes: files.map(file => file.type),
 			emojis: emojis.map(emoji => emoji.name),
 			tags,
-			mentions: mentionedUsers.map(u => u.id),
+			mentions: unique(mentionedUsers.map(u => u.id)),
 			mentionedRemoteUsers: JSON.stringify(mentionedRemoteUsers),
 			isAIGenerated: !!note._juice_isAIGenerated,
 			isNovel: !!note._juice_isNovel,
@@ -425,20 +482,10 @@ export class ApNoteService {
 		await this.searchService.unindexNote(exists).catch(() => {});
 		await this.searchService.indexNote(updated).catch(() => {});
 
-		// 開いている人の画面の表示を差し替える(見られるかは配るときに確かめている)
-		const packed = await this.noteEntityService.pack(updated, null, { skipHide: true });
+		// 開いている人の画面の表示を差し替える。内容は見る人ごとに見られるかを確かめる必要があるので、
+		// 編集日時だけ配り、受け取った側が取り直す
 		this.globalEventService.publishNoteStream(updated, 'edited', {
-			text: packed.text,
-			cw: packed.cw,
-			lang: packed.lang,
-			fileIds: packed.fileIds,
-			files: packed.files,
-			emojis: packed.emojis,
-			tags: packed.tags,
-			mentions: packed.mentions,
-			isAIGenerated: packed.isAIGenerated,
-			isNovel: packed.isNovel,
-			updatedAt: packed.updatedAt,
+			updatedAt: editedAt.toISOString(),
 		});
 
 		return 'ok: Note updated';

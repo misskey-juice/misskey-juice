@@ -32,7 +32,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkTime :time="note.createdAt" colored/>
 		</MkA>
 		<!-- JUICE: リモートで編集された投稿 -->
-		<span v-if="editedAt != null" v-tooltip="`${i18n.ts.edited}: ${dateString(editedAt)}`" style="margin-left: 0.5em;" :aria-label="i18n.ts.edited" role="img"><i class="ti ti-pencil"></i></span>
+		<span v-if="editedAt != null" v-tooltip="`${i18n.ts.edited}: ${dateString(editedAt)}`" style="margin-left: 0.5em;" :aria-label="`${i18n.ts.edited}: ${dateString(editedAt)}`" role="img"><i class="ti ti-pencil"></i></span>
 		<span v-if="note.visibility !== 'public'" style="margin-left: 0.5em;" :title="i18n.ts._visibility[note.visibility]">
 			<i v-if="note.visibility === 'home'" class="ti ti-home"></i>
 			<i v-else-if="note.visibility === 'followers'" class="ti ti-lock"></i>
