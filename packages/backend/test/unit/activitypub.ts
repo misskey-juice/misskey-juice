@@ -26,7 +26,7 @@ import { GlobalModule } from '@/GlobalModule.js';
 import { CoreModule } from '@/core/CoreModule.js';
 import { FederatedInstanceService } from '@/core/FederatedInstanceService.js';
 import { LoggerService } from '@/core/LoggerService.js';
-import { MiMeta, MiNote, UserProfilesRepository } from '@/models/_.js';
+import { MiMeta, MiNote, NotesRepository, UserProfilesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { secureRndstr } from '@/misc/secure-rndstr.js';
 import { DownloadService } from '@/core/DownloadService.js';
@@ -94,6 +94,7 @@ async function createRandomRemoteUser(
 
 describe('ActivityPub', () => {
 	let userProfilesRepository: UserProfilesRepository;
+	let notesRepository: NotesRepository;
 	let imageService: ApImageService;
 	let noteService: ApNoteService;
 	let personService: ApPersonService;
@@ -146,6 +147,7 @@ describe('ActivityPub', () => {
 		app.enableShutdownHooks();
 
 		userProfilesRepository = app.get(DI.userProfilesRepository);
+		notesRepository = app.get(DI.notesRepository);
 
 		noteService = app.get<ApNoteService>(ApNoteService);
 		personService = app.get<ApPersonService>(ApPersonService);
@@ -194,6 +196,74 @@ describe('ActivityPub', () => {
 			assert.deepStrictEqual(note?.uri, post.id);
 			assert.deepStrictEqual(note.visibility, 'public');
 			assert.deepStrictEqual(note.text, post.content);
+		});
+	});
+
+	// JUICE: Mastodon・Fedibird等で編集された投稿(Update)の受け取り
+	describe('Note edit via Update (JUICE)', () => {
+		async function setup(extra: Record<string, unknown> = {}) {
+			const actor = createRandomActor();
+			const post = {
+				'@context': 'https://www.w3.org/ns/activitystreams',
+				id: `${host}/notes/${secureRndstr(8)}`,
+				type: 'Note',
+				attributedTo: actor.id,
+				to: 'https://www.w3.org/ns/activitystreams#Public',
+				content: 'before',
+				...extra,
+			};
+			resolver.register(actor.id, actor);
+			resolver.register(post.id, post);
+			const note = await noteService.createNote(post.id, undefined, resolver, true);
+			const user = await personService.fetchPerson(actor.id) as MiRemoteUser;
+			return { actor, post, note: note!, user };
+		}
+
+		test('編集日時付きのUpdateで、本文・CW・編集日時が差し替わる', async () => {
+			const { post, note, user } = await setup();
+			const updated = new Date(Date.now() - 1000).toISOString();
+			const result = await noteService.updateNote({ ...post, content: 'after', summary: 'cw', updated }, user, resolver);
+			assert.strictEqual(result, 'ok: Note updated');
+			const after = await notesRepository.findOneByOrFail({ id: note.id });
+			assert.strictEqual(after.text, 'after');
+			assert.strictEqual(after.cw, 'cw');
+			assert.strictEqual(after.updatedAt?.toISOString(), updated);
+			// 公開範囲は変わらない
+			assert.strictEqual(after.visibility, note.visibility);
+		});
+
+		test('遅れて届いた古い編集では戻さない', async () => {
+			const { post, note, user } = await setup();
+			const newer = new Date(Date.now() - 1000).toISOString();
+			const older = new Date(Date.now() - 5000).toISOString();
+			await noteService.updateNote({ ...post, content: 'newer', updated: newer }, user, resolver);
+			const result = await noteService.updateNote({ ...post, content: 'older', updated: older }, user, resolver);
+			assert.strictEqual(result, 'skip: older or same edit');
+			assert.strictEqual((await notesRepository.findOneByOrFail({ id: note.id })).text, 'newer');
+		});
+
+		test('編集日時の無いUpdateは編集として扱わない', async () => {
+			const { post, note, user } = await setup();
+			const result = await noteService.updateNote({ ...post, content: 'after' }, user, resolver);
+			assert.strictEqual(result, 'skip: not an edit (no updated)');
+			const after = await notesRepository.findOneByOrFail({ id: note.id });
+			assert.strictEqual(after.text, 'before');
+			assert.strictEqual(after.updatedAt, null);
+		});
+
+		test('投稿者以外からのUpdate・知らない投稿のUpdateは反映しない', async () => {
+			const { post, note } = await setup();
+			const other = createRandomActor();
+			resolver.register(other.id, other);
+			const otherUser = await personService.createPerson(other.id, resolver) as MiRemoteUser;
+			const updated = new Date(Date.now() - 1000).toISOString();
+			assert.strictEqual(await noteService.updateNote({ ...post, content: 'hijacked', updated }, otherUser, resolver), 'skip: actor is not the author');
+			assert.strictEqual((await notesRepository.findOneByOrFail({ id: note.id })).text, 'before');
+
+			const unknown = { ...post, id: `${host}/notes/${secureRndstr(8)}`, content: 'new', updated };
+			const { user } = await setup();
+			assert.strictEqual(await noteService.updateNote(unknown, user, resolver), 'skip: note not found');
+			assert.strictEqual(await notesRepository.countBy({ uri: unknown.id }), 0);
 		});
 	});
 

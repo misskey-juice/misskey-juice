@@ -405,6 +405,7 @@ export class NoteEntityService implements OnModuleInit {
 			isAIGenerated: note.isAIGenerated,
 			hideFromMediaTimeline: note.hideFromMediaTimeline, // JUICE
 			isNovel: note.isNovel, // JUICE
+			updatedAt: note.updatedAt?.toISOString() ?? undefined, // JUICE
 			relayId: note.relayId ?? undefined,
 			reactionAcceptance: note.reactionAcceptance,
 			visibleUserIds: note.visibility === 'specified' ? note.visibleUserIds : undefined,

@@ -138,6 +138,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkA :to="notePage(appearNote)">
 						<MkTime :time="appearNote.createdAt" mode="detail" colored/>
 					</MkA>
+					<!-- JUICE: リモートで編集された投稿は、最後に編集された日時を出す -->
+					<span v-if="$appearNote.updatedAt" style="margin-left: 0.5em;"><i class="ti ti-pencil"></i> {{ i18n.ts.edited }}: <MkTime :time="$appearNote.updatedAt" mode="detail"/></span>
 					<span style="margin-left: 0.5em;">
 						<span style="border: 1px solid var(--MI_THEME-divider); margin-right: 0.5em;"></span>
 						<i v-if="appearNote.visibility === 'public'" class="ti ti-world"></i>

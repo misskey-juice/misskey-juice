@@ -141,6 +141,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 							PixelFed
 							<template #suffix>GitHub</template>
 						</FormLink>
+						<!-- JUICE: 投稿の編集(ActivityPubのUpdate)の受け取りは、この2つの形式・振る舞いに合わせたので横に並べる -->
+						<div :class="$style.inspiredPair">
+							<FormLink to="https://github.com/mastodon/mastodon" external>
+								<template #icon><i class="ti ti-bulb"></i></template>
+								Mastodon
+								<template #suffix>GitHub</template>
+							</FormLink>
+							<FormLink to="https://github.com/fedibird/mastodon" external>
+								<template #icon><i class="ti ti-bulb"></i></template>
+								Fedibird
+								<template #suffix>GitHub</template>
+							</FormLink>
+						</div>
 					</div>
 				</FormSection>
 
@@ -298,6 +311,13 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.inspiredPair {
+	display: grid;
+	// 狭い画面では1列に戻す
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 8px;
+}
+
 // JUICEブランドカラー(テーマの--MI_THEME-accent等はユーザー設定で変わるため、雨の色は固定にする)
 $juice-rain-color: #f2841f;
 

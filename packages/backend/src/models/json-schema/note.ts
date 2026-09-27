@@ -220,6 +220,12 @@ export const packedNoteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		// JUICE: リモートで編集された投稿の、最後に編集された日時(編集されていなければ無い)
+		updatedAt: {
+			type: 'string',
+			optional: true, nullable: false,
+			format: 'date-time',
+		},
 		relayId: {
 			type: 'string',
 			optional: true, nullable: true,

@@ -843,7 +843,12 @@ export class ApInboxService {
 			return 'ok: Person updated';
 		} else if (getApType(object) === 'Question') {
 			await this.apQuestionService.updateQuestion(object, actor, resolver).catch(err => console.error(err));
-			return 'ok: Question updated';
+			// JUICE: 編集日時(updated)付きのQuestionは、アンケートの集計に加えて投稿そのものの編集として扱う(Mastodon等と同じ)
+			if (object.updated == null) return 'ok: Question updated';
+			return await this.apNoteService.updateNote(object, actor, resolver);
+		} else if (isPost(object)) {
+			// JUICE: 投稿の編集(Mastodon・Fedibird等)。このサーバーにある本人の投稿だけを反映する
+			return await this.apNoteService.updateNote(object, actor, resolver);
 		} else {
 			return `skip: Unknown type: ${getApType(object)}`;
 		}

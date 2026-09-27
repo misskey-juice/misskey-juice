@@ -16,6 +16,8 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
 
+type NoteEditedBody = Pick<Misskey.entities.Note, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
+
 export const noteEvents = new EventEmitter<{
 	[ev: `reacted:${string}`]: (ctx: { userId: Misskey.entities.User['id']; reaction: string; emoji?: { name: string; url: string; } | null; }) => void;
 	[ev: `unreacted:${string}`]: (ctx: { userId: Misskey.entities.User['id']; reaction: string; emoji?: { name: string; url: string; } | null; }) => void;
@@ -23,6 +25,8 @@ export const noteEvents = new EventEmitter<{
 	// JUICE
 	[ev: `aiGeneratedChanged:${string}`]: (ctx: { isAIGenerated: boolean; }) => void;
 	[ev: `novelChanged:${string}`]: (ctx: { isNovel: boolean; }) => void;
+	// JUICE: リモートで編集された投稿を反映した
+	[ev: `edited:${string}`]: (ctx: NoteEditedBody) => void;
 }>();
 
 const fetchEvent = new EventEmitter<{
@@ -173,6 +177,12 @@ function realtimeSubscribe(props: {
 				});
 				break;
 			}
+
+			case 'edited': {
+				// JUICE
+				noteEvents.emit(`edited:${id}`, body);
+				break;
+			}
 		}
 	}
 
@@ -207,6 +217,7 @@ export type ReactiveNoteData = {
 	pollChoices: NonNullable<Misskey.entities.Note['poll']>['choices'];
 	isAIGenerated: Misskey.entities.Note['isAIGenerated']; // JUICE
 	isNovel: Misskey.entities.Note['isNovel']; // JUICE
+	updatedAt: Misskey.entities.Note['updatedAt']; // JUICE: 最後に編集された日時
 };
 
 const noReaction = Symbol();
@@ -238,6 +249,7 @@ export function useNoteCapture(props: {
 		pollChoices: note.poll?.choices ?? [],
 		isAIGenerated: note.isAIGenerated, // JUICE
 		isNovel: note.isNovel, // JUICE
+		updatedAt: note.updatedAt, // JUICE
 	});
 
 	noteEvents.on(`reacted:${note.id}`, onReacted);
@@ -245,6 +257,7 @@ export function useNoteCapture(props: {
 	noteEvents.on(`pollVoted:${note.id}`, onPollVoted);
 	noteEvents.on(`aiGeneratedChanged:${note.id}`, onAIGeneratedChanged); // JUICE
 	noteEvents.on(`novelChanged:${note.id}`, onNovelChanged); // JUICE
+	noteEvents.on(`edited:${note.id}`, onEdited); // JUICE
 
 	// 操作がダブっていないかどうかを簡易的に記録するためのMap
 	const reactionUserMap = new Map<Misskey.entities.User['id'], string | typeof noReaction>();
@@ -316,6 +329,16 @@ export function useNoteCapture(props: {
 		$note.isNovel = ctx.isNovel;
 	}
 
+	// JUICE: リモートで編集された投稿の内容に差し替える。本文・CW・添付などはノートのデータを直接書き換え、
+	// 編集日時をリアクティブにして、それを表示している画面を描き直させる
+	// (URLのプレビューや長い投稿の折りたたみは、表示したときのまま。読み込み直すと反映される)
+	function onEdited(ctx: NoteEditedBody): void {
+		Object.assign(note, ctx);
+		$note.isAIGenerated = ctx.isAIGenerated;
+		$note.isNovel = ctx.isNovel;
+		$note.updatedAt = ctx.updatedAt;
+	}
+
 	function subscribe() {
 		if (mock) {
 			// モックモードでは購読しない
@@ -340,6 +363,7 @@ export function useNoteCapture(props: {
 		noteEvents.off(`pollVoted:${note.id}`, onPollVoted);
 		noteEvents.off(`aiGeneratedChanged:${note.id}`, onAIGeneratedChanged); // JUICE
 		noteEvents.off(`novelChanged:${note.id}`, onNovelChanged); // JUICE
+		noteEvents.off(`edited:${note.id}`, onEdited); // JUICE
 	});
 
 	// 投稿からある程度経過している(=タイムラインを遡って表示した)ノートは、イベントが発生する可能性が低いためそもそも購読しない
