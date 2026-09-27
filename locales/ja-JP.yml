@@ -2563,6 +2563,7 @@ _drawRoom:
   showCursors: "ほかの人のカーソルを表示"
   cursorOpacity: "ほかの人のカーソルの濃さ"
   showDebugInfo: "デバッグ情報を表示"
+  viewSettings: "表示の設定"
   debugMyStrokes: "自分の線"
   debugMyBytes: "自分の線のデータ量"
   debugRoomStrokes: "部屋の線(全員)"

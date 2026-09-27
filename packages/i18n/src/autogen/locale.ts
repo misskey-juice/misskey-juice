@@ -9798,6 +9798,10 @@ export interface Locale extends ILocale {
          */
         "showDebugInfo": string;
         /**
+         * 表示の設定
+         */
+        "viewSettings": string;
+        /**
          * 自分の線
          */
         "debugMyStrokes": string;

@@ -344,6 +344,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<i class="ti ti-map"></i>
 							<span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortMinimap }}</span>
 						</button>
+						<!-- JUICE: 表示の設定 -->
+						<button v-tooltip="i18n.ts._drawRoom.viewSettings" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.viewSettings" @click="openViewMenu"><i class="ti ti-dots"></i></button>
 					</div>
 				</div>
 			</div>
@@ -1861,7 +1863,12 @@ function openZoomMenu(ev: MouseEvent): void {
 			active: current,
 			action: () => setZoom(scale),
 		};
-	}), { type: 'divider' }, {
+	})], (ev.currentTarget ?? ev.target) as HTMLElement);
+}
+
+// JUICE: 表示の設定(ホイールでの拡大縮小・ピクセルアート拡大モード・ほかの人のカーソル・デバッグ情報)は「…」のメニューにまとめる
+function openViewMenu(ev: MouseEvent): void {
+	os.popupMenu([{
 		type: 'switch',
 		text: i18n.ts._drawRoom.wheelZoom,
 		ref: wheelZoom,

@@ -3905,6 +3905,7 @@ _drawRoom:
   showCursors: "Show other people's cursors"
   cursorOpacity: "Opacity of other people's cursors"
   showDebugInfo: "Show debug info"
+  viewSettings: "View settings"
   debugMyStrokes: "My strokes"
   debugMyBytes: "My stroke data"
   debugRoomStrokes: "Strokes in room (everyone)"

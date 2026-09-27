@@ -3905,6 +3905,7 @@ _drawRoom:
   showCursors: "다른 사람의 커서 표시"
   cursorOpacity: "다른 사람의 커서 농도"
   showDebugInfo: "디버그 정보 표시"
+  viewSettings: "표시 설정"
   debugMyStrokes: "내 선"
   debugMyBytes: "내 선 데이터"
   debugRoomStrokes: "방의 선(전원)"

@@ -3905,6 +3905,7 @@ _drawRoom:
   showCursors: "显示其他人的光标"
   cursorOpacity: "其他人光标的浓度"
   showDebugInfo: "显示调试信息"
+  viewSettings: "显示设置"
   debugMyStrokes: "我的笔画"
   debugMyBytes: "我的笔画数据量"
   debugRoomStrokes: "房间内笔画(所有人)"
