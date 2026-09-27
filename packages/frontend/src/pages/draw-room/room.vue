@@ -56,7 +56,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							@click="brushPanelOpen = !brushPanelOpen"
 						>
 							<span :class="$style.brushPreview" :style="{ background: color, opacity: opacity / 100 }"></span>
-							<span v-if="usesBrushSize" :class="$style.sizeValue">{{ size }}</span>
+							<span v-if="usesBrushSize" :class="$style.sizeValue">{{ sizePercent }}%</span>
 						</button>
 						<div :class="[$style.brushOptions, { [$style.brushOptionsOpen]: brushPanelOpen }]">
 						<span :class="$style.toolSeparator"></span>
@@ -65,19 +65,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:key="c"
 							v-tooltip="c"
 							class="_button"
-							:class="[$style.swatch, { [$style.swatchActive]: color === c && tool === 'pen' }]"
+							:class="[$style.swatch, { [$style.swatchActive]: color === c }]"
 							:style="{ background: c }"
 							:aria-label="`${i18n.ts._drawRoom.color}: ${c}`"
-							:aria-pressed="color === c && tool === 'pen'"
-							@click="color = c; tool = 'pen'"
+							:aria-pressed="color === c"
+							@click="color = c"
 						></button>
-						<input v-model="color" type="color" :class="$style.colorInput" :aria-label="i18n.ts._drawRoom.color" @input="tool = 'pen'"/>
+						<!-- JUICE: カラーパレット(色相の輪・保存した色・最近使った色・コードや数値) -->
+						<button
+							v-tooltip="i18n.ts._drawRoom.colorPalette"
+							class="_button"
+							:class="$style.colorButton"
+							:aria-label="`${i18n.ts._drawRoom.colorPalette}: ${color}`"
+							@click="openColorPicker"
+						><span :class="$style.colorButtonSwatch" :style="{ background: color }"></span><i class="ti ti-palette"></i></button>
 						<!-- JUICE: 太さ・濃さ・筆の種類は、それを使う道具のときだけ出す(スポイト・選択・移動などでは出さない) -->
 						<span v-if="usesBrushSize || usesOpacity" :class="$style.toolSeparator"></span>
 						<label v-if="usesBrushSize" :class="$style.sizeLabel">
 							<i class="ti ti-line-dashed"></i>
-							<input v-model.number="size" type="range" min="1" :max="sizeMax" step="1" :aria-label="i18n.ts._drawRoom.size"/>
-							<span :class="$style.sizeValue">{{ size }}</span>
+							<input v-model.number="sizePercent" type="range" min="1" max="100" step="1" :aria-label="i18n.ts._drawRoom.size" :aria-valuetext="`${sizePercent}% (${Math.round(size * 10) / 10}px)`"/>
+							<span v-tooltip="`${Math.round(size * 10) / 10}px`" :class="$style.sizeValue">{{ sizePercent }}%</span>
 						</label>
 						<label v-if="usesOpacity" v-tooltip="i18n.ts._drawRoom.opacity" :class="$style.sizeLabel">
 							<i class="ti ti-droplet-half-2"></i>
@@ -93,9 +100,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button v-tooltip="i18n.ts._drawRoom.brushAreaHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'area' }]" :aria-label="i18n.ts._drawRoom.lassoFill" :aria-pressed="brushType === 'area'" @click="brushType = 'area'"><i class="ti ti-lasso-polygon"></i></button>
 						<button v-tooltip="i18n.ts._drawRoom.clipToLinesHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: clipToLines }]" :aria-label="i18n.ts._drawRoom.clipToLines" :aria-pressed="clipToLines" @click="clipToLines = !clipToLines"><i class="ti ti-shape"></i></button>
 						</template>
+						<!-- JUICE: 透明度ロック(ペン・塗りつぶしのとき。消しゴムには効かない) -->
+						<button
+							v-if="(usesBrushSize && tool !== 'eraser') || tool === 'bucket'"
+							v-tooltip="i18n.ts._drawRoom.alphaLockHint"
+							class="_button"
+							:class="[$style.toolButton, { [$style.toolButtonActive]: alphaLock }]"
+							:aria-label="i18n.ts._drawRoom.alphaLock"
+							:aria-pressed="alphaLock"
+							@click="alphaLock = !alphaLock"
+						><i class="ti ti-lock-square"></i></button>
+						<!-- JUICE: 隙間閉じ(塗りつぶしと、線の中だけ塗るとき) -->
+						<template v-if="tool === 'bucket' || (usesBrushSize && clipToLines)">
+						<span v-if="!usesBrushSize" :class="$style.toolSeparator"></span>
+						<button
+							v-tooltip="i18n.ts._drawRoom.gapCloseHint"
+							class="_button"
+							:class="[$style.toolButton, { [$style.toolButtonActive]: gapClose !== 'off' }]"
+							:aria-label="`${i18n.ts._drawRoom.gapClose}: ${gapCloseLabel(gapClose)}`"
+							@click="openGapCloseMenu"
+						><i class="ti ti-arrows-join-2"></i><span :class="$style.toolLabel">{{ gapCloseLabel(gapClose) }}</span></button>
+						</template>
 						</div>
 						<span :class="$style.toolSeparator"></span>
 						<button v-tooltip="i18n.ts._drawRoom.undo" class="_button" :class="$style.toolButton" :aria-label="i18n.ts._drawRoom.undo" @click="undo"><i class="ti ti-arrow-back-up"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortUndo }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.redo" class="_button" :class="$style.toolButton" :aria-label="i18n.ts._drawRoom.redo" @click="redo"><i class="ti ti-arrow-forward-up"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortRedo }}</span></button>
 						<button v-tooltip="i18n.ts._drawRoom.clearMyLayer" class="_button" :class="$style.toolButton" :aria-label="i18n.ts._drawRoom.clearMyLayer" @click="clearMyLayer"><i class="ti ti-trash"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortClear }}</span></button>
 					</div>
 					<!-- JUICE: 部屋主も描く人から抜けて観戦できる(部屋主のまま) -->
@@ -160,6 +189,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							[$style.canvasPicking]: canDraw && tool === 'eyedropper',
 							[$style.canvasMove]: canDraw && tool === 'move',
 							[$style.canvasPan]: spaceHeld || (canDraw && tool === 'hand'),
+							[$style.canvasPetting]: petting && !spaceHeld,
 						}]"
 					></canvas>
 					<canvas ref="overlayEl" :class="$style.canvasOverlay"></canvas>
@@ -204,10 +234,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:class="$style.cursor"
 					:style="{ transform: `translate(${canvasToView(cursor.x, cursor.y)[0]}px, ${canvasToView(cursor.x, cursor.y)[1]}px)`, opacity: cursorOpacity }"
 				>
-					<span :class="$style.cursorDot"></span>
+					<!-- JUICE: なでているときは、点の代わりに手を出す -->
+					<i v-if="cursor.pet" class="ti ti-hand-stop" :class="$style.cursorHand"></i>
+					<span v-else :class="$style.cursorDot"></span>
 					<MkAvatar v-if="userMap.get(userId)" :class="$style.cursorAvatar" :user="userMap.get(userId)!"/>
 				</div>
 				</template>
+				<!-- JUICE: なでたところに出るハート(自分のなでた分も出す) -->
+				<i
+					v-for="heart in petHearts"
+					:key="heart.id"
+					class="ti ti-heart-filled"
+					:class="$style.petHeart"
+					:style="{ transform: `translate(${canvasToView(heart.x, heart.y)[0]}px, ${canvasToView(heart.x, heart.y)[1]}px)`, '--petHeartDrift': `${heart.drift}px` }"
+					aria-hidden="true"
+				></i>
 				<!-- JUICE: 選んでいる線の操作 -->
 				<div v-if="strokeSelection.size > 0 && !selecting" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
 					<span :class="$style.selectionHint">{{ i18n.tsx._drawRoom.selectedStrokes({ n: strokeSelection.size }) }}</span>
@@ -250,11 +291,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</svg>
 					</div>
 					<div :class="$style.minimapBar">
+						<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える) -->
+						<button
+							v-if="room != null && !room.isEnded && !room.viewOnly"
+							v-tooltip="i18n.ts._drawRoom.petToolHint"
+							class="_button"
+							:class="[$style.minimapToggle, { [$style.minimapToggleActive]: petting }]"
+							:aria-label="i18n.ts._drawRoom.petTool"
+							:aria-pressed="petting"
+							@click="petting = !petting"
+						><i class="ti ti-hand-stop"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.petTool }}</span></button>
 						<!-- JUICE: キャンバスの回転(PC向け。スマホ・タブレットは2本指で回せる) -->
 						<button v-tooltip="i18n.ts._drawRoom.rotateLeft" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.rotateLeft" @click="rotateBy(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
 						<button v-if="rotationDegrees !== 0" v-tooltip="i18n.ts._drawRoom.resetRotation" class="_button" :class="$style.zoomLevel" :aria-label="i18n.ts._drawRoom.resetRotation" @click="resetRotation">{{ rotationDegrees }}°</button>
 						<button v-tooltip="i18n.ts._drawRoom.rotateRight" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.rotateRight" @click="rotateBy(ROTATE_STEP)"><i class="ti ti-rotate-clockwise-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateRight }}</span></button>
 						<button v-tooltip="i18n.ts._drawRoom.zoomOut" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.zoomOut" @click="zoomBy(1 / ZOOM_STEP)"><i class="ti ti-minus"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.zoomOut }}</span></button>
+						<!-- JUICE: 倍率はスライダーでも変えられる(倍率の段階が細かく感じられるよう、倍率の対数で動かす) -->
+						<input v-model.number="zoomSlider" type="range" :min="ZOOM_SLIDER_MIN" :max="ZOOM_SLIDER_MAX" step="0.01" :class="$style.zoomSlider" :aria-label="i18n.ts._drawRoom.zoomLevel" :aria-valuetext="`${Math.round(view.scale * 100)}%`"/>
 						<button v-tooltip="i18n.ts._drawRoom.zoomLevel" class="_button" :class="$style.zoomLevel" :aria-label="i18n.ts._drawRoom.zoomLevel" @click="openZoomMenu">{{ Math.round(view.scale * 100) }}%</button>
 						<button v-tooltip="i18n.ts._drawRoom.zoomIn" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.zoomIn" @click="zoomBy(ZOOM_STEP)"><i class="ti ti-plus"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.zoomIn }}</span></button>
 						<!-- JUICE: ピクセルアート拡大モード(拡大しても画素をぼかさない。画像の拡大表示と同じもの) -->
@@ -396,6 +449,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									@click="activeLayerId = meta.id"
 								>{{ layerName($i.id, meta) }}</button>
 								<i v-if="meta.private" v-tooltip="i18n.ts._drawRoom.draftLayerHint" class="ti ti-lock" :class="$style.subLayerState" role="img" :aria-label="i18n.ts._drawRoom.draftLayerHint"></i>
+								<span v-if="meta.blend != null" :class="$style.subLayerOpacity">{{ blendLabel(meta.blend) }}</span>
 								<span v-if="meta.opacity < 1" :class="$style.subLayerOpacity">{{ Math.round(meta.opacity * 100) }}%</span>
 								<button
 									v-tooltip="meta.visible ? i18n.ts.hide : i18n.ts.show"
@@ -409,6 +463,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</template>
 					</MkDraggable>
+					<!-- JUICE: 描いているレイヤーの濃さ(動かしている間は自分の画面だけ変え、離したら送る) -->
+					<label v-if="activeLayerMeta != null" :class="$style.layerOpacity">
+						<i class="ti ti-droplet-half-2"></i>
+						<span>{{ i18n.ts._drawRoom.layerOpacity }}</span>
+						<input
+							type="range"
+							min="0"
+							max="100"
+							step="5"
+							:value="Math.round(activeLayerMeta.opacity * 100)"
+							:aria-label="`${i18n.ts._drawRoom.layerOpacity}: ${layerName($i.id, activeLayerMeta)}`"
+							@input="previewActiveLayerOpacity(($event.target as HTMLInputElement).valueAsNumber)"
+							@change="updateMyLayer(activeLayerMeta.id, { opacity: ($event.target as HTMLInputElement).valueAsNumber / 100 })"
+						/>
+						<span :class="$style.sizeValue">{{ Math.round(activeLayerMeta.opacity * 100) }}%</span>
+					</label>
 					<div :class="$style.layerActions">
 						<button v-if="myLayers.length < MAX_USER_LAYERS" class="_button" :class="$style.addLayer" @click="addLayer()"><i class="ti ti-plus"></i> {{ i18n.ts._drawRoom.addLayer }}</button>
 						<button v-if="myLayers.length < MAX_USER_LAYERS" v-tooltip="i18n.ts._drawRoom.draftLayerHint" class="_button" :class="$style.addLayer" @click="addLayer(true)"><i class="ti ti-lock"></i> {{ i18n.ts._drawRoom.addDraftLayer }}</button>
@@ -422,6 +492,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:class="[$style.subLayer, { [$style.subLayerHidden]: !meta.visible }]"
 					>
 						<span :class="$style.subLayerName">{{ layerName(userId, meta) }}</span>
+						<span v-if="meta.blend != null" :class="$style.subLayerOpacity">{{ blendLabel(meta.blend) }}</span>
 						<span v-if="meta.opacity < 1" :class="$style.subLayerOpacity">{{ Math.round(meta.opacity * 100) }}%</span>
 						<i v-if="!meta.visible" v-tooltip="i18n.ts._drawRoom.layerHidden" class="ti ti-eye-off" :class="$style.subLayerState" role="img" :aria-label="i18n.ts._drawRoom.layerHidden"></i>
 					</div>
@@ -492,7 +563,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
+import { computed, defineAsyncComponent, markRaw, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -500,6 +571,7 @@ import MkDraggable from '@/components/MkDraggable.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { url } from '@@/js/config.js';
+import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { uploadFile } from '@/utility/drive.js';
@@ -513,8 +585,8 @@ import { useRouter } from '@/router.js';
 import { ensureSignin, iAmModerator } from '@/i.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { floodFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
-import { DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, rotatePoints, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
-import type { CanvasStroke, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
+import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, rotatePoints, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
+import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
 
@@ -589,10 +661,24 @@ const usesBrushSize = computed(() => tool.value === 'pen' || tool.value === 'era
 const usesOpacity = computed(() => usesBrushSize.value || tool.value === 'bucket');
 // 太さの上限。キャンバスの大きさに合わせて決める
 const sizeMax = ref(60);
+// JUICE: 太さは、1%を1px・100%をそのキャンバスで一番太い筆とした割合で選ぶ。細い筆を細かく選べるよう、割合の2乗で太さにする
+// (太さは小数のまま持ち、割合との行き来でつまみが戻らないようにする)
+const sizePercent = computed({
+	get: () => {
+		const t = sizeMax.value > 1 ? Math.max(0, size.value - 1) / (sizeMax.value - 1) : 1;
+		return Math.max(1, Math.min(100, Math.round(1 + Math.sqrt(t) * 99)));
+	},
+	set: (percent: number) => {
+		const t = ((Math.max(1, Math.min(100, percent)) - 1) / 99) ** 2;
+		size.value = Math.round((1 + t * (sizeMax.value - 1)) * 100) / 100;
+	},
+});
 // JUICE: 筆の種類(ペン・消しゴム共通)と、線の中だけ塗る(はみ出し防止)
 // JUICE: areaは囲って塗る(ペンなら塗る、消しゴムなら消す)。線を描くのではなく、なぞって囲った範囲を扱う
 const brushType = ref<'normal' | 'soft' | 'dot' | 'area'>('normal');
 const clipToLines = ref(false);
+// JUICE: 透明度ロック(レイヤーの描いてある所にだけ描く。ペン・塗りつぶし・囲って塗る)
+const alphaLock = ref(false);
 // ドットをくっきり表示する(拡大したときに画素をぼかさない)。表示の好みはプロファイルに覚える(バックアップ・復元で戻る)
 const dotView = prefer.model('drawRoomDotView');
 // 画素の格子は、1画素が画面上で8px以上に拡大されたときだけ出す(それより小さいと格子で絵が灰色に見えてしまう)。
@@ -711,6 +797,40 @@ function updateMyLayer(id: string, patch: Partial<LayerMeta>): void {
 	sendMyLayers(myLayers.value.map(layer => (layer.id === id ? { ...layer, ...patch } : layer)));
 }
 
+// JUICE: 合成モードの名前
+function blendLabel(value: DrawLayerBlend | undefined): string {
+	const labels: Record<DrawLayerBlend | 'normal', string> = {
+		normal: i18n.ts._drawRoom.blendNormal,
+		multiply: i18n.ts._drawRoom.blendMultiply,
+		screen: i18n.ts._drawRoom.blendScreen,
+		overlay: i18n.ts._drawRoom.blendOverlay,
+		darken: i18n.ts._drawRoom.blendDarken,
+		lighten: i18n.ts._drawRoom.blendLighten,
+		'color-dodge': i18n.ts._drawRoom.blendColorDodge,
+		'color-burn': i18n.ts._drawRoom.blendColorBurn,
+		'hard-light': i18n.ts._drawRoom.blendHardLight,
+		'soft-light': i18n.ts._drawRoom.blendSoftLight,
+		difference: i18n.ts._drawRoom.blendDifference,
+		exclusion: i18n.ts._drawRoom.blendExclusion,
+		hue: i18n.ts._drawRoom.blendHue,
+		saturation: i18n.ts._drawRoom.blendSaturation,
+		color: i18n.ts._drawRoom.blendColor,
+		luminosity: i18n.ts._drawRoom.blendLuminosity,
+		lighter: i18n.ts._drawRoom.blendLighter,
+	};
+	return labels[value ?? 'normal'];
+}
+
+// JUICE: 描いているレイヤー(濃さのスライダー用)
+const activeLayerMeta = computed(() => myLayers.value.find(layer => layer.id === activeLayerId.value) ?? null);
+
+// 濃さのスライダーを動かしている間は、自分の画面にだけ反映する(離したときに送る)
+function previewActiveLayerOpacity(percent: number): void {
+	const meta = activeLayerMeta.value;
+	if (meta == null || !Number.isFinite(percent)) return;
+	applyUserLayers($i.id, myLayers.value.map(layer => (layer.id === meta.id ? { ...layer, opacity: percent / 100 } : layer)));
+}
+
 function toggleMyLayerVisible(id: string): void {
 	const layer = myLayers.value.find(l => l.id === id);
 	if (layer != null) updateMyLayer(id, { visible: !layer.visible });
@@ -766,13 +886,15 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 		icon: 'ti ti-pencil',
 		action: () => renameMyLayer(meta),
 	}, {
+		// JUICE: 合成モード(乗算・焼き込みカラーなど)
 		type: 'parent',
-		text: i18n.ts._drawRoom.layerOpacity,
-		icon: 'ti ti-droplet-half-2',
-		children: [1, 0.8, 0.6, 0.4, 0.2].map(value => ({
-			text: `${value * 100}%`,
-			icon: Math.abs(meta.opacity - value) < 0.005 ? 'ti ti-check' : undefined,
-			action: () => updateMyLayer(meta.id, { opacity: value }),
+		text: `${i18n.ts._drawRoom.blendMode}: ${blendLabel(meta.blend)}`,
+		icon: 'ti ti-blend-mode',
+		children: [undefined, ...DRAW_LAYER_BLENDS].map(value => ({
+			text: blendLabel(value),
+			icon: (meta.blend ?? undefined) === value ? 'ti ti-check' : undefined,
+			active: (meta.blend ?? undefined) === value,
+			action: () => updateMyLayer(meta.id, { blend: value }),
 		})),
 	}, {
 		// JUICE: 下描き(自分だけ) ⇔ みんなに見せる
@@ -834,7 +956,30 @@ function viewToCanvas(vx: number, vy: number): [number, number] {
 // 表示領域の大きさ(全体マップの枠の計算用)
 const viewportSize = reactive({ width: 0, height: 0 });
 // JUICE: ほかの人のカーソル(キャンバス座標)。しばらく動きが無ければ消す
-const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: number }>());
+const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: number; pet: boolean }>());
+
+// JUICE: なでるツール。オンの間は、ドラッグしても描かず・表示も動かさず、なでている位置を送る
+const petting = ref(false);
+let petPointerId: number | null = null;
+// なでたところに出るハート(キャンバス座標)。しばらくしたら消す
+const petHearts = ref<{ id: number; x: number; y: number; drift: number }[]>([]);
+let petHeartSeq = 0;
+const lastPetHeartAt = new Map<string, number>();
+const PET_HEART_INTERVAL_MS = 180;
+const PET_HEART_LIFETIME_MS = 1200;
+const PET_HEART_MAX = 60;
+
+function spawnPetHeart(userId: string, x: number, y: number): void {
+	const now = Date.now();
+	if (now - (lastPetHeartAt.get(userId) ?? 0) < PET_HEART_INTERVAL_MS) return;
+	lastPetHeartAt.set(userId, now);
+	const id = ++petHeartSeq;
+	petHearts.value = [...petHearts.value.slice(-(PET_HEART_MAX - 1)), { id, x, y, drift: Math.round((Math.random() - 0.5) * 24) }];
+	window.setTimeout(() => {
+		petHearts.value = petHearts.value.filter(heart => heart.id !== id);
+	}, PET_HEART_LIFETIME_MS);
+}
+
 const CURSOR_TIMEOUT_MS = 8000;
 // 自分のカーソルを送る間隔(ms)
 const CURSOR_SEND_INTERVAL_MS = 60;
@@ -1058,6 +1203,7 @@ function connect(): void {
 			opacity: payload.opacity,
 			brush: payload.brush,
 			layer: payload.layer,
+			...(payload.lock === true ? { lock: true } : {}),
 			...(payload.clip != null ? { clip: decodePoints(payload.clip) } : {}),
 			points: decodePoints(payload.points),
 		});
@@ -1072,7 +1218,8 @@ function connect(): void {
 				cursors.delete(cursor.userId);
 				continue;
 			}
-			cursors.set(cursor.userId, { x: cursor.x, y: cursor.y, updatedAt: now });
+			cursors.set(cursor.userId, { x: cursor.x, y: cursor.y, updatedAt: now, pet: cursor.pet === true });
+			if (cursor.pet === true) spawnPetHeart(cursor.userId, cursor.x, cursor.y);
 		}
 		ensureUsers([...cursors.keys()]);
 	});
@@ -1085,9 +1232,31 @@ function connect(): void {
 		engine.value?.addStroke(keyFor(payload.userId, payload.stroke.layer), decodeStroke(payload.stroke));
 		if (!layerUserIds.value.includes(payload.userId)) refreshLayerList();
 	}));
-	c.on('undo', payload => applyEvent(() => {
-		forKeys(payload.userId, key => engine.value?.removeStroke(key, payload.strokeId));
+	// JUICE: 取り消し・やり直し(自分の分も、サーバーから届いてから反映する)
+	c.on('strokesPatched', payload => applyEvent(() => {
+		const e = engine.value;
+		if (e == null) return;
+		for (const step of payload.steps) {
+			if (step.t === 'del') {
+				const ids = new Set(step.ids);
+				forKeys(payload.userId, key => e.deleteStrokes(key, ids));
+			} else if (step.t === 'mv') {
+				const ids = step.ids == null ? null : new Set(step.ids);
+				forKeys(payload.userId, key => e.moveStrokes(key, ids, step.dx, step.dy));
+			} else {
+				// 線のレイヤーごとに分けて戻す(知らないレイヤー=ほかの人の下描きの線は届かない)
+				const byKey = new Map<string, { before: string | null; stroke: CanvasStroke }[]>();
+				for (const item of step.items) {
+					const key = keyFor(payload.userId, item.stroke.layer);
+					const list = byKey.get(key) ?? [];
+					list.push({ before: item.before, stroke: decodeStroke(item.stroke) });
+					byKey.set(key, list);
+				}
+				for (const [key, items] of byKey) e.insertStrokes(key, items);
+			}
+		}
 		if (payload.userId === $i.id) pruneStrokeSelection();
+		if (!layerUserIds.value.includes(payload.userId)) refreshLayerList();
 	}));
 	c.on('clearLayer', payload => applyEvent(() => {
 		// レイヤーを指定していればそのレイヤーだけ、無ければその人の全てのレイヤー
@@ -1378,7 +1547,7 @@ function zoomAt(clientX: number, clientY: number, factor: number): void {
 	const py = clientY - rect.top;
 	viewAdjusted = true;
 	// ドット絵を描けるよう、32倍まで拡大できる
-	const next = Math.min(MAX_ZOOM, Math.max(0.1, view.scale * factor));
+	const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale * factor));
 	const actual = next / view.scale;
 	view.x = px - (px - view.x) * actual;
 	view.y = py - (py - view.y) * actual;
@@ -1417,6 +1586,39 @@ function resetRotation(): void {
 const ROTATE_STEP = Math.PI / 12; // 15°
 // バケツで「似た色」とみなす差(0〜255)
 const BUCKET_TOLERANCE = 48;
+
+// JUICE: 隙間閉じ。閉じる隙間の幅(の半分)は、キャンバスが大きいほど太い線に合わせて広げる
+const gapClose = prefer.model('drawRoomGapClose');
+const GAP_CLOSE_BASE = { off: 0, small: 2, medium: 5, large: 10 } as const;
+
+function gapClosePixels(): number {
+	const e = engine.value;
+	const base = GAP_CLOSE_BASE[gapClose.value];
+	if (e == null || base === 0) return 0;
+	return Math.round(base * Math.max(1, Math.max(e.width, e.height) / 1600));
+}
+
+function gapCloseLabel(value: typeof gapClose.value): string {
+	return {
+		off: i18n.ts._drawRoom.gapCloseOff,
+		small: i18n.ts._drawRoom.gapCloseSmall,
+		medium: i18n.ts._drawRoom.gapCloseMedium,
+		large: i18n.ts._drawRoom.gapCloseLarge,
+	}[value];
+}
+
+function openGapCloseMenu(ev: MouseEvent): void {
+	os.popupMenu([
+		{ type: 'label', text: i18n.ts._drawRoom.gapClose },
+		...(['off', 'small', 'medium', 'large'] as const).map(value => ({
+			text: gapCloseLabel(value),
+			icon: gapClose.value === value ? 'ti ti-check' : undefined,
+			active: gapClose.value === value,
+			action: () => { gapClose.value = value; },
+		})),
+	], (ev.currentTarget ?? ev.target) as HTMLElement);
+}
+
 const rotationDegrees = computed(() => Math.round((view.rotation * 180) / Math.PI));
 
 // 指で回したとき、0°・90°・180°・270°の近くなら、その角度にそろえる
@@ -1448,6 +1650,7 @@ function onWheel(ev: WheelEvent): void {
 const ZOOM_STEP = 1.25;
 const ZOOM_PRESETS = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
 const MAX_ZOOM = 32;
+const MIN_ZOOM = 0.1;
 
 // JUICE: 表示の好み(プロファイルに覚える。バックアップ・復元で戻る)。ほかの人のカーソルの表示・濃さ、横のパネルをしまう
 const showCursors = prefer.model('drawRoomShowCursors');
@@ -1536,6 +1739,14 @@ function setZoom(scale: number): void {
 	zoomBy(scale / view.scale);
 }
 
+// JUICE: 倍率のスライダー(倍率の2を底とする対数)
+const ZOOM_SLIDER_MIN = Math.log2(MIN_ZOOM);
+const ZOOM_SLIDER_MAX = Math.log2(MAX_ZOOM);
+const zoomSlider = computed({
+	get: () => Math.log2(view.scale),
+	set: (value: number) => setZoom(2 ** value),
+});
+
 function openZoomMenu(ev: MouseEvent): void {
 	os.popupMenu([{
 		text: i18n.ts._drawRoom.fitToScreen,
@@ -1602,6 +1813,8 @@ type ActiveStroke = {
 	clip?: number[];
 	// JUICE: どのレイヤーの線か(最初のレイヤーなら無し)
 	layer?: string;
+	// JUICE: 透明度ロック
+	lock?: boolean;
 	points: number[];
 	// まだ送っていない点が始まる位置(points内のindex)
 	sentIndex: number;
@@ -1657,7 +1870,7 @@ function pressureOf(ev: PointerEvent): number {
 }
 
 // 今選んでいる道具で描く線の設定
-type StrokeStyle = Pick<ActiveStroke, 'tool' | 'color' | 'size' | 'opacity' | 'brush' | 'clip' | 'layer'>;
+type StrokeStyle = Pick<ActiveStroke, 'tool' | 'color' | 'size' | 'opacity' | 'brush' | 'clip' | 'layer' | 'lock'>;
 
 function currentStrokeStyle(): StrokeStyle {
 	const drawTool: DrawTool = tool.value === 'eraser' ? 'eraser' : 'pen';
@@ -1668,6 +1881,8 @@ function currentStrokeStyle(): StrokeStyle {
 		...(opacity.value < 100 ? { opacity: opacity.value / 100 } : {}),
 		...(brushType.value === 'soft' || brushType.value === 'dot' ? { brush: brushType.value } : {}),
 		...(activeLayerId.value !== '0' ? { layer: activeLayerId.value } : {}),
+		// JUICE: 透明度ロック(ペンのときだけ)
+		...(alphaLock.value && drawTool === 'pen' ? { lock: true } : {}),
 	};
 }
 
@@ -1680,6 +1895,7 @@ function strokeStyleOf(stroke: ActiveStroke): StrokeStyle {
 		...(stroke.brush != null ? { brush: stroke.brush } : {}),
 		...(stroke.clip != null ? { clip: stroke.clip } : {}),
 		...(stroke.layer != null ? { layer: stroke.layer } : {}),
+		...(stroke.lock === true ? { lock: true } : {}),
 	};
 }
 
@@ -1693,7 +1909,7 @@ function clipRegionAt(x: number, y: number): number[] | undefined {
 	const px = Math.floor(x);
 	const py = Math.floor(y);
 	if (px < 0 || py < 0 || px >= e.width || py >= e.height) return undefined;
-	const mask = floodFillMask(e.referenceImage(), px, py, BUCKET_TOLERANCE);
+	const mask = floodFillMask(e.referenceImage(), px, py, BUCKET_TOLERANCE, gapClosePixels());
 	if (mask == null) return undefined;
 	// 線の縁の下まで塗れるよう少し広げる
 	const points = maskToFillPoints(dilateMask(mask, e.width, e.height, 1), e.width, e.height, STROKE_MAX_POINTS);
@@ -1768,7 +1984,30 @@ function finishStroke(): void {
 	}
 	engine.value?.addStroke(activeKey.value, stroke);
 	connection.value?.send('stroke', encodeStroke(stroke));
+	if (stroke.tool === 'pen') rememberRecentColor(stroke.color);
 	if (!layerUserIds.value.includes($i.id)) refreshLayerList();
+}
+
+// JUICE: 最近使った色(カラーパレットに並べる。プロファイルに覚える)
+const RECENT_COLORS_MAX = 16;
+
+function rememberRecentColor(value: string): void {
+	const recent = prefer.s.drawRoomRecentColors;
+	if (recent[0] === value) return;
+	prefer.commit('drawRoomRecentColors', [value, ...recent.filter(c => c !== value)].slice(0, RECENT_COLORS_MAX));
+}
+
+// JUICE: カラーパレットを開く。選んだ色はすぐ使う(道具は持ち替えない)
+function openColorPicker(ev: MouseEvent): void {
+	const { dispose } = os.popup(defineAsyncComponent(() => import('./color-picker.vue')), {
+		color: color.value,
+		anchorElement: (ev.currentTarget ?? ev.target) as HTMLElement,
+	}, {
+		update: (value: string) => {
+			color.value = value;
+		},
+		closed: () => dispose(),
+	});
 }
 
 // 描きかけの線を取りやめる。途中までの線は皆の画面に届いているので、消してもらうよう知らせる
@@ -1793,6 +2032,8 @@ function onPointerDown(ev: PointerEvent): void {
 		// 2本目の指が触れたら、描きかけの線は取り消して拡大縮小・移動に切り替える
 		if (touches.size >= 2) {
 			// 1本目の指で始めた操作(線・範囲選択・囲って塗る・移動・表示の移動など)は取りやめる
+			cancelLongPress();
+			pickingPointerId = null;
 			cancelStroke();
 			selectFrom = null;
 			selectGesture.value = null;
@@ -1804,6 +2045,13 @@ function onPointerDown(ev: PointerEvent): void {
 			pinch = { distance: Math.hypot(a.x - b.x, a.y - b.y), centerX: (a.x + b.x) / 2, centerY: (a.y + b.y) / 2, angle: Math.atan2(b.y - a.y, b.x - a.x), twist: 0, rotating: false };
 			return;
 		}
+	}
+	// JUICE: なでるツール(見学者も)。左ドラッグでなでる
+	if (petting.value && !spaceHeld.value && ev.button === 0 && !selecting.value) {
+		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+		petPointerId = ev.pointerId;
+		sendCursor(ev, true);
+		return;
 	}
 	// スペースを押している間と手のひらツールでは、左ドラッグで表示を移動する
 	if ((spaceHeld.value || tool.value === 'hand') && ev.button === 0) {
@@ -1852,14 +2100,51 @@ function onPointerDown(ev: PointerEvent): void {
 		engine.value.beginMove(activeKey.value, ids);
 		return;
 	}
-	// スポイト(またはAltを押しながらクリック)は、その位置の色を拾ってペンにする
+	// スポイト(またはAltを押しながらクリック)は、その位置の色を拾う
 	if (tool.value === 'eyedropper' || ev.altKey) {
 		pickColorAt(ev);
 		return;
 	}
 	(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 	startStroke(ev);
+	// JUICE: 指で描き始めた所でしばらく止めていたら、スポイトにする(iPad等)
+	if (ev.pointerType === 'touch' && (tool.value === 'pen' || tool.value === 'eraser')) startLongPress(ev);
 }
+
+//#region 長押しでスポイト(JUICE)
+const LONG_PRESS_MS = 500;
+// 長押しとみなす、指のぶれの大きさ(画面のpx)
+const LONG_PRESS_MOVE_PX = 10;
+let longPress: { pointerId: number; startX: number; startY: number; last: PointerEvent; timer: number } | null = null;
+// 長押しでスポイトにした指。離すまで、動かした先の色を拾い続ける
+let pickingPointerId: number | null = null;
+
+function startLongPress(ev: PointerEvent): void {
+	cancelLongPress();
+	const pointerId = ev.pointerId;
+	longPress = {
+		pointerId,
+		startX: ev.clientX,
+		startY: ev.clientY,
+		last: ev,
+		timer: window.setTimeout(() => {
+			const press = longPress;
+			longPress = null;
+			if (press == null || press.pointerId !== pointerId) return;
+			// 描き始めていた線は取りやめて、その位置の色を拾う
+			if (activeStroke != null && activeStroke.pointerId === pointerId) cancelStroke();
+			pickingPointerId = pointerId;
+			pickColorAt(press.last);
+		}, LONG_PRESS_MS),
+	};
+}
+
+function cancelLongPress(): void {
+	if (longPress == null) return;
+	window.clearTimeout(longPress.timer);
+	longPress = null;
+}
+//#endregion
 
 function pickColorAt(ev: PointerEvent): void {
 	if (engine.value == null) return;
@@ -1867,8 +2152,15 @@ function pickColorAt(ev: PointerEvent): void {
 	const picked = engine.value.pickColor(x, y);
 	if (picked == null) return;
 	color.value = picked;
-	tool.value = 'pen';
+	// JUICE: スポイトの道具で拾ったら、その前に使っていた道具に戻す(Altを押しながらのときは道具はそのまま)
+	if (tool.value === 'eyedropper') tool.value = toolBeforeEyedropper;
 }
+
+// JUICE: スポイトに持ち替える前の道具(色を拾った後に戻す)
+let toolBeforeEyedropper: typeof tool.value = 'pen';
+watch(tool, (value, old) => {
+	if (value === 'eyedropper' && old !== 'eyedropper') toolBeforeEyedropper = old;
+});
 
 let panFrom: { x: number; y: number; pointerId: number } | null = null;
 
@@ -1876,13 +2168,16 @@ let lastCursorSentAt = 0;
 let cursorShown = false;
 
 // 自分のカーソルの位置をほかの人に送る(間引いて送る)
-function sendCursor(ev: PointerEvent): void {
+function sendCursor(ev: PointerEvent, force = false): void {
 	if (connection.value == null || engine.value == null || room.value?.isEnded) return;
 	const now = Date.now();
-	if (now - lastCursorSentAt < CURSOR_SEND_INTERVAL_MS) return;
+	if (!force && now - lastCursorSentAt < CURSOR_SEND_INTERVAL_MS) return;
 	lastCursorSentAt = now;
 	const [x, y] = toCanvasPoint(ev);
-	connection.value.send('cursor', { x, y });
+	// JUICE: なでている間は、なでていることも送る
+	const pet = petPointerId === ev.pointerId;
+	connection.value.send('cursor', { x, y, ...(pet ? { pet: true } : {}) });
+	if (pet) spawnPetHeart($i.id, x, y);
 	cursorShown = true;
 }
 
@@ -1914,6 +2209,15 @@ function onPointerMove(ev: PointerEvent): void {
 			pinch = { distance, centerX, centerY, angle, twist, rotating };
 			return;
 		}
+	}
+	// JUICE: 長押しの途中で指が動いたら、長押しではない(そのまま線を描く)
+	if (longPress != null && longPress.pointerId === ev.pointerId) {
+		if (Math.hypot(ev.clientX - longPress.startX, ev.clientY - longPress.startY) > LONG_PRESS_MOVE_PX) cancelLongPress();
+		else longPress.last = ev;
+	}
+	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
+		pickColorAt(ev);
+		return;
 	}
 	if (panFrom != null && panFrom.pointerId === ev.pointerId) {
 		viewAdjusted = true;
@@ -1985,6 +2289,17 @@ function onPointerUp(ev: PointerEvent): void {
 			snapRotation();
 		}
 	}
+	if (longPress != null && longPress.pointerId === ev.pointerId) cancelLongPress();
+	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
+		pickingPointerId = null;
+		return;
+	}
+	if (petPointerId != null && petPointerId === ev.pointerId) {
+		petPointerId = null;
+		// なで終わったことを送る(カーソルの表示を普通に戻す)
+		sendCursor(ev, true);
+		return;
+	}
 	if (panFrom != null && panFrom.pointerId === ev.pointerId) {
 		panFrom = null;
 		return;
@@ -2022,6 +2337,12 @@ function onPointerUp(ev: PointerEvent): void {
 function undo(): void {
 	if (!canDraw.value) return;
 	connection.value?.send('undo', {});
+}
+
+// JUICE: 取り消した操作をやり直す
+function redo(): void {
+	if (!canDraw.value) return;
+	connection.value?.send('redo', {});
 }
 
 async function clearMyLayer(): Promise<void> {
@@ -2071,7 +2392,11 @@ function onKeydown(ev: KeyboardEvent): void {
 		fitToScreen();
 		return;
 	}
-	if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
+	// JUICE: Ctrl+Shift+Z・Ctrl+Yでやり直す
+	if ((ev.ctrlKey || ev.metaKey) && ((ev.key.toLowerCase() === 'z' && ev.shiftKey) || ev.key.toLowerCase() === 'y')) {
+		ev.preventDefault();
+		redo();
+	} else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
 		ev.preventDefault();
 		undo();
 	} else if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.toLowerCase() === 'i' && canDraw.value) {
@@ -2368,10 +2693,12 @@ function commitFillStroke(points: number[]): void {
 		size: 1,
 		...(opacity.value < 100 ? { opacity: opacity.value / 100 } : {}),
 		...(activeLayerId.value !== '0' ? { layer: activeLayerId.value } : {}),
+		...(alphaLock.value && !erase ? { lock: true } : {}),
 		points,
 	};
 	e.addStroke(activeKey.value, stroke);
 	connection.value?.send('stroke', encodeStroke(stroke));
+	if (!erase) rememberRecentColor(stroke.color);
 	if (!layerUserIds.value.includes($i.id)) refreshLayerList();
 }
 
@@ -2394,7 +2721,7 @@ function bucketFill(ev: PointerEvent): void {
 	const py = Math.floor(y);
 	if (px < 0 || py < 0 || px >= e.width || py >= e.height) return;
 	const image = e.referenceImage();
-	const mask = floodFillMask(image, px, py, BUCKET_TOLERANCE);
+	const mask = floodFillMask(image, px, py, BUCKET_TOLERANCE, gapClosePixels());
 	if (mask == null) return;
 	// 線の縁のぼかしに塗り残しが出ないよう、少し広げてから輪郭を取る
 	const points = maskToFillPoints(dilateMask(mask, e.width, e.height, 1), e.width, e.height, STROKE_MAX_POINTS);
@@ -2650,11 +2977,43 @@ async function saveImageToDrive(area?: ImageArea | null): Promise<void> {
 	cancelSelecting();
 }
 
+// JUICE: この部屋のURL
+function roomUrl(): string {
+	return `${url}/draw/${props.roomId}`;
+}
+
+// JUICE: 共有するときの文(部屋の名前とURL)。保存しないで終了した部屋は、まもなく消えるのでURLを付けない
+function roomShareText(): string {
+	const r = room.value;
+	const title = r?.title ?? '';
+	if (r != null && r.isEnded && !r.keepAfterEnd) return title;
+	return title === '' ? roomUrl() : `${title}\n${roomUrl()}`;
+}
+
 async function postImage(area?: ImageArea | null): Promise<void> {
 	const file = await os.promiseDialog(uploadImage(area));
 	if (file == null) return;
 	cancelSelecting();
-	os.post({ initialFiles: [file], initialText: room.value?.title ?? '' });
+	os.post({ initialFiles: [file], initialText: roomShareText() });
+}
+
+// JUICE: 部屋を共有する(部屋の名前とURLをノートに書く・URLをコピーする・端末の共有)
+function openShareMenu(ev: MouseEvent): void {
+	os.popupMenu([{
+		text: i18n.ts.shareWithNote,
+		icon: 'ti ti-pencil',
+		action: () => os.post({ initialText: roomShareText() }),
+	}, {
+		text: i18n.ts.copyLink,
+		icon: 'ti ti-link',
+		action: () => copyToClipboard(roomUrl()),
+	}, ...(typeof navigator.share === 'function' ? [{
+		text: i18n.ts.share,
+		icon: 'ti ti-share',
+		action: () => {
+			navigator.share({ title: room.value?.title ?? undefined, url: roomUrl() }).catch(() => {});
+		},
+	}] : [])], (ev.currentTarget ?? ev.target) as HTMLElement);
 }
 
 async function downloadImage(area?: ImageArea | null): Promise<void> {
@@ -2776,6 +3135,14 @@ const headerActions = computed(() => {
 		text: i18n.ts._drawRoom.fitToScreen,
 		handler: fitToScreen,
 	}];
+	// JUICE: 部屋の共有(保存しないで終了した部屋は、まもなく消えるので出さない)
+	if (room.value != null && !(room.value.isEnded && !room.value.keepAfterEnd)) {
+		actions.push({
+			icon: 'ti ti-share',
+			text: i18n.ts.share,
+			handler: openShareMenu,
+		});
+	}
 	if (isOwner.value && room.value != null && !room.value.isEnded) {
 		actions.push({
 			icon: 'ti ti-settings',
@@ -3159,13 +3526,20 @@ definePage(() => ({
 	outline-offset: 1px;
 }
 
-.colorInput {
-	width: 28px;
-	height: 24px;
-	padding: 0;
-	border: none;
-	background: none;
-	cursor: pointer;
+.colorButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 2px 6px 2px 2px;
+	border-radius: 999px;
+	box-shadow: 0 0 0 1px var(--MI_THEME-divider);
+}
+
+.colorButtonSwatch {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	border: solid 1px var(--MI_THEME-divider);
 }
 
 .sizeLabel {
@@ -3270,6 +3644,11 @@ definePage(() => ({
 	cursor: grab;
 }
 
+// JUICE: なでるツール
+.canvasPetting {
+	cursor: pointer;
+}
+
 .rotateHandle {
 	fill: var(--MI_THEME-panel);
 	stroke: var(--MI_THEME-accent);
@@ -3345,7 +3724,14 @@ definePage(() => ({
 
 .minimapBar {
 	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: 4px;
+}
+
+.zoomSlider {
+	flex: 1 1 60px;
+	min-width: 40px;
 }
 
 .zoomLevel,
@@ -3399,6 +3785,49 @@ definePage(() => ({
 	pointer-events: none;
 	// まとめて届く間隔(0.1秒)に合わせて、次の位置までなめらかに動かす
 	transition: transform 0.1s linear;
+}
+
+.cursorHand {
+	position: absolute;
+	top: -12px;
+	left: -10px;
+	font-size: 22px;
+	color: var(--MI_THEME-accent);
+	filter: drop-shadow(0 0 2px var(--MI_THEME-bg));
+	transform-origin: 50% 100%;
+	animation: petWiggle 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes petWiggle {
+	from { transform: rotate(-15deg); }
+	to { transform: rotate(15deg); }
+}
+
+.petHeart {
+	position: absolute;
+	top: -8px;
+	left: -8px;
+	font-size: 16px;
+	color: #ff6b9a;
+	pointer-events: none;
+	filter: drop-shadow(0 0 2px var(--MI_THEME-bg));
+
+	&::before {
+		display: inline-block;
+		animation: petHeartFloat 1.2s ease-out forwards;
+	}
+}
+
+@keyframes petHeartFloat {
+	from { transform: translate(0, 0) scale(0.6); opacity: 1; }
+	to { transform: translate(var(--petHeartDrift), -40px) scale(1.1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cursorHand,
+	.petHeart::before {
+		animation: none;
+	}
 }
 
 .cursorDot {
@@ -3580,6 +4009,18 @@ definePage(() => ({
 .subLayerState {
 	font-size: 0.85em;
 	opacity: 0.7;
+}
+
+.layerOpacity {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+
+	> input {
+		flex: 1;
+		min-width: 0;
+	}
 }
 
 .layerActions {

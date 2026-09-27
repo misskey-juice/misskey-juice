@@ -281,6 +281,8 @@ export interface DrawRoomEventTypes {
 			userId: MiUser['id'];
 			x: number | null;
 			y: number | null;
+			// JUICE: なでるツールで絵をなでている
+			pet?: boolean;
 		}[];
 	};
 	// 描いている途中の線を取りやめた(途中まで表示していた分を消す)
@@ -294,10 +296,12 @@ export interface DrawRoomEventTypes {
 		stroke: Packed<'DrawStroke'>;
 		private?: boolean;
 	};
-	undo: {
+	// JUICE: 取り消し・やり直しで、その人の線を変えた(手順を順に行う。insは同じレイヤーのbeforeの線の前、nullなら最後に入れる)
+	strokesPatched: {
 		userId: MiUser['id'];
-		strokeId: string;
-		private?: boolean;
+		steps: ({ t: 'del'; ids: string[] } | { t: 'mv'; ids: string[] | null; dx: number; dy: number } | { t: 'ins'; items: { before: string | null; stroke: DrawStroke }[] })[];
+		// 下描きのレイヤーのid(ほかの人のストリームでは、これらのレイヤーの線を除いて流す)
+		privateLayers?: string[];
 	};
 	// layerがあればその人のそのレイヤーだけ、無ければその人の全てのレイヤーを消去した
 	clearLayer: {

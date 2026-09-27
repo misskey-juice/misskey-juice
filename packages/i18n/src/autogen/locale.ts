@@ -9686,7 +9686,7 @@ export interface Locale extends ILocale {
          */
         "eyedropper": string;
         /**
-         * スポイト(I / Altを押しながらクリックでも色を拾えます)
+         * スポイト(I / Altを押しながらクリック / 指で長押しでも色を拾えます)
          */
         "eyedropperHint": string;
         /**
@@ -9713,6 +9713,14 @@ export interface Locale extends ILocale {
          * 手のひら(線は動かさずに表示を動かす)(H)
          */
         "handToolHint": string;
+        /**
+         * なでる
+         */
+        "petTool": string;
+        /**
+         * なでる(ドラッグで絵をなでられます。絵は変わらず、なでているところがみんなに見えます)
+         */
+        "petToolHint": string;
         /**
          * 範囲
          */
@@ -9854,6 +9862,86 @@ export interface Locale extends ILocale {
          */
         "layerOpacity": string;
         /**
+         * 合成モード
+         */
+        "blendMode": string;
+        /**
+         * 通常
+         */
+        "blendNormal": string;
+        /**
+         * 乗算
+         */
+        "blendMultiply": string;
+        /**
+         * スクリーン
+         */
+        "blendScreen": string;
+        /**
+         * オーバーレイ
+         */
+        "blendOverlay": string;
+        /**
+         * 比較(暗)
+         */
+        "blendDarken": string;
+        /**
+         * 比較(明)
+         */
+        "blendLighten": string;
+        /**
+         * 覆い焼きカラー
+         */
+        "blendColorDodge": string;
+        /**
+         * 焼き込みカラー
+         */
+        "blendColorBurn": string;
+        /**
+         * ハードライト
+         */
+        "blendHardLight": string;
+        /**
+         * ソフトライト
+         */
+        "blendSoftLight": string;
+        /**
+         * 差の絶対値
+         */
+        "blendDifference": string;
+        /**
+         * 除外
+         */
+        "blendExclusion": string;
+        /**
+         * 色相
+         */
+        "blendHue": string;
+        /**
+         * 彩度
+         */
+        "blendSaturation": string;
+        /**
+         * カラー
+         */
+        "blendColor": string;
+        /**
+         * 輝度
+         */
+        "blendLuminosity": string;
+        /**
+         * 加算
+         */
+        "blendLighter": string;
+        /**
+         * 透明度ロック
+         */
+        "alphaLock": string;
+        /**
+         * 透明度ロック(レイヤーの描いてある所にだけ描けます。はみ出さずに色を塗り替えたいときに)
+         */
+        "alphaLockHint": string;
+        /**
          * 上へ
          */
         "moveLayerUp": string;
@@ -9946,6 +10034,30 @@ export interface Locale extends ILocale {
          */
         "clipToLinesHint": string;
         /**
+         * 隙間閉じ
+         */
+        "gapClose": string;
+        /**
+         * 隙間閉じ(線に小さな隙間があっても、閉じているものとして塗ります)
+         */
+        "gapCloseHint": string;
+        /**
+         * オフ
+         */
+        "gapCloseOff": string;
+        /**
+         * 小
+         */
+        "gapCloseSmall": string;
+        /**
+         * 中
+         */
+        "gapCloseMedium": string;
+        /**
+         * 大
+         */
+        "gapCloseLarge": string;
+        /**
          * 左に回転
          */
         "rotateLeft": string;
@@ -9966,6 +10078,46 @@ export interface Locale extends ILocale {
          */
         "color": string;
         /**
+         * カラーパレット
+         */
+        "colorPalette": string;
+        /**
+         * 色相
+         */
+        "hue": string;
+        /**
+         * 鮮やかさ・明るさ
+         */
+        "saturationValue": string;
+        /**
+         * カラーコード
+         */
+        "colorCode": string;
+        /**
+         * 保存した色
+         */
+        "savedColors": string;
+        /**
+         * 今の色を保存
+         */
+        "saveColor": string;
+        /**
+         * 保存した色を整理
+         */
+        "editSavedColors": string;
+        /**
+         * 保存した色から外す
+         */
+        "removeSavedColor": string;
+        /**
+         * ＋で今の色を保存できます
+         */
+        "noSavedColors": string;
+        /**
+         * 最近使った色
+         */
+        "recentColors": string;
+        /**
          * 太さ
          */
         "size": string;
@@ -9973,6 +10125,14 @@ export interface Locale extends ILocale {
          * 元に戻す
          */
         "undo": string;
+        /**
+         * やり直す
+         */
+        "redo": string;
+        /**
+         * やり直し
+         */
+        "shortRedo": string;
         /**
          * 描いているレイヤーを消去
          */

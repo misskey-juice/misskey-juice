@@ -39,6 +39,12 @@ type ReversiUpdateSettings<K extends ReversiUpdateKey> = {
 	value: ReversiGameDetailed[K];
 };
 
+// JUICE: 絵チャの取り消し・やり直しで行う手順
+export type DrawStrokesPatchStep =
+	| { t: 'del'; ids: string[]; }
+	| { t: 'mv'; ids: string[] | null; dx: number; dy: number; }
+	| { t: 'ins'; items: { before: string | null; stroke: DrawStroke; }[]; };
+
 export type Channels = {
 	main: {
 		params: null;
@@ -297,11 +303,12 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; private?: boolean; }) => void;
-			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; }[]; }) => void;
+			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; points: string; private?: boolean; }) => void;
+			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; pet?: boolean; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
 			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;
-			undo: (payload: { userId: User['id']; strokeId: string; private?: boolean; }) => void;
+			// JUICE: 取り消し・やり直しで、その人の線を変えた(手順を順に行う。insは同じレイヤーのbeforeの線の前、nullなら最後に入れる)
+			strokesPatched: (payload: { userId: User['id']; steps: DrawStrokesPatchStep[]; privateLayers?: string[]; }) => void;
 			clearLayer: (payload: { userId: User['id']; layer?: string; private?: boolean; }) => void;
 			// JUICE: その人のレイヤーの一覧が変わった(一覧から消えたレイヤーの線も消えている)
 			layersUpdated: (payload: { userId: User['id']; layers: DrawLayer[]; }) => void;
@@ -321,12 +328,13 @@ export type Channels = {
 			ended: (payload: { room: DrawRoom; }) => void;
 		};
 		receives: {
-			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; };
-			cursor: { x: number | null; y: number | null; };
+			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; points: string; };
+			cursor: { x: number | null; y: number | null; pet?: boolean; };
 			visibility: { visible: boolean; };
 			strokeCancel: { strokeId: string; };
 			stroke: DrawStroke;
 			undo: null | Record<string, never>;
+			redo: null | Record<string, never>;
 			clearLayer: null | Record<string, never> | { layer: string; };
 			// JUICE: 自分のレイヤーの一覧を置き換える
 			setLayers: { layers: DrawLayer[]; };

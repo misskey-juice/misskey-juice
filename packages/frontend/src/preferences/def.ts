@@ -230,6 +230,17 @@ export const PREF_DEF = definePreferences({
 	drawRoomDotView: {
 		default: false,
 	},
+	// カラーパレットに保存した色と、最近使った色
+	drawRoomSavedColors: {
+		default: [] as string[],
+	},
+	drawRoomRecentColors: {
+		default: [] as string[],
+	},
+	// 塗りつぶし・線の中だけ塗るの隙間閉じ(この幅より狭い線の隙間は閉じているものとして塗る)
+	drawRoomGapClose: {
+		default: 'off' as 'off' | 'small' | 'medium' | 'large',
+	},
 	// 画像を保存する形式
 	drawRoomImageFormat: {
 		default: 'png' as 'png' | 'webp' | 'jpeg',

@@ -438,6 +438,115 @@ describe('絵チャ', () => {
 		await call('draw-rooms/end', { roomId: other.id }, bob);
 	});
 
+	// JUICE: レイヤーの合成モードと、透明度ロックの線
+	test('レイヤーの合成モードと、透明度ロックの線を保存できる', async () => {
+		const room = await createRoom(alice);
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		const mine = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: { id: string; lock?: boolean }[]; layers: { id: string; blend?: string }[] } | undefined;
+		try {
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'mul', name: '影', visible: true, opacity: 1, blend: 'color-burn' },
+			] });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.layers.map(l => [l.id, l.blend ?? 'normal']), [['0', 'normal'], ['mul', 'color-burn']]), { timeout: 5000, interval: 200 });
+			// 知らない合成モードは断られる(一覧は変わらない)
+			await new Promise(resolve => setTimeout(resolve, 250));
+			sendToChannel(aliceWs, 'setLayers', { layers: [{ id: '0', name: '', visible: true, opacity: 1, blend: 'source-over' }] });
+			// 透明度ロックはペン・塗りつぶしの線にだけ付く(消しゴムでは外す)
+			sendToChannel(aliceWs, 'stroke', { ...stroke('l1'), lock: true });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('l2'), tool: 'eraser', lock: true });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => [s.id, s.lock ?? false]), [['l1', true], ['l2', false]]), { timeout: 5000, interval: 200 });
+			assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['0', 'mul']);
+		} finally {
+			aliceWs.close();
+		}
+
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+	});
+
+	// JUICE: 取り消し・やり直し(線を描く・動かす・切って置き換える・消す、下描きのレイヤーの削除)
+	test('取り消し・やり直しで、描いた線・移動・削除・下描きのレイヤーの削除を戻せる', async () => {
+		const room = await createRoom(alice);
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		type Stroke = { id: string; dx?: number; dy?: number; layer?: string };
+		type Layer = { id: string; private?: boolean };
+		const mine = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: Layer[] } | undefined;
+		const state = async () => ((await mine())?.strokes ?? []).map(s => [s.id, s.dx ?? 0, s.dy ?? 0]);
+		// 回数制限(1秒あたり5回)にかからないよう、操作の間を少し空ける
+		const send = async (type: string, body: unknown) => {
+			sendToChannel(aliceWs, type, body);
+			await new Promise(resolve => setTimeout(resolve, 250));
+		};
+		const expect = async (value: unknown) => await vi.waitFor(async () => assert.deepStrictEqual(await state(), value), { timeout: 5000, interval: 200 });
+		try {
+			for (const id of ['u1', 'u2', 'u3']) sendToChannel(aliceWs, 'stroke', stroke(id));
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0]]);
+
+			// 描いた線の取り消し・やり直し
+			await send('undo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0]]);
+			await send('redo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0]]);
+
+			// 移動の取り消し(ずらしたのが戻り、その前に描いた線は消えない)・やり直し
+			await send('moveStrokes', { strokeIds: ['u1'], dx: 10, dy: 5 });
+			await expect([['u1', 10, 5], ['u2', 0, 0], ['u3', 0, 0]]);
+			await send('undo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0]]);
+			await send('redo', {});
+			await expect([['u1', 10, 5], ['u2', 0, 0], ['u3', 0, 0]]);
+
+			// 選んだ線の削除の取り消し(元の重なり順に戻る)
+			await send('deleteStrokes', { strokeIds: ['u2'] });
+			await expect([['u1', 10, 5], ['u3', 0, 0]]);
+			await send('undo', {});
+			await expect([['u1', 10, 5], ['u2', 0, 0], ['u3', 0, 0]]);
+
+			// 境目で切ってから動かした操作は、1回の取り消しで切る前に戻る
+			const piece = (id: string) => ({ ...stroke(id), points: encodePoints([[10, 10, 1], [15, 15, 1]]) });
+			await send('moveStrokes', { strokeIds: ['u2a'], dx: 3, dy: 3, splits: [{ id: 'u2', pieces: [piece('u2a'), piece('u2b')] }] });
+			await expect([['u1', 10, 5], ['u2a', 3, 3], ['u2b', 0, 0], ['u3', 0, 0]]);
+			await send('undo', {});
+			await expect([['u1', 10, 5], ['u2', 0, 0], ['u3', 0, 0]]);
+
+			// 新しい操作をしたら、やり直しはできなくなる
+			await send('undo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0]]);
+			sendToChannel(aliceWs, 'stroke', stroke('u4'));
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0]]);
+			await send('redo', {});
+			await send('chat', { text: 'barrier-1' });
+			await vi.waitFor(async () => {
+				const chat = (await call('draw-rooms/chat-history', { roomId: room.id }, alice)).body as { message: { text: string } }[];
+				assert.ok(chat.some(item => item.message.text === 'barrier-1'));
+			}, { timeout: 5000, interval: 200 });
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0]]);
+
+			// 下描きのレイヤーの削除は、レイヤーごと戻せる(皆に見えるレイヤーの削除は戻せない)
+			await send('setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 0.5, private: true },
+			] });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('d1'), layer: 'draft' });
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0], ['d1', 0, 0]]);
+			await send('setLayers', { layers: [{ id: '0', name: '', visible: true, opacity: 1 }] });
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0]]);
+			await send('undo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0], ['d1', 0, 0]]);
+			assert.deepStrictEqual((await mine())?.layers.map(l => [l.id, l.private ?? false]), [['0', false], ['draft', true]]);
+
+			// 下描きのレイヤーの消去も戻せる
+			await send('clearLayer', { layer: 'draft' });
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0]]);
+			await send('undo', {});
+			await expect([['u1', 0, 0], ['u2', 0, 0], ['u3', 0, 0], ['u4', 0, 0], ['d1', 0, 0]]);
+		} finally {
+			aliceWs.close();
+		}
+
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+	});
+
 	test('移動ツールで線をずらし、選んだ線だけを消せる。部屋主はほかの人のレイヤーを消去できる', async () => {
 		const room = await createRoom(alice);
 		await call('draw-rooms/join', { roomId: room.id }, bob);

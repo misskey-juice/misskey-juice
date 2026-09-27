@@ -6658,6 +6658,7 @@ export type components = {
             dx?: number;
             dy?: number;
             layer?: string;
+            lock?: boolean;
             points: string;
         };
         DrawLayer: {
@@ -6666,6 +6667,8 @@ export type components = {
             visible: boolean;
             opacity: number;
             private?: boolean;
+            /** @enum {string} */
+            blend?: 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity' | 'lighter';
         };
         DrawRoomChatMessage: {
             id: string;

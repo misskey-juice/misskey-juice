@@ -190,9 +190,14 @@ type PendingEntry = PendingStroke & {
 // JUICE: 描いている途中のペンの線は、表示用のキャンバスとは別の重ね描き用キャンバスに、増えた分だけ描き足す。
 // こうすると描いている間に表示用のキャンバス(全レイヤーの合成)を描き直さずに済む。
 // 消しゴムは下の絵を消して見せる必要があるので、これまでどおりレイヤーごと描き直す
-function isOverlayStroke(stroke: { tool: DrawTool }): boolean {
-	return stroke.tool === 'pen';
+function isOverlayStroke(stroke: { tool: DrawTool; lock?: boolean }): boolean {
+	// JUICE: 透明度ロックの線は、下の絵のある所にだけ描くので、レイヤーに重ねて描く(消しゴムと同じ扱い)
+	return stroke.tool === 'pen' && stroke.lock !== true;
 }
+
+// JUICE: レイヤーの合成モード(Canvasの合成方法の名前)。無ければ通常
+export const DRAW_LAYER_BLENDS = ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'] as const;
+export type DrawLayerBlend = typeof DRAW_LAYER_BLENDS[number];
 
 // JUICE: 描いている途中の線が、この時間続きも確定も届かなければ消す(描いていた人の切断などで
 // 取りやめの知らせが届かなかった場合に、途中までの線がいつまでも残らないように)
@@ -229,7 +234,15 @@ type Layer = {
 	visible: boolean;
 	// JUICE: 下描き(本人の画面にだけ見える)。保存する画像には入れない
 	private: boolean;
+	// JUICE: 合成モード(下のレイヤーとの重ね方)
+	blend: GlobalCompositeOperation;
 };
+
+// JUICE: レイヤーを、その濃さ・合成モードで重ねる
+function setLayerComposite(ctx: CanvasRenderingContext2D, layer: Layer): void {
+	ctx.globalAlpha = layer.opacity;
+	ctx.globalCompositeOperation = layer.blend;
+}
 
 function createCanvas(width: number, height: number): HTMLCanvasElement {
 	const canvas = window.document.createElement('canvas');
@@ -238,7 +251,7 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 	return canvas;
 }
 
-type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip'>;
+type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip' | 'lock'>;
 
 // 半透明の線を一旦不透明で描いておく作業用のキャンバス(使い回す)。
 // 読み込みのときはWorkerの中でも描くので、documentが無ければOffscreenCanvasにする
@@ -256,6 +269,11 @@ function createScratch(): HTMLCanvasElement {
  * 半透明の線は、区間の重なりが濃くならないよう作業用キャンバスに不透明で描いてから、まとめて薄く重ねる
  */
 export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+	// JUICE: 透明度ロックの線は、レイヤーの描いてある所(透明でない所)にだけ描く
+	if (stroke.lock === true && stroke.tool !== 'eraser') {
+		drawLockedStroke(ctx, stroke);
+		return;
+	}
 	// JUICE: 線の中だけ塗る(はみ出し防止)の線は、塗れる範囲の外には描かない
 	if (stroke.clip != null && stroke.clip.length >= 9) {
 		ctx.save();
@@ -266,6 +284,37 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 		return;
 	}
 	drawStrokeUnclipped(ctx, stroke);
+}
+
+// JUICE: 透明度ロックの線を、作業用キャンバスに普通に描いてから、レイヤーの描いてある所にだけ重ねる
+let lockScratch: HTMLCanvasElement | null = null;
+
+function drawLockedStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+	const rect = pointsRect(stroke.points, stroke.size + 2);
+	if (rect == null) return;
+	const x0 = Math.floor(Math.max(0, rect.x0));
+	const y0 = Math.floor(Math.max(0, rect.y0));
+	const x1 = Math.ceil(Math.min(ctx.canvas.width, rect.x1));
+	const y1 = Math.ceil(Math.min(ctx.canvas.height, rect.y1));
+	if (x1 <= x0 || y1 <= y0) return;
+	const w = x1 - x0;
+	const h = y1 - y0;
+	lockScratch ??= createScratch();
+	if (lockScratch.width < w) lockScratch.width = w;
+	if (lockScratch.height < h) lockScratch.height = h;
+	const lctx = lockScratch.getContext('2d')!;
+	lctx.save();
+	lctx.globalCompositeOperation = 'source-over';
+	lctx.globalAlpha = 1;
+	lctx.clearRect(0, 0, w, h);
+	lctx.translate(-x0, -y0);
+	drawStroke(lctx, { ...stroke, lock: undefined });
+	lctx.restore();
+	ctx.save();
+	ctx.globalAlpha = 1;
+	ctx.globalCompositeOperation = 'source-atop';
+	ctx.drawImage(lockScratch, 0, 0, w, h, x0, y0, w, h);
+	ctx.restore();
 }
 
 function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
@@ -653,7 +702,7 @@ export class DrawCanvasEngine {
 		const canvas = this.groupCanvas[group];
 		if (canvas == null) return;
 		const layers = group === 'below' ? this.splitGroups().below : this.splitGroups().above;
-		if (stroke.tool === 'eraser' || layer.opacity < 1 || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !isOverlayStroke(entry))) {
+		if (stroke.tool === 'eraser' || stroke.lock === true || layer.opacity < 1 || layer.blend !== 'source-over' || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !isOverlayStroke(entry))) {
 			this.markLayerRegion(layer, strokeRect(stroke));
 			return;
 		}
@@ -674,10 +723,11 @@ export class DrawCanvasEngine {
 			}
 			for (const layer of layers) {
 				if (!this.isShown(layer)) continue;
-				ctx.globalAlpha = layer.opacity;
+				setLayerComposite(ctx, layer);
 				ctx.drawImage(this.layerImage(layer), 0, 0);
 			}
 			ctx.globalAlpha = 1;
+			ctx.globalCompositeOperation = 'source-over';
 			this.groupDirty[group] = false;
 			this.groupRegion[group] = null;
 		} else if (this.groupRegion[group] != null) {
@@ -698,10 +748,11 @@ export class DrawCanvasEngine {
 				}
 				for (const layer of layers) {
 					if (!this.isShown(layer)) continue;
-					ctx.globalAlpha = layer.opacity;
+					setLayerComposite(ctx, layer);
 					ctx.drawImage(this.layerImage(layer), x, y, w, h, x, y, w, h);
 				}
 				ctx.globalAlpha = 1;
+				ctx.globalCompositeOperation = 'source-over';
 			}
 		}
 		return canvas;
@@ -763,6 +814,7 @@ export class DrawCanvasEngine {
 				pending: new Map(),
 				visible: true,
 				private: false,
+				blend: 'source-over',
 			};
 			this.layers.set(userId, layer);
 			this.order.push(userId);
@@ -824,7 +876,7 @@ export class DrawCanvasEngine {
 	 * JUICE: その人のレイヤーの一覧(重なり順は下から)に合わせて、レイヤーを作る・消す・並べ替える・表示と濃さを変える。
 	 * その人のレイヤーは、今の重なり順の中の同じ位置にまとめて置く
 	 */
-	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number; private?: boolean }[]): void {
+	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number; private?: boolean; blend?: DrawLayerBlend }[]): void {
 		const keys = metas.map(meta => drawLayerKey(userId, meta.id));
 		const old = [...this.order];
 		for (const key of old) {
@@ -839,6 +891,7 @@ export class DrawCanvasEngine {
 			layer.visible = meta.visible;
 			layer.opacity = Math.min(1, Math.max(0, meta.opacity));
 			layer.private = meta.private === true;
+			layer.blend = meta.blend != null && (DRAW_LAYER_BLENDS as readonly string[]).includes(meta.blend) ? meta.blend : 'source-over';
 		}
 		const others = old.filter(key => ownerOfLayerKey(key) !== userId);
 		const first = old.findIndex(key => ownerOfLayerKey(key) === userId);
@@ -1194,6 +1247,44 @@ export class DrawCanvasEngine {
 		this.requestRender();
 	}
 
+	/**
+	 * JUICE: 取り消し・やり直しで線を戻す。それぞれbeforeの線の前(無い・nullなら最後)に入れる。もうある線は入れない
+	 */
+	public insertStrokes(userId: string, items: { before: string | null; stroke: CanvasStroke }[]): void {
+		const layer = this.ensureLayer(userId);
+		const present = new Set(layer.strokes.map(stroke => stroke.id));
+		const beforeAnchor = new Map<string, CanvasStroke[]>();
+		const atEnd: CanvasStroke[] = [];
+		for (const { before, stroke } of items) {
+			if (present.has(stroke.id)) continue;
+			present.add(stroke.id);
+			if (before == null) {
+				atEnd.push(stroke);
+			} else {
+				const waiting = beforeAnchor.get(before) ?? [];
+				waiting.push(stroke);
+				beforeAnchor.set(before, waiting);
+			}
+		}
+		if (beforeAnchor.size === 0 && atEnd.length === 0) return;
+		const result: CanvasStroke[] = [];
+		for (const stroke of layer.strokes) {
+			const waiting = beforeAnchor.get(stroke.id);
+			if (waiting != null) {
+				result.push(...waiting);
+				beforeAnchor.delete(stroke.id);
+			}
+			result.push(stroke);
+		}
+		// 目印の線が無くなっていたら、最後に入れる
+		for (const waiting of beforeAnchor.values()) result.push(...waiting);
+		result.push(...atEnd);
+		layer.strokes = result;
+		this.redrawCommitted(layer);
+		this.requestRender();
+		this.committedChanged();
+	}
+
 	public strokesOf(userId: string): readonly CanvasStroke[] {
 		return this.layers.get(userId)?.strokes ?? [];
 	}
@@ -1480,10 +1571,11 @@ export class DrawCanvasEngine {
 		ctx.fillRect(0, 0, this.width, this.height);
 		for (const layer of this.orderedLayers()) {
 			if (onlyVisible && !this.isShown(layer)) continue;
-			ctx.globalAlpha = layer.opacity;
+			setLayerComposite(ctx, layer);
 			ctx.drawImage(this.layerImage(layer), 0, 0);
 		}
 		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = 'source-over';
 	}
 
 	// 表示用のキャンバスを次に描き直す。rectを渡すとその範囲だけ(nullなら範囲は増やさない)、省略すると全体
@@ -1518,23 +1610,39 @@ export class DrawCanvasEngine {
 			if (w <= 0 || h <= 0) return;
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.drawImage(this.groupImage('below', below), x, y, w, h, x, y, w, h);
-			if (mine != null && this.isShown(mine)) {
-				ctx.globalAlpha = mine.opacity;
-				ctx.drawImage(this.layerImage(mine), x, y, w, h, x, y, w, h);
-				ctx.globalAlpha = 1;
-			}
-			if (above.some(layer => this.isShown(layer))) ctx.drawImage(this.groupImage('above', above), x, y, w, h, x, y, w, h);
+			this.drawMineAndAbove(ctx, mine, above, { x, y, w, h });
 			return;
 		}
 		ctx.globalCompositeOperation = 'copy';
 		ctx.drawImage(this.groupImage('below', below), 0, 0);
 		ctx.globalCompositeOperation = 'source-over';
+		this.drawMineAndAbove(ctx, mine, above, null);
+	}
+
+	// 自分のレイヤーと、その上の組を重ねる。JUICE: 上の組に合成モードのあるレイヤーがあるときは、まとめたキャンバス
+	// (透明な上に重ねたもの)では下の絵と正しく合成できないので、1枚ずつ重ねる
+	private drawMineAndAbove(ctx: CanvasRenderingContext2D, mine: Layer | null, above: Layer[], area: { x: number; y: number; w: number; h: number } | null): void {
+		const draw = (image: CanvasImageSource) => {
+			if (area == null) ctx.drawImage(image, 0, 0);
+			else ctx.drawImage(image, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
+		};
 		if (mine != null && this.isShown(mine)) {
-			ctx.globalAlpha = mine.opacity;
-			ctx.drawImage(this.layerImage(mine), 0, 0);
-			ctx.globalAlpha = 1;
+			setLayerComposite(ctx, mine);
+			draw(this.layerImage(mine));
 		}
-		if (above.some(layer => this.isShown(layer))) ctx.drawImage(this.groupImage('above', above), 0, 0);
+		const shown = above.filter(layer => this.isShown(layer));
+		if (shown.some(layer => layer.blend !== 'source-over')) {
+			for (const layer of shown) {
+				setLayerComposite(ctx, layer);
+				draw(this.layerImage(layer));
+			}
+		} else if (shown.length > 0) {
+			ctx.globalAlpha = 1;
+			ctx.globalCompositeOperation = 'source-over';
+			draw(this.groupImage('above', above));
+		}
+		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = 'source-over';
 	}
 
 	/**
@@ -1551,10 +1659,11 @@ export class DrawCanvasEngine {
 		ctx.fillRect(0, 0, 1, 1);
 		for (const layer of this.orderedLayers()) {
 			if (!this.isShown(layer)) continue;
-			ctx.globalAlpha = layer.opacity;
+			setLayerComposite(ctx, layer);
 			ctx.drawImage(this.layerImage(layer), px, py, 1, 1, 0, 0, 1, 1);
 		}
 		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = 'source-over';
 		const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
 		return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 	}
@@ -1584,10 +1693,11 @@ export class DrawCanvasEngine {
 		ctx.fillRect(0, 0, target.width, target.height);
 		for (const layer of this.orderedLayers()) {
 			if (!this.isShown(layer)) continue;
-			ctx.globalAlpha = layer.opacity;
+			setLayerComposite(ctx, layer);
 			ctx.drawImage(layer.thumb, 0, 0, target.width, target.height);
 		}
 		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = 'source-over';
 	}
 
 	/**
@@ -1608,10 +1718,11 @@ export class DrawCanvasEngine {
 		for (const layer of this.orderedLayers()) {
 			// JUICE: 下描きは保存する画像に入れない
 			if (!layer.visible || layer.private) continue;
-			ctx.globalAlpha = layer.opacity;
+			setLayerComposite(ctx, layer);
 			ctx.drawImage(layer.committed, x, y, width, height, 0, 0, width, height);
 		}
 		ctx.globalAlpha = 1;
+		ctx.globalCompositeOperation = 'source-over';
 		return canvas;
 	}
 

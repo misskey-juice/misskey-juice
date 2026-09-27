@@ -136,6 +136,11 @@ export const packedDrawStrokeSchema = {
 			type: 'string',
 			optional: true, nullable: false,
 		},
+		// JUICE: 透明度ロック(その時点でレイヤーに描いてある所にだけ描く)
+		lock: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
 		// 1点5バイト(x・yは1/8px単位のint16、筆圧は0〜255のuint8、リトルエンディアン)を並べてbase64にしたもの
 		points: {
 			type: 'string',
@@ -191,6 +196,12 @@ export const packedDrawLayerSchema = {
 		private: {
 			type: 'boolean',
 			optional: true, nullable: false,
+		},
+		// JUICE: 合成モード(乗算・焼き込みカラーなど)。無ければ通常
+		blend: {
+			type: 'string',
+			optional: true, nullable: false,
+			enum: ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'],
 		},
 	},
 } as const;
