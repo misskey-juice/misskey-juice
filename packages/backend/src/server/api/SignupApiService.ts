@@ -395,6 +395,19 @@ export class SignupApiService {
 				throw new FastifyReplyError(400, 'EXPIRED');
 			}
 
+			// JUICE: 登録を受け付けた後に、同じ(別名を含む)メールアドレスのアカウントが確認済みになっていたら作らない。
+			// 受付時は確認前の登録を数えないため、+タグ等の別名で複数登録してから順に確認すると、重複を防げないので
+			// 受付の後に管理画面で+タグ・Gmailのドットを禁止した場合も、ここで断る
+			const rejection = await this.emailService.isEmailUsedByOtherAccount(pendingUser.email) ? 'USED_EMAIL'
+				: await this.emailService.isPlusTagBlocked(pendingUser.email) || await this.emailService.isGmailDotBlocked(pendingUser.email) ? 'UNAVAILABLE_EMAIL'
+				: null;
+			if (rejection != null) {
+				await this.userPendingsRepository.delete({ id: pendingUser.id });
+				const pendingTicket = await this.registrationTicketsRepository.findOneBy({ pendingUserId: pendingUser.id });
+				if (pendingTicket) await this.releaseRegistrationTicket(pendingTicket);
+				throw new FastifyReplyError(400, rejection);
+			}
+
 			const { approvalRequiredForSignup } = resolveSignupApprovalSettings(await this.juiceSettingsService.fetch());
 
 			// 招待コードで登録した場合は承認式登録をバイパスする(招待した時点でモデレーターの信任があるため)

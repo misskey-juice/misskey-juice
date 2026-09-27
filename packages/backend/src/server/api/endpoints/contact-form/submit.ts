@@ -124,7 +124,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// ただしコンタクトフォームでは既存メールアドレス(reason: 'used')も許可する
 				if (this.serverSettings.enableActiveEmailValidation) {
 					const validated = await this.emailService.validateEmailForAccount(ps.email.trim()).catch(() => null);
-					if (validated != null && !validated.available && validated.reason !== 'used') {
+					// JUICE: +タグ・Gmailのドットの禁止はアカウント向けの設定なので、お問い合わせではそれらのアドレスも受け付ける
+					if (validated != null && !validated.available && validated.reason !== 'used' && validated.reason !== 'plusTag' && validated.reason !== 'gmailDot') {
 						throw new ApiError(meta.errors.invalidReplyMethod);
 					}
 				}

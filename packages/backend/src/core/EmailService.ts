@@ -169,7 +169,7 @@ export class EmailService {
 	@bindThis
 	public async validateEmailForAccount(emailAddress: string): Promise<{
 		available: boolean;
-		reason: null | 'used' | 'format' | 'disposable' | 'mx' | 'smtp' | 'banned' | 'network' | 'blacklist';
+		reason: null | 'used' | 'format' | 'disposable' | 'mx' | 'smtp' | 'banned' | 'network' | 'blacklist' | 'plusTag' | 'gmailDot';
 	}> {
 		if (!this.utilityService.validateEmailFormat(emailAddress)) {
 			return {
@@ -178,27 +178,7 @@ export class EmailService {
 			};
 		}
 
-		const juiceSettings = await this.juiceSettingsService.fetch();
-		const { blockEmailDotAliasRegistration, blockEmailPlusAliasRegistration } = resolveEmailAliasSettings(juiceSettings);
-		const aliasCheckEnabled = blockEmailDotAliasRegistration || blockEmailPlusAliasRegistration;
-
-		let existsAsAlias = false;
-		const exist = aliasCheckEnabled
-			? (existsAsAlias = await this.existsAsEmailAlias(emailAddress, {
-				foldDots: blockEmailDotAliasRegistration,
-				stripPlusTag: blockEmailPlusAliasRegistration,
-			}))
-			: (await this.userProfilesRepository.countBy({
-				emailVerified: true,
-				email: emailAddress,
-			})) !== 0;
-
-		if (exist) {
-			// JUICE: 完全一致ではなく別名正規化による判定だった場合、問い合わせ対応時に
-			// 経緯を追えるようログにだけ残す(APIレスポンス上は通常の'used'と区別しない)
-			if (existsAsAlias) {
-				this.logger.debug(`email registration blocked as alias duplicate: ${emailAddress}`);
-			}
+		if (await this.isEmailUsedByOtherAccount(emailAddress)) {
 			return {
 				available: false,
 				reason: 'used',
@@ -254,6 +234,23 @@ export class EmailService {
 			};
 		}
 
+		// JUICE: 管理画面で+タグを禁止しているときは、+を含むアドレスを既存のアカウントの有無に関係なく受け付けない。
+		// お問い合わせフォームではこの理由を許すので、ほかの検証(使い捨てアドレス等)の後に判定する
+		if (await this.isPlusTagBlocked(emailAddress)) {
+			return {
+				available: false,
+				reason: 'plusTag',
+			};
+		}
+
+		// JUICE: 同じく、Gmailのドット無視を禁止しているときは、@より前に.を含むGmailのアドレスを受け付けない
+		if (await this.isGmailDotBlocked(emailAddress)) {
+			return {
+				available: false,
+				reason: 'gmailDot',
+			};
+		}
+
 		return {
 			available: true,
 			reason: null,
@@ -266,8 +263,56 @@ export class EmailService {
 	// SQL側で再現し、DBだけで重複判定を完結させる(normalizeEmailForDedupとロジックを二重管理する
 	// トレードオフはあるが、UtilityService.dotFoldingEmailDomainsは共有しているため対象ドメインの
 	// 一覧だけは分岐しない)
+	/**
+	 * JUICE: そのメールアドレスが、確認済みのほかのアカウントで使われているか。管理画面の設定に応じて、
+	 * +タグ・Gmailのドット無視による別名も同じアドレスとみなす。
+	 * 登録・メールアドレス変更の受付時だけでなく、確認のリンクを開いたとき(アカウントを作る・確認済みにする直前)にも呼ぶ。
+	 * 受付時は、まだ確認していない登録・変更を数えないため、確認前の別名を複数並べると素通りしてしまうので
+	 */
 	@bindThis
-	private async existsAsEmailAlias(emailAddress: string, options: { foldDots: boolean; stripPlusTag: boolean }): Promise<boolean> {
+	public async isEmailUsedByOtherAccount(emailAddress: string, exceptUserId?: string): Promise<boolean> {
+		const juiceSettings = await this.juiceSettingsService.fetch();
+		const { blockEmailDotAliasRegistration, blockEmailPlusAliasRegistration } = resolveEmailAliasSettings(juiceSettings);
+		if (!blockEmailDotAliasRegistration && !blockEmailPlusAliasRegistration) {
+			const query = this.userProfilesRepository.createQueryBuilder('profile')
+				.where('profile.emailVerified = true')
+				.andWhere('profile.email = :emailAddress', { emailAddress });
+			if (exceptUserId != null) query.andWhere('profile.userId != :exceptUserId', { exceptUserId });
+			return (await query.getCount()) !== 0;
+		}
+
+		const used = await this.existsAsEmailAlias(emailAddress, {
+			foldDots: blockEmailDotAliasRegistration,
+			stripPlusTag: blockEmailPlusAliasRegistration,
+		}, exceptUserId);
+		// 別名として判定した場合は、問い合わせ対応時に経緯を追えるようログにだけ残す(APIレスポンス上は通常の'used'と区別しない)
+		if (used) this.logger.debug(`email blocked as alias duplicate: ${emailAddress}`);
+		return used;
+	}
+
+	/**
+	 * JUICE: 管理画面の設定で、+タグを含むメールアドレスを禁止していて、このアドレスのローカルパートに+があるか
+	 */
+	@bindThis
+	public async isPlusTagBlocked(emailAddress: string): Promise<boolean> {
+		const { blockEmailPlusAliasRegistration } = resolveEmailAliasSettings(await this.juiceSettingsService.fetch());
+		const atIndex = emailAddress.lastIndexOf('@');
+		return blockEmailPlusAliasRegistration && atIndex !== -1 && emailAddress.slice(0, atIndex).includes('+');
+	}
+
+	/**
+	 * JUICE: 管理画面の設定で、Gmailのドット無視による別名を禁止していて、このアドレスが@より前に.を含むGmail(Googlemail)のアドレスか
+	 */
+	@bindThis
+	public async isGmailDotBlocked(emailAddress: string): Promise<boolean> {
+		const { blockEmailDotAliasRegistration } = resolveEmailAliasSettings(await this.juiceSettingsService.fetch());
+		const atIndex = emailAddress.lastIndexOf('@');
+		if (!blockEmailDotAliasRegistration || atIndex === -1) return false;
+		const domain = emailAddress.slice(atIndex + 1).toLowerCase();
+		return this.utilityService.dotFoldingEmailDomains.includes(domain) && emailAddress.slice(0, atIndex).includes('.');
+	}
+
+	private async existsAsEmailAlias(emailAddress: string, options: { foldDots: boolean; stripPlusTag: boolean }, exceptUserId?: string): Promise<boolean> {
 		const normalizedCandidate = this.utilityService.normalizeEmailForDedup(emailAddress, options);
 
 		const localPart = options.stripPlusTag
@@ -278,16 +323,16 @@ export class EmailService {
 			? `(CASE WHEN ${domainPart} = ANY(:dotFoldingDomains) THEN replace(${localPart}, '.', '') ELSE ${localPart} END)`
 			: localPart;
 
-		const count = await this.userProfilesRepository.createQueryBuilder('profile')
+		const query = this.userProfilesRepository.createQueryBuilder('profile')
 			.where('profile.emailVerified = true')
 			.andWhere('profile.email IS NOT NULL')
 			.andWhere(`lower(${normalizedLocalPart} || '@' || ${domainPart}) = :normalizedCandidate`, {
 				...(options.foldDots ? { dotFoldingDomains: this.utilityService.dotFoldingEmailDomains } : {}),
 				normalizedCandidate,
-			})
-			.getCount();
+			});
+		if (exceptUserId != null) query.andWhere('profile.userId != :exceptUserId', { exceptUserId });
 
-		return count !== 0;
+		return (await query.getCount()) !== 0;
 	}
 
 	private async verifyMail(emailAddress: string, verifymailAuthKey: string): Promise<{
