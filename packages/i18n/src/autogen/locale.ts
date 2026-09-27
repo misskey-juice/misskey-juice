@@ -9802,6 +9802,42 @@ export interface Locale extends ILocale {
          */
         "deleteLayerConfirm": ParameterizedString<"name">;
         /**
+         * ドラッグして並べ替え
+         */
+        "reorderLayer": string;
+        /**
+         * レイヤーを全て削除
+         */
+        "deleteAllMyLayers": string;
+        /**
+         * 自分のレイヤーと、そこに描いた線を全て削除しますか？(元に戻せません)
+         */
+        "deleteAllMyLayersConfirm": string;
+        /**
+         * 下描き{n}
+         */
+        "draftLayerN": ParameterizedString<"n">;
+        /**
+         * 下描きを追加
+         */
+        "addDraftLayer": string;
+        /**
+         * 下描き(自分だけに見えます。保存する画像には入りません)
+         */
+        "draftLayerHint": string;
+        /**
+         * 下描きにする(自分だけに見える)
+         */
+        "makeLayerDraft": string;
+        /**
+         * みんなに見せる
+         */
+        "publishLayer": string;
+        /**
+         * 「{name}」をみんなに見せますか？今描いてある線も見えるようになります
+         */
+        "publishLayerConfirm": ParameterizedString<"name">;
+        /**
          * 濃さ
          */
         "layerOpacity": string;
@@ -9977,6 +10013,30 @@ export interface Locale extends ILocale {
          * この絵チャは終了しました。1時間後に削除されるので、残したい場合は画像を保存・投稿してください
          */
         "endedNotKept": string;
+        /**
+         * まもなく削除される部屋
+         */
+        "endingRooms": string;
+        /**
+         * あと{n}分で削除
+         */
+        "deletesInMinutes": ParameterizedString<"n">;
+        /**
+         * まもなく削除
+         */
+        "deletesSoon": string;
+        /**
+         * この絵チャは終了しました。あと{n}分で削除されるので、残したい場合は画像を保存・投稿してください
+         */
+        "endedNotKeptRemaining": ParameterizedString<"n">;
+        /**
+         * この絵チャは終了しました。まもなく削除されるので、残したい場合は画像を保存・投稿してください
+         */
+        "endedNotKeptSoon": string;
+        /**
+         * この部屋を今すぐ削除しますか？(削除される時間を待たずに消えます。絵とチャットは元に戻せません)
+         */
+        "deleteRoomNowConfirm": string;
         /**
          * 描く人から外す
          */

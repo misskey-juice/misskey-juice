@@ -5200,6 +5200,8 @@ export type components = {
             isAIGenerated: boolean;
             hideFromMediaTimeline: boolean;
             isNovel: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
             /**
              * Format: id
              * @example xxxxxxxxxx
@@ -6637,6 +6639,8 @@ export type components = {
             isEnded: boolean;
             /** Format: date-time */
             endedAt: string | null;
+            /** Format: date-time */
+            deletesAt: string | null;
             members: components['schemas']['UserLite'][];
             isMember: boolean;
             viewOnly: boolean;
@@ -6661,6 +6665,7 @@ export type components = {
             name: string;
             visible: boolean;
             opacity: number;
+            private?: boolean;
         };
         DrawRoomChatMessage: {
             id: string;

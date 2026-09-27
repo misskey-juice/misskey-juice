@@ -227,6 +227,8 @@ type Layer = {
 	thumb: HTMLCanvasElement;
 	pending: Map<string, PendingEntry>;
 	visible: boolean;
+	// JUICE: 下描き(本人の画面にだけ見える)。保存する画像には入れない
+	private: boolean;
 };
 
 function createCanvas(width: number, height: number): HTMLCanvasElement {
@@ -760,6 +762,7 @@ export class DrawCanvasEngine {
 				thumb: createCanvas(this.thumbWidth, this.thumbHeight),
 				pending: new Map(),
 				visible: true,
+				private: false,
 			};
 			this.layers.set(userId, layer);
 			this.order.push(userId);
@@ -821,7 +824,7 @@ export class DrawCanvasEngine {
 	 * JUICE: その人のレイヤーの一覧(重なり順は下から)に合わせて、レイヤーを作る・消す・並べ替える・表示と濃さを変える。
 	 * その人のレイヤーは、今の重なり順の中の同じ位置にまとめて置く
 	 */
-	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number }[]): void {
+	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number; private?: boolean }[]): void {
 		const keys = metas.map(meta => drawLayerKey(userId, meta.id));
 		const old = [...this.order];
 		for (const key of old) {
@@ -835,6 +838,7 @@ export class DrawCanvasEngine {
 			const layer = this.ensureLayer(keys[i]);
 			layer.visible = meta.visible;
 			layer.opacity = Math.min(1, Math.max(0, meta.opacity));
+			layer.private = meta.private === true;
 		}
 		const others = old.filter(key => ownerOfLayerKey(key) !== userId);
 		const first = old.findIndex(key => ownerOfLayerKey(key) === userId);
@@ -1602,7 +1606,8 @@ export class DrawCanvasEngine {
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, width, height);
 		for (const layer of this.orderedLayers()) {
-			if (!layer.visible) continue;
+			// JUICE: 下描きは保存する画像に入れない
+			if (!layer.visible || layer.private) continue;
 			ctx.globalAlpha = layer.opacity;
 			ctx.drawImage(layer.committed, x, y, width, height, 0, 0, width, height);
 		}

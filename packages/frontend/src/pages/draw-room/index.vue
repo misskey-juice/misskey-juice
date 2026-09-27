@@ -23,6 +23,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFoldableSection>
 
+			<!-- JUICE: 保存しないで終了し、まだ削除されていない部屋(削除されるまでに画像を保存・投稿できる) -->
+			<MkFoldableSection v-if="endingRooms.length > 0">
+				<template #header>{{ i18n.ts._drawRoom.endingRooms }}</template>
+				<div class="_gaps_s">
+					<XRoomCard v-for="room in endingRooms" :key="room.id" :room="room"/>
+				</div>
+			</MkFoldableSection>
+
 			<MkFoldableSection v-if="myRooms != null && myRooms.length > 0">
 				<template #header>{{ i18n.ts._drawRoom.savedRooms }}</template>
 				<div class="_gaps_s">
@@ -53,6 +61,8 @@ const $i = ensureSignin();
 const router = useRouter();
 
 const openRooms = ref<Misskey.entities.DrawRoom[] | null>(null);
+// JUICE: 保存しないで終了し、まだ削除されていない部屋(一覧のAPIは開催中の部屋と一緒に返す)
+const endingRooms = ref<Misskey.entities.DrawRoom[]>([]);
 // JUICE: 自分が部屋主の部屋(開催中+保存した終了済み)。保存した部屋だけを別枠で見せる
 const myRooms = ref<Misskey.entities.DrawRoom[] | null>(null);
 const error = ref<unknown>(null);
@@ -64,7 +74,8 @@ async function fetchRooms(): Promise<void> {
 			misskeyApi('draw-rooms/list', { limit: 30 }),
 			misskeyApi('draw-rooms/list', { userId: $i.id, limit: 30 }),
 		]);
-		openRooms.value = open;
+		openRooms.value = open.filter(room => !room.isEnded);
+		endingRooms.value = open.filter(room => room.isEnded && room.deletesAt != null);
 		myRooms.value = mine.filter(room => room.isEnded);
 	} catch (err) {
 		error.value = err;

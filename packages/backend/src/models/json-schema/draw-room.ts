@@ -59,6 +59,12 @@ export const packedDrawRoomSchema = {
 			format: 'date-time',
 			optional: false, nullable: true,
 		},
+		// JUICE: 保存しないで終了した部屋が自動で削除される日時(それ以外はnull)。部屋主はそれより前にも削除できる
+		deletesAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: false, nullable: true,
+		},
 		members: {
 			type: 'array',
 			optional: false, nullable: false,
@@ -180,6 +186,11 @@ export const packedDrawLayerSchema = {
 		opacity: {
 			type: 'number',
 			optional: false, nullable: false,
+		},
+		// JUICE: 下描き(描いた本人にだけ見える)。ほかの人には、下描きのレイヤーは返らない
+		private: {
+			type: 'boolean',
+			optional: true, nullable: false,
 		},
 	},
 } as const;

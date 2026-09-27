@@ -1088,6 +1088,7 @@ export type Channels = {
                 clip?: string;
                 layer?: string;
                 points: string;
+                private?: boolean;
             }) => void;
             cursors: (payload: {
                 cursors: {
@@ -1103,14 +1104,17 @@ export type Channels = {
             stroke: (payload: {
                 userId: User['id'];
                 stroke: DrawStroke;
+                private?: boolean;
             }) => void;
             undo: (payload: {
                 userId: User['id'];
                 strokeId: string;
+                private?: boolean;
             }) => void;
             clearLayer: (payload: {
                 userId: User['id'];
                 layer?: string;
+                private?: boolean;
             }) => void;
             layersUpdated: (payload: {
                 userId: User['id'];
@@ -1132,6 +1136,12 @@ export type Channels = {
                     id: string;
                     pieces: DrawStroke[];
                 }[];
+                privateLayers?: string[];
+            }) => void;
+            layerPublished: (payload: {
+                userId: User['id'];
+                layer: string;
+                strokes: DrawStroke[];
             }) => void;
             operationRejected: (payload: Record<string, never>) => void;
             chat: (payload: {

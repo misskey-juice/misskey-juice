@@ -37,6 +37,8 @@ export type DrawLayerMeta = {
 	name: string;
 	visible: boolean;
 	opacity: number;
+	// JUICE: 下描き(描いた本人の画面にだけ見える)。線もレイヤー自体も、ほかの人には配らない。保存する画像にも入らない
+	private?: boolean;
 };
 
 // レイヤーの一覧を持っていない人(以前に描かれた部屋を含む)は、最初のレイヤー1枚だけ

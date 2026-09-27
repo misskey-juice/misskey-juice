@@ -659,6 +659,96 @@ describe('絵チャ', () => {
 		assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['top']);
 	});
 
+	test('下描きのレイヤーは本人にだけ見え、みんなに見せるようにすると線が届く', async () => {
+		const room = await createRoom(alice, { keepAfterEnd: true });
+		type Stroke = { id: string; layer?: string };
+		type Layer = { id: string; private?: boolean };
+		const received: { type: string; body: any }[] = [];
+		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		const view = async (viewer: typeof alice) => (await layersOf(room, viewer)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: Layer[] } | undefined;
+		try {
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 0.5, private: true },
+			] });
+			await vi.waitFor(async () => assert.deepStrictEqual((await view(alice))?.layers.map(l => [l.id, l.private ?? false]), [['0', false], ['draft', true]]), { timeout: 5000, interval: 200 });
+			sendToChannel(aliceWs, 'strokePart', { strokeId: 'd1', tool: 'pen', color: '#000000', size: 4, layer: 'draft', points: encodePoints([[1, 1, 1]]) });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('d1'), layer: 'draft' });
+			sendToChannel(aliceWs, 'stroke', stroke('p1'));
+			await vi.waitFor(async () => assert.deepStrictEqual((await view(alice))?.strokes.map(s => s.id), ['d1', 'p1']), { timeout: 5000, interval: 200 });
+
+			// ほかの人には、下描きのレイヤーもその線も返らない・流れない
+			const bobView = await view(bob);
+			assert.deepStrictEqual(bobView?.layers.map(l => l.id), ['0']);
+			assert.deepStrictEqual(bobView?.strokes.map(s => s.id), ['p1']);
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'stroke' && m.body.stroke.id === 'p1')), { timeout: 5000, interval: 100 });
+			assert.ok(!received.some(m => (m.type === 'stroke' || m.type === 'strokePart') && (m.body.stroke?.id === 'd1' || m.body.strokeId === 'd1')));
+			assert.ok(received.filter(m => m.type === 'layersUpdated').every(m => m.body.layers.every((l: Layer) => !l.private)));
+
+			// みんなに見せるようにすると、その時点の線がまとめて届く
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 0.5 },
+			] });
+			await vi.waitFor(() => {
+				const published = received.find(m => m.type === 'layerPublished');
+				assert.strictEqual(published?.body.layer, 'draft');
+				assert.deepStrictEqual(published?.body.strokes.map((s: Stroke) => s.id), ['d1']);
+			}, { timeout: 5000, interval: 100 });
+			assert.deepStrictEqual((await view(bob))?.strokes.map(s => s.id), ['d1', 'p1']);
+
+			// 下描きに戻すと、保存した部屋でもほかの人には見えない
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 0.5, private: true },
+			] });
+			await vi.waitFor(async () => assert.deepStrictEqual((await view(bob))?.strokes.map(s => s.id), ['p1']), { timeout: 5000, interval: 200 });
+		} finally {
+			aliceWs.close();
+			bobWs.close();
+		}
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+		assert.deepStrictEqual((await view(bob))?.strokes.map(s => s.id), ['p1']);
+		assert.deepStrictEqual((await view(alice))?.strokes.map(s => s.id), ['d1', 'p1']);
+	});
+
+	test('描いている途中で下描きに変えた線は、ほかの人の画面から取り消される。線を切ったときは下描きの線だけを除いて届く', async () => {
+		const room = await createRoom(alice);
+		const received: { type: string; body: any }[] = [];
+		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		const publicLayers = [{ id: '0', name: '', visible: true, opacity: 1 }, { id: 'd', name: '', visible: true, opacity: 1 }];
+		try {
+			sendToChannel(aliceWs, 'setLayers', { layers: publicLayers });
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'layersUpdated')), { timeout: 5000, interval: 100 });
+			sendToChannel(aliceWs, 'strokePart', { strokeId: 'x1', tool: 'pen', color: '#000000', size: 4, layer: 'd', points: encodePoints([[1, 1, 1]]) });
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'strokePart' && m.body.strokeId === 'x1')), { timeout: 5000, interval: 100 });
+
+			// 途中で下描きにする → 確定した線は届かず、途中まで届いた分は取り消される
+			sendToChannel(aliceWs, 'setLayers', { layers: [publicLayers[0], { ...publicLayers[1], private: true }] });
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'layersUpdated' && m.body.layers.length === 1)), { timeout: 5000, interval: 100 });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('x1'), layer: 'd' });
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'strokeCancel' && m.body.strokeId === 'x1')), { timeout: 5000, interval: 100 });
+			assert.ok(!received.some(m => m.type === 'stroke' && m.body.stroke.id === 'x1'));
+
+			// 線を切って、公開のレイヤーと下描きのレイヤーの線に置き換えると、ほかの人には公開の分だけが届く
+			sendToChannel(aliceWs, 'stroke', stroke('p1'));
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'stroke' && m.body.stroke.id === 'p1')), { timeout: 5000, interval: 100 });
+			await new Promise(resolve => setTimeout(resolve, 1100));
+			sendToChannel(aliceWs, 'replaceStrokes', { replacements: [{ id: 'p1', pieces: [stroke('p1a'), { ...stroke('p1b'), layer: 'd' }] }] });
+			await vi.waitFor(() => {
+				const split = received.find(m => m.type === 'strokesSplit');
+				assert.deepStrictEqual(split?.body.splits.map((s: { id: string; pieces: { id: string }[] }) => [s.id, s.pieces.map(p => p.id)]), [['p1', ['p1a']]]);
+				assert.strictEqual(split?.body.privateLayers, undefined);
+			}, { timeout: 5000, interval: 100 });
+		} finally {
+			aliceWs.close();
+			bobWs.close();
+		}
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+	});
+
 	test('大きいキャンバス(3840×3840)でも、端まで描いた線を受け付ける', async () => {
 		const room = await createRoom(alice, { canvasPreset: 'square3840' });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
@@ -706,11 +796,23 @@ describe('絵チャ', () => {
 		assert.strictEqual((await call('draw-rooms/show', { roomId: room.id }, alice)).body.error.code, 'NO_SUCH_ROOM');
 	});
 
-	test('「保存しない」部屋は終了後に一覧から消える', async () => {
+	test('「保存しない」部屋は、保存した部屋の一覧には出ず、削除されるまでは部屋の一覧に削除の予定と一緒に出る。部屋主はすぐ削除できる', async () => {
 		const room = await createRoom(alice, { keepAfterEnd: false });
 		await call('draw-rooms/end', { roomId: room.id }, alice);
 		const aliceRooms = (await call('draw-rooms/list', { userId: alice.id }, alice)).body as DrawRoom[];
 		assert.strictEqual(aliceRooms.some(r => r.id === room.id), false);
+
+		// 削除されるまでの間は、見られる人の部屋の一覧に出る(終了から1時間後に削除される予定)
+		const listed = ((await call('draw-rooms/list', {}, bob)).body as DrawRoom[]).find(r => r.id === room.id);
+		assert.ok(listed != null);
+		assert.strictEqual(listed.isEnded, true);
+		assert.ok(listed.endedAt != null && listed.deletesAt != null);
+		assert.strictEqual(new Date(listed.deletesAt).getTime() - new Date(listed.endedAt).getTime(), 1000 * 60 * 60);
+
+		// 部屋主以外は削除できず、部屋主は時間を待たずに削除できる
+		assert.strictEqual((await call('draw-rooms/delete', { roomId: room.id }, bob)).body.error.code, 'NOT_OWNER');
+		assert.strictEqual((await call('draw-rooms/delete', { roomId: room.id }, alice)).status, 204);
+		assert.strictEqual(((await call('draw-rooms/list', {}, bob)).body as DrawRoom[]).some(r => r.id === room.id), false);
 		// 終了していない部屋は削除できない(先に終了する)
 		const active = await createRoom(alice);
 		assert.strictEqual((await call('draw-rooms/delete', { roomId: active.id }, alice)).body.error.code, 'ROOM_NOT_ENDED');

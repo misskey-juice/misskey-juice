@@ -297,17 +297,19 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; }) => void;
+			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; private?: boolean; }) => void;
 			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
-			stroke: (payload: { userId: User['id']; stroke: DrawStroke; }) => void;
-			undo: (payload: { userId: User['id']; strokeId: string; }) => void;
-			clearLayer: (payload: { userId: User['id']; layer?: string; }) => void;
+			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;
+			undo: (payload: { userId: User['id']; strokeId: string; private?: boolean; }) => void;
+			clearLayer: (payload: { userId: User['id']; layer?: string; private?: boolean; }) => void;
 			// JUICE: その人のレイヤーの一覧が変わった(一覧から消えたレイヤーの線も消えている)
 			layersUpdated: (payload: { userId: User['id']; layers: DrawLayer[]; }) => void;
 			strokesMoved: (payload: { userId: User['id']; strokeIds: string[] | null; dx: number; dy: number; }) => void;
 			strokesDeleted: (payload: { userId: User['id']; strokeIds: string[]; }) => void;
-			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; }) => void;
+			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; privateLayers?: string[]; }) => void;
+			// JUICE: 下描きのレイヤーを皆に見せるようにした(そのレイヤーの今の線)
+			layerPublished: (payload: { userId: User['id']; layer: string; strokes: DrawStroke[]; }) => void;
 			// JUICE: 自分が送った線の移動・削除・置き換えが断られた(本人にだけ届く。線を取り直してサーバーの状態に合わせる)
 			operationRejected: (payload: Record<string, never>) => void;
 			chat: (payload: { message: DrawRoomChatMessage; user: UserLite; }) => void;
@@ -424,6 +426,10 @@ export type NoteUpdatedEvent = { id: Note['id'] } & ({
 	body: {
 		isNovel: boolean;
 	};
+} | {
+	// JUICE: リモートで編集された投稿を反映した(表示を差し替える内容)
+	type: 'edited';
+	body: Pick<Note, 'text' | 'cw' | 'lang' | 'fileIds' | 'files' | 'emojis' | 'tags' | 'mentions' | 'isAIGenerated' | 'isNovel' | 'updatedAt'>;
 });
 
 export type BroadcastEvents = {

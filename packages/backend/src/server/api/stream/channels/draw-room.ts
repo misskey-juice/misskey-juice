@@ -106,7 +106,45 @@ export class DrawRoomChannel extends Channel {
 			// 大きさが変わったら、線の座標の確認もその大きさで行う
 			this.room = { ...this.room, title, maxMembers, canvasWidth, canvasHeight };
 		}
+		// JUICE: ほかの人の下描き(本人だけに見える)のレイヤーの線と、レイヤーそのものは流さない
+		if ('userId' in data.body && data.body.userId !== this.user.id) {
+			if (data.type === 'strokePart' || data.type === 'stroke') {
+				const strokeId = data.type === 'stroke' ? data.body.stroke.id : data.body.strokeId;
+				if (data.body.private) {
+					// 描いている途中で下描きに変わった線は、途中まで届いていた分をこの人の画面から消してもらう
+					if (this.forwardedPartIds.delete(strokeId)) this.send('strokeCancel', { userId: data.body.userId, strokeId });
+					return;
+				}
+				if (data.type === 'strokePart') this.rememberForwardedPart(strokeId);
+				else this.forwardedPartIds.delete(strokeId);
+			}
+			if ((data.type === 'clearLayer' || data.type === 'undo') && data.body.private) return;
+			if (data.type === 'layersUpdated' && data.body.layers.some(layer => layer.private)) {
+				this.send({ type: 'layersUpdated', body: { ...data.body, layers: data.body.layers.filter(layer => !layer.private) } });
+				return;
+			}
+			if (data.type === 'strokesSplit' && data.body.privateLayers != null) {
+				// 線ごとに、下描きのレイヤーの線だけを除く(元の線のidは残し、この人の画面からも元の線を取り除いてもらう)
+				const hidden = new Set(data.body.privateLayers);
+				const splits = data.body.splits.map(split => ({ id: split.id, pieces: split.pieces.filter(piece => !hidden.has(piece.layer ?? '0')) }));
+				this.send({ type: 'strokesSplit', body: { userId: data.body.userId, splits } });
+				return;
+			}
+		}
 		this.send(data);
+	}
+
+	// JUICE: この接続に途中まで流した、ほかの人の描いている途中の線のid(下描きに変わったときに取り消してもらうため)。
+	// 取り消し・確定が届かなかった分で増え続けないよう、古いものから捨てる
+	private forwardedPartIds = new Set<string>();
+
+	private rememberForwardedPart(strokeId: string): void {
+		if (this.forwardedPartIds.has(strokeId)) return;
+		this.forwardedPartIds.add(strokeId);
+		if (this.forwardedPartIds.size > 500) {
+			const oldest = this.forwardedPartIds.values().next().value;
+			if (oldest != null) this.forwardedPartIds.delete(oldest);
+		}
 	}
 
 	// JUICE: 書き込み系の操作はwrite:draw-roomsの権限が必要(サードパーティーのトークンがread権限だけの場合)
@@ -196,12 +234,13 @@ export class DrawRoomChannel extends Channel {
 			if (!isJsonObject(item) || !this.isValidLayerId(item.id) || ids.has(item.id)) return null;
 			const { visible, opacity } = item;
 			if (typeof item.name !== 'string' || typeof visible !== 'boolean') return null;
+			if (item.private !== undefined && typeof item.private !== 'boolean') return null;
 			// 名前は改行などの制御文字を除き、前後の空白を取ってから長さを確かめる
 			const name = item.name.replace(/\p{Cc}/gu, '').trim();
 			if (name.length > 32) return null;
 			if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
 			ids.add(item.id);
-			layers.push({ id: item.id, name, visible, opacity: Math.round(opacity * 100) / 100 });
+			layers.push({ id: item.id, name, visible, opacity: Math.round(opacity * 100) / 100, ...(item.private === true ? { private: true } : {}) });
 		}
 		return layers;
 	}
@@ -311,7 +350,7 @@ export class DrawRoomChannel extends Channel {
 				if (!this.canDraw() || !isJsonObject(body) || !this.isValidStrokeId(body.strokeId)) return;
 				const part = this.parseStrokeBody(body, DRAW_STROKE_PART_MAX_POINTS);
 				if (part == null || !await rate('strokePart')) return;
-				this.drawRoomService.publishStrokePart(room.id, user.id, { ...part, strokeId: body.strokeId });
+				await this.drawRoomService.publishStrokePart(room.id, user.id, { ...part, strokeId: body.strokeId });
 				break;
 			}
 			case 'strokeCancel': {

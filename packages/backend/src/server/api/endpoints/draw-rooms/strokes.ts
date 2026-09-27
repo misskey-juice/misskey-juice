@@ -80,7 +80,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			try {
 				const room = await this.drawRoomService.getRoom(ps.roomId, me);
-				return await this.drawRoomService.getLayers(room);
+				// JUICE: ほかの人の下描きのレイヤーは返さない
+				return await this.drawRoomService.getLayers(room, me?.id ?? null);
 			} catch (err) {
 				rethrowDrawRoomError(err);
 			}
