@@ -169,6 +169,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
+				<!-- JUICE: リモートのユーザーのアイコンのデコレーション(Misskey系のサーバーのユーザーだけ) -->
+				<SearchMarker v-slot="slotProps">
+					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
+						<template #label><SearchLabel>{{ i18n.ts._juice.remoteAvatarDecorations }}</SearchLabel></template>
+
+						<div class="_gaps_m">
+							<SearchMarker>
+								<MkSwitch v-model="remoteAvatarDecorationsEnabled">
+									<template #label><SearchLabel>{{ i18n.ts._juice.remoteAvatarDecorationsEnabled }}</SearchLabel></template>
+									<template #caption>{{ i18n.ts._juice.remoteAvatarDecorationsEnabledCaption }}</template>
+								</MkSwitch>
+							</SearchMarker>
+						</div>
+					</MkFolder>
+				</SearchMarker>
+
 				<SearchMarker v-slot="slotProps">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 						<template #label><SearchLabel>{{ i18n.ts._juice.ranking }}</SearchLabel></template>
@@ -454,6 +470,7 @@ const emojiRequestRequireLicense = ref(settings.emojiRequestRequireLicense);
 const avatarDecorationRequestEnabled = ref(settings.avatarDecorationRequestEnabled);
 const avatarDecorationRequestRequireCategory = ref(settings.avatarDecorationRequestRequireCategory);
 const avatarDecorationRequestRequireDescription = ref(settings.avatarDecorationRequestRequireDescription);
+const remoteAvatarDecorationsEnabled = ref(settings.remoteAvatarDecorationsEnabled);
 const rankingAggregationPeriodHours = ref(settings.rankingAggregationPeriodHours);
 const rankingDisplayCount = ref(settings.rankingDisplayCount);
 const relayTimelineEnabled = ref(settings.relayTimelineEnabled);
@@ -591,6 +608,7 @@ function save() {
 		avatarDecorationRequestEnabled: avatarDecorationRequestEnabled.value,
 		avatarDecorationRequestRequireCategory: avatarDecorationRequestRequireCategory.value,
 		avatarDecorationRequestRequireDescription: avatarDecorationRequestRequireDescription.value,
+		remoteAvatarDecorationsEnabled: remoteAvatarDecorationsEnabled.value,
 		rankingAggregationPeriodHours: rankingAggregationPeriodHours.value,
 		rankingDisplayCount: rankingDisplayCount.value,
 		relayTimelineEnabled: relayTimelineEnabled.value,

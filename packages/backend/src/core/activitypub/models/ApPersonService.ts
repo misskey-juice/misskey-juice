@@ -37,6 +37,7 @@ import { bindThis } from '@/decorators.js';
 import { RoleService } from '@/core/RoleService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { AccountMoveService } from '@/core/AccountMoveService.js';
+import type { RemoteAvatarDecorationService } from '@/core/RemoteAvatarDecorationService.js';
 import { checkHttps } from '@/misc/check-https.js';
 import { getApId, getApType, getOneApHrefNullable, isActor, isCollection, isCollectionOrOrderedCollection, isPropertyValue } from '../type.js';
 import { extractApHashtags } from './tag.js';
@@ -74,6 +75,7 @@ export class ApPersonService implements OnModuleInit {
 	private instanceChart: InstanceChart;
 	private apLoggerService: ApLoggerService;
 	private accountMoveService: AccountMoveService;
+	private remoteAvatarDecorationService: RemoteAvatarDecorationService;
 	private logger: Logger;
 
 	constructor(
@@ -126,6 +128,7 @@ export class ApPersonService implements OnModuleInit {
 		this.instanceChart = this.moduleRef.get('InstanceChart');
 		this.apLoggerService = this.moduleRef.get('ApLoggerService');
 		this.accountMoveService = this.moduleRef.get('AccountMoveService');
+		this.remoteAvatarDecorationService = this.moduleRef.get('RemoteAvatarDecorationService');
 		this.logger = this.apLoggerService.logger;
 	}
 
@@ -474,6 +477,9 @@ export class ApPersonService implements OnModuleInit {
 
 		await this.updateFeatured(user.id, resolver).catch(err => this.logger.error(err));
 
+		// JUICE: アイコンのデコレーションを相手のサーバーから取ってくる(待たない)
+		this.remoteAvatarDecorationService.refresh(user).catch(err => this.logger.error('error occurred while fetching avatar decorations', { stack: err }));
+
 		return user;
 	}
 
@@ -640,6 +646,9 @@ export class ApPersonService implements OnModuleInit {
 		const updated = { ...exist, ...updates };
 
 		this.cacheService.uriPersonCache.set(uri, updated);
+
+		// JUICE: アイコンのデコレーションを相手のサーバーから取ってくる(待たない)
+		this.remoteAvatarDecorationService.refresh(updated).catch(err => this.logger.error('error occurred while fetching avatar decorations', { stack: err }));
 
 		// 移行処理を行う
 		if (updated.movedAt && (

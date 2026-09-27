@@ -11542,6 +11542,7 @@ export interface operations {
                         avatarDecorationRequestEnabled: boolean;
                         avatarDecorationRequestRequireCategory: boolean;
                         avatarDecorationRequestRequireDescription: boolean;
+                        remoteAvatarDecorationsEnabled: boolean;
                         rankingAggregationPeriodHours: number;
                         rankingDisplayCount: number;
                         relayTimelineEnabled: boolean;
@@ -11745,6 +11746,7 @@ export interface operations {
                     avatarDecorationRequestEnabled?: boolean;
                     avatarDecorationRequestRequireCategory?: boolean;
                     avatarDecorationRequestRequireDescription?: boolean;
+                    remoteAvatarDecorationsEnabled?: boolean;
                     rankingAggregationPeriodHours?: number;
                     rankingDisplayCount?: number;
                     relayTimelineEnabled?: boolean;

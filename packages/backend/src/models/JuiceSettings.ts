@@ -140,6 +140,11 @@ export interface JuiceSettingsValue {
 	 * 絵チャ(お絵かきチャット)機能を使えるようにするか。既定は有効
 	 */
 	drawRoomEnabled?: boolean;
+
+	/**
+	 * リモートのユーザー(Misskey系)のアイコンのデコレーションを表示するか。既定は有効
+	 */
+	remoteAvatarDecorationsEnabled?: boolean;
 }
 
 // JUICE: misskey-tempuraのコンタクトフォームを参考に追加
@@ -477,6 +482,14 @@ export function resolveDrawRoomSettings(settings: JuiceSettingsValue): {
 } {
 	return {
 		drawRoomEnabled: settings.drawRoomEnabled ?? true,
+	};
+}
+
+export function resolveRemoteAvatarDecorationSettings(settings: JuiceSettingsValue): {
+	remoteAvatarDecorationsEnabled: boolean;
+} {
+	return {
+		remoteAvatarDecorationsEnabled: settings.remoteAvatarDecorationsEnabled ?? true,
 	};
 }
 

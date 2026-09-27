@@ -15529,6 +15529,18 @@ export interface Locale extends ILocale {
          */
         "avatarDecorationRequestRequireDescription": string;
         /**
+         * リモートのアバターデコレーション
+         */
+        "remoteAvatarDecorations": string;
+        /**
+         * リモートのアバターデコレーションを表示する
+         */
+        "remoteAvatarDecorationsEnabled": string;
+        /**
+         * Misskey系のサーバー(Misskey・CherryPick・Sharkey)のユーザーが付けているアバターデコレーションを、相手のサーバーから取ってきて表示します。このサーバーのデコレーションとしては登録されず、画像はメディアプロキシ経由で表示されます
+         */
+        "remoteAvatarDecorationsEnabledCaption": string;
+        /**
          * ユーザーランキング
          */
         "ranking": string;

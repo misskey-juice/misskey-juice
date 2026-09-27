@@ -33,6 +33,7 @@ export const paramDef = {
 		avatarDecorationRequestEnabled: { type: 'boolean' },
 		avatarDecorationRequestRequireCategory: { type: 'boolean' },
 		avatarDecorationRequestRequireDescription: { type: 'boolean' },
+		remoteAvatarDecorationsEnabled: { type: 'boolean' },
 		rankingAggregationPeriodHours: { type: 'integer', minimum: 1 },
 		rankingDisplayCount: { type: 'integer', minimum: 1, maximum: 100 },
 		relayTimelineEnabled: { type: 'boolean' },
@@ -130,6 +131,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.avatarDecorationRequestEnabled !== undefined) set.avatarDecorationRequestEnabled = ps.avatarDecorationRequestEnabled;
 			if (ps.avatarDecorationRequestRequireCategory !== undefined) set.avatarDecorationRequestRequireCategory = ps.avatarDecorationRequestRequireCategory;
 			if (ps.avatarDecorationRequestRequireDescription !== undefined) set.avatarDecorationRequestRequireDescription = ps.avatarDecorationRequestRequireDescription;
+			if (ps.remoteAvatarDecorationsEnabled !== undefined) set.remoteAvatarDecorationsEnabled = ps.remoteAvatarDecorationsEnabled;
 			if (ps.rankingAggregationPeriodHours !== undefined) set.rankingAggregationPeriodHours = ps.rankingAggregationPeriodHours;
 			if (ps.rankingDisplayCount !== undefined) set.rankingDisplayCount = ps.rankingDisplayCount;
 			if (ps.relayTimelineEnabled !== undefined) set.relayTimelineEnabled = ps.relayTimelineEnabled;
