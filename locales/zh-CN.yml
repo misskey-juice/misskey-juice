@@ -3717,6 +3717,8 @@ _aboutJuice:
     announcementReaction: "对公告添加多个反应"
     approvalSignup: "审批式注册(必须填写注册理由、由版主审批/驳回、即使未收集邮箱也可通过验证码查看审核状态)"
     avatarDecorationRequest: "普通用户申请头像装饰的功能"
+    remoteAvatarDecorations: "显示远程用户的头像挂件(Misskey 系服务器的用户，不会注册到本服务器)"
+    remoteNoteEdit: "接收并反映在其他服务器上编辑的帖子(ActivityPub Update，附带已编辑标识)"
     contactForm: "无需登录即可提交的联系表单(可选择分类和回复方式,版主可管理状态并指派负责人)"
     emailI18n: "系统邮件按用户设置接收语言"
     emojiRequest: "普通用户申请自定义表情的功能"

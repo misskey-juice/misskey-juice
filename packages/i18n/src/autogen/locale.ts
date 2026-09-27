@@ -9357,6 +9357,14 @@ export interface Locale extends ILocale {
              */
             "avatarDecorationRequest": string;
             /**
+             * リモートのユーザーのアバターデコレーションを表示(Misskey系のサーバーのユーザー。このサーバーには登録しない)
+             */
+            "remoteAvatarDecorations": string;
+            /**
+             * ほかのサーバーで編集された投稿を受け取って反映(ActivityPubのUpdate。編集済みの表示付き)
+             */
+            "remoteNoteEdit": string;
+            /**
              * 絵文字・アバターデコレーション申請の「差し替え申請」(既存の画像だけを差し替え可能)
              */
             "requestReplacement": string;

@@ -3717,6 +3717,8 @@ _aboutJuice:
     announcementReaction: "Multiple reactions on announcements"
     approvalSignup: "Approval-required signup (reason input, approval/rejection by moderators, a check code to track approval status even without collecting an email address)"
     avatarDecorationRequest: "Avatar decoration requests from regular users"
+    remoteAvatarDecorations: "Show avatar decorations of remote users (users on Misskey-based servers, without registering them on this server)"
+    remoteNoteEdit: "Receives and applies edits to posts made on other servers (ActivityPub Update, with an “edited” indicator)"
     contactForm: "A contact form that can be submitted without logging in (category and reply method selection, status management and assignee handling for moderators)"
     emailI18n: "Per-user language setting for system emails"
     emojiRequest: "Custom emoji requests from regular users"

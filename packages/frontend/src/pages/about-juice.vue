@@ -229,6 +229,8 @@ const features = [
 	{ icon: 'ti ti-ai', text: i18n.ts._aboutJuice._features.aiGenerated },
 	{ icon: 'ti ti-mood-plus', text: i18n.ts._aboutJuice._features.emojiRequest },
 	{ icon: 'ti ti-frame', text: i18n.ts._aboutJuice._features.avatarDecorationRequest },
+	{ icon: 'ti ti-world', text: i18n.ts._aboutJuice._features.remoteAvatarDecorations },
+	{ icon: 'ti ti-pencil', text: i18n.ts._aboutJuice._features.remoteNoteEdit },
 	{ icon: 'ti ti-replace', text: i18n.ts._aboutJuice._features.requestReplacement },
 	{ icon: 'ti ti-shield-check', text: i18n.ts._aboutJuice._features.roleApprovalDelegation },
 	{ icon: 'ti ti-arrows-join', text: i18n.ts._aboutJuice._features.reactionPiggyback },

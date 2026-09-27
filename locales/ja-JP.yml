@@ -2451,6 +2451,8 @@ _aboutJuice:
     aiGenerated: "投稿・添付ファイルのAI生成物フラグ表示(ActivityPub連合対応)"
     emojiRequest: "一般ユーザーによる絵文字申請機能"
     avatarDecorationRequest: "一般ユーザーによるアバターデコレーション申請機能"
+    remoteAvatarDecorations: "リモートのユーザーのアバターデコレーションを表示(Misskey系のサーバーのユーザー。このサーバーには登録しない)"
+    remoteNoteEdit: "ほかのサーバーで編集された投稿を受け取って反映(ActivityPubのUpdate。編集済みの表示付き)"
     requestReplacement: "絵文字・アバターデコレーション申請の「差し替え申請」(既存の画像だけを差し替え可能)"
     roleApprovalDelegation: "絵文字・アバターデコレーション・承認式新規登録の各申請の承認/却下権限を、モデレーターに限らずロール単位で個別に付与可能"
     reactionPiggyback: "他人のリアクションをクリックして自分も同じリアクションを付けられる「相乗り」(リモートサーバーのカスタム絵文字にも対応)"
