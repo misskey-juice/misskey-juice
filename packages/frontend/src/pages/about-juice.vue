@@ -237,6 +237,9 @@ const features = [
 	{ icon: 'ti ti-brand-oauth', text: i18n.ts._aboutJuice._features.oauthLogin },
 	{ icon: 'ti ti-piano', text: i18n.ts._aboutJuice._features.midiPlayer },
 	{ icon: 'ti ti-book', text: i18n.ts._aboutJuice._features.novel },
+	{ icon: 'ti ti-palette', text: i18n.ts._aboutJuice._features.drawRoom },
+	{ icon: 'ti ti-writing', text: i18n.ts._aboutJuice._features.novelEditor },
+	{ icon: 'ti ti-search', text: i18n.ts._aboutJuice._features.mfmSearchEngine },
 ];
 
 // JUICE: この一覧に載っている機能が、どういう経路で実装されたかをざっくり示す

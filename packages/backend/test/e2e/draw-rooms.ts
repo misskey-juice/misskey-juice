@@ -582,6 +582,83 @@ describe('絵チャ', () => {
 		await call('draw-rooms/end', { roomId: room.id }, alice);
 	});
 
+	test('1人が複数のレイヤーを持て、レイヤーを消すとその線も消える。レイヤーだけを消去できる', async () => {
+		const room = await createRoom(alice, { keepAfterEnd: true });
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		type Stroke = { id: string; layer?: string; tool: string; brush?: string };
+		type Layer = { id: string; name: string; visible: boolean; opacity: number };
+		const mine = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: Layer[] } | undefined;
+		try {
+			// 最初はレイヤー1枚だけ(レイヤーの一覧を送っていなくても、描いた人には最初のレイヤーがある)
+			sendToChannel(aliceWs, 'stroke', stroke('b0'));
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['0']), { timeout: 5000, interval: 200 });
+
+			// レイヤーを足して(上に)、そのレイヤーに描く
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'top', name: '色', visible: false, opacity: 0.5 },
+			] });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.layers, [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'top', name: '色', visible: false, opacity: 0.5 },
+			]), { timeout: 5000, interval: 200 });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t1'), layer: 'top' });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t2'), layer: 'top' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => [s.id, s.layer ?? '0']), [['b0', '0'], ['t1', 'top'], ['t2', 'top']]), { timeout: 5000, interval: 200 });
+
+			// そのレイヤーの線だけを消去する
+			sendToChannel(aliceWs, 'clearLayer', { layer: 'top' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => s.id), ['b0']), { timeout: 5000, interval: 200 });
+
+			// レイヤーを消すと、そのレイヤーの線も消える
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t3'), layer: 'top' });
+			await vi.waitFor(async () => assert.strictEqual((await mine())?.strokes.length, 2), { timeout: 5000, interval: 200 });
+			sendToChannel(aliceWs, 'setLayers', { layers: [{ id: 'top', name: '色', visible: true, opacity: 1 }] });
+			await vi.waitFor(async () => {
+				const layer = await mine();
+				assert.deepStrictEqual(layer?.layers.map(l => l.id), ['top']);
+				assert.deepStrictEqual(layer?.strokes.map(s => s.id), ['t3']);
+			}, { timeout: 5000, interval: 200 });
+
+			// 囲った範囲を消すのは消しゴムだけ(ペンでは断られる)
+			const area = { tool: 'eraser', brush: 'area', color: '#000000', size: 1, layer: 'top', points: encodePoints([[0, 0, 1], [50, 0, 1], [50, 50, 1]]) };
+			sendToChannel(aliceWs, 'stroke', { ...area, id: 'e1' });
+			sendToChannel(aliceWs, 'stroke', { ...area, id: 'p1', tool: 'pen' });
+			// 一覧に無いレイヤー(消した'0'・一度も無い'ghost')への線は入れない
+			sendToChannel(aliceWs, 'stroke', stroke('z1'));
+			sendToChannel(aliceWs, 'stroke', { ...stroke('g1'), layer: 'ghost' });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t4'), layer: 'top' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => s.id), ['t3', 'e1', 't4']), { timeout: 5000, interval: 200 });
+
+			// 線を置き換えるときも、一覧に無いレイヤーの線にはできない
+			sendToChannel(aliceWs, 'replaceStrokes', { replacements: [{ id: 't4', pieces: [{ ...stroke('g2'), layer: 'ghost' }] }] });
+
+			// 持っていないレイヤーの消去は何もしない
+			sendToChannel(aliceWs, 'clearLayer', { layer: 'ghost' });
+
+			// レイヤーの名前は、制御文字を除いて前後の空白を取る
+			// (直前の操作と同じ1秒に入ると回数制限にかかるので、少し待つ)
+			await new Promise(resolve => setTimeout(resolve, 1100));
+			sendToChannel(aliceWs, 'setLayers', { layers: [{ id: 'top', name: ' 色\nいろ ', visible: true, opacity: 1 }] });
+			await vi.waitFor(async () => assert.strictEqual((await mine())?.layers[0].name, '色いろ'), { timeout: 5000, interval: 200 });
+			assert.deepStrictEqual((await mine())?.strokes.map(s => s.id), ['t3', 'e1', 't4']);
+
+			// レイヤーの一覧が不正(9枚以上・idが重なる・0枚)なら受け付けない
+			const many = Array.from({ length: 9 }, (_, i) => ({ id: `l${i}`, name: '', visible: true, opacity: 1 }));
+			sendToChannel(aliceWs, 'setLayers', { layers: many });
+			sendToChannel(aliceWs, 'setLayers', { layers: [{ id: 'x', name: '', visible: true, opacity: 1 }, { id: 'x', name: '', visible: true, opacity: 1 }] });
+			sendToChannel(aliceWs, 'setLayers', { layers: [] });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t5'), layer: 'top' });
+			await vi.waitFor(async () => assert.strictEqual((await mine())?.strokes.at(-1)?.id, 't5'), { timeout: 5000, interval: 200 });
+			assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['top']);
+		} finally {
+			aliceWs.close();
+		}
+		// 保存する部屋は、終了後もレイヤーの一覧が残る
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+		assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['top']);
+	});
+
 	test('大きいキャンバス(3840×3840)でも、端まで描いた線を受け付ける', async () => {
 		const room = await createRoom(alice, { canvasPreset: 'square3840' });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });

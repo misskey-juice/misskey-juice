@@ -75,13 +75,13 @@ export function encodePoints(points: number[]): string {
 	let binary = '';
 	const bytes = new Uint8Array(view.buffer);
 	for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-	return window.btoa(binary);
+	return btoa(binary);
 }
 
 export function decodePoints(encoded: string): number[] {
 	let binary: string;
 	try {
-		binary = window.atob(encoded);
+		binary = atob(encoded);
 	} catch {
 		return [];
 	}
@@ -121,6 +121,51 @@ function shiftPoints(points: number[], dx: number, dy: number): number[] {
 	return points.map((v, i) => (i % 3 === 0 ? v + dx : i % 3 === 1 ? v + dy : v));
 }
 
+// JUICE: 線が描かれる範囲(キャンバスの座標、右下は含まない)。人数が多いときに、変わった範囲だけを描き直すのに使う
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+
+// 点の列(x, y, 筆圧の繰り返し)を囲む範囲。線の太さぶん広げる
+function pointsRect(points: number[], pad: number): Rect | null {
+	if (points.length < 3) return null;
+	let x0 = Infinity;
+	let y0 = Infinity;
+	let x1 = -Infinity;
+	let y1 = -Infinity;
+	for (let i = 0; i < points.length; i += 3) {
+		x0 = Math.min(x0, points[i]);
+		x1 = Math.max(x1, points[i]);
+		y0 = Math.min(y0, points[i + 1]);
+		y1 = Math.max(y1, points[i + 1]);
+	}
+	return { x0: Math.floor(x0 - pad), y0: Math.floor(y0 - pad), x1: Math.ceil(x1 + pad), y1: Math.ceil(y1 + pad) };
+}
+
+const strokeRectCache = new WeakMap<object, Rect | null>();
+
+function strokeRect(stroke: StrokeShape): Rect | null {
+	let rect = strokeRectCache.get(stroke);
+	if (rect === undefined) {
+		rect = pointsRect(stroke.points, stroke.size + 2);
+		strokeRectCache.set(stroke, rect);
+	}
+	return rect;
+}
+
+// 描いている途中の線の範囲(点が増えるのでキャッシュしない)
+function pendingRect(entry: { points: number[]; size: number }): Rect | null {
+	return pointsRect(entry.points, entry.size + 2);
+}
+
+function unionRect(a: Rect | null, b: Rect | null): Rect | null {
+	if (a == null) return b;
+	if (b == null) return a;
+	return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+}
+
+function rectsIntersect(a: Rect, b: Rect): boolean {
+	return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+}
+
 // 点(x, y)が多角形(平らな座標の配列)の内側にあるか
 function pointInPolygon(x: number, y: number, polygon: number[]): boolean {
 	let inside = false;
@@ -153,13 +198,30 @@ function isOverlayStroke(stroke: { tool: DrawTool }): boolean {
 // 取りやめの知らせが届かなかった場合に、途中までの線がいつまでも残らないように)
 const PENDING_STROKE_TIMEOUT_MS = 20 * 1000;
 
+// JUICE: 1人が複数のレイヤーを持てる。レイヤーは「描いた人のid:レイヤーのid」のキーで区別する
+export function drawLayerKey(userId: string, layerId: string | undefined): string {
+	return `${userId}:${layerId ?? '0'}`;
+}
+
+export function ownerOfLayerKey(key: string): string {
+	const i = key.indexOf(':');
+	return i === -1 ? key : key.slice(0, i);
+}
+
 type Layer = {
-	userId: string;
+	// 描いた人のid:レイヤーのid(drawLayerKey)
+	key: string;
+	ownerId: string;
+	// レイヤーの濃さ(0〜1)。表示・保存する画像の両方に効く
+	opacity: number;
 	// 描き終わった線だけを描いたキャンバス
 	committed: HTMLCanvasElement;
-	// 消しゴムの途中の線も含めて描いたキャンバス。消しゴムを使うまでは作らない。
-	// 一度作ったら使い回す(大きいキャンバスを作っては捨てるとブラウザが重くなり、落ちることもあるため)
+	// 消しゴムの途中の線も含めて描いたキャンバス。消しゴム・移動を使っている間だけ持つ。
+	// 使い終わったらエンジンの予備の置き場(liveSpare)に戻し、次に使うレイヤーで使い回す
+	// (レイヤーごとに持ち続けるとメモリを使いすぎ、作っては捨てるとブラウザが重くなり落ちることもあるため)
 	live: HTMLCanvasElement | null;
+	// liveのうち描き直しが必要な範囲('full'は全体)
+	liveDirty: Rect | 'full' | null;
 	strokes: CanvasStroke[];
 	// 全体マップ用の縮小したレイヤー(描き終わった線だけ)
 	thumb: HTMLCanvasElement;
@@ -176,8 +238,15 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 
 type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip'>;
 
-// 半透明の線を一旦不透明で描いておく作業用のキャンバス(使い回す)
+// 半透明の線を一旦不透明で描いておく作業用のキャンバス(使い回す)。
+// 読み込みのときはWorkerの中でも描くので、documentが無ければOffscreenCanvasにする
 let scratch: HTMLCanvasElement | null = null;
+
+function createScratch(): HTMLCanvasElement {
+	if (typeof window !== 'undefined') return window.document.createElement('canvas');
+	// OffscreenCanvasは、ここで使う機能(大きさ・getContext('2d')・drawImageの元)がcanvas要素と同じ
+	return new OffscreenCanvas(1, 1) as unknown as HTMLCanvasElement;
+}
 
 /**
  * 1本の線を描く。筆圧で線の太さを変え、点の間は中点を通る2次曲線でつないで滑らかにする。
@@ -198,7 +267,8 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 }
 
 function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
-	if (stroke.tool === 'fill') {
+	// JUICE: 囲って塗る(ペン)・囲った範囲を消す(消しゴム)は、多角形を塗りつぶす
+	if (stroke.tool === 'fill' || (stroke.tool === 'eraser' && stroke.brush === 'area')) {
 		drawFill(ctx, stroke);
 		return;
 	}
@@ -228,7 +298,7 @@ function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape)
 	if (x1 <= x0 || y1 <= y0) return;
 	const w = x1 - x0;
 	const h = y1 - y0;
-	scratch ??= window.document.createElement('canvas');
+	scratch ??= createScratch();
 	if (scratch.width < w) scratch.width = w;
 	if (scratch.height < h) scratch.height = h;
 	const sctx = scratch.getContext('2d')!;
@@ -253,7 +323,7 @@ function drawFill(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
 	const p = stroke.points;
 	if (p.length < 9) return;
 	ctx.save();
-	ctx.globalCompositeOperation = 'source-over';
+	ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
 	ctx.globalAlpha = stroke.opacity ?? 1;
 	ctx.fillStyle = stroke.color;
 	tracePolygon(ctx, p);
@@ -386,20 +456,33 @@ function applyStrokeStyle(ctx: CanvasRenderingContext2D, stroke: StrokeShape, er
  */
 function drawSegments(ctx: CanvasRenderingContext2D, stroke: StrokeShape, from: number, to: number, isLastTail: boolean): void {
 	const p = stroke.points;
+	// JUICE: 太さが同じ区間が続く間は1本の道筋にまとめて描く(区間ごとに描くと、線が多い部屋の読み込みが遅いため)
+	let width = -1;
 	for (let i = from; i <= to; i++) {
-		const startX = i === 1 ? p[0] : (p[(i - 1) * 3] + p[i * 3]) / 2;
-		const startY = i === 1 ? p[1] : (p[(i - 1) * 3 + 1] + p[i * 3 + 1]) / 2;
 		const x = p[i * 3];
 		const y = p[i * 3 + 1];
 		const tail = isLastTail && i === to;
 		const endX = tail ? x : (x + p[(i + 1) * 3]) / 2;
 		const endY = tail ? y : (y + p[(i + 1) * 3 + 1]) / 2;
-		ctx.beginPath();
-		ctx.lineWidth = (strokeWidthAt(stroke, i - 1) + strokeWidthAt(stroke, i)) / 2;
-		ctx.moveTo(startX, startY);
+		const w = quantizeWidth((strokeWidthAt(stroke, i - 1) + strokeWidthAt(stroke, i)) / 2);
+		if (w !== width) {
+			if (width !== -1) ctx.stroke();
+			width = w;
+			ctx.beginPath();
+			ctx.lineWidth = w;
+			ctx.moveTo(i === 1 ? p[0] : (p[(i - 1) * 3] + x) / 2, i === 1 ? p[1] : (p[(i - 1) * 3 + 1] + y) / 2);
+		}
 		ctx.quadraticCurveTo(x, y, endX, endY);
-		ctx.stroke();
 	}
+	if (width !== -1) ctx.stroke();
+}
+
+// 線の太さを、見た目で区別できない細かさ(2%刻み、細い線は0.25px刻み)にそろえる。
+// そろえた太さが続く区間をまとめて描けるようにするため
+function quantizeWidth(width: number): number {
+	if (width < 12) return Math.max(0.25, Math.round(width * 4) / 4);
+	const step = Math.log(1.02);
+	return Math.exp(Math.round(Math.log(width) / step) * step);
 }
 
 function drawDot(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
@@ -462,12 +545,6 @@ function drawStrokeIncrement(ctx: CanvasRenderingContext2D, stroke: StrokeShape,
 // JUICE: 全体マップの長い辺の大きさ
 export const THUMBNAIL_MAX_SIZE = 160;
 
-// 線を縮小する(全体マップ用)
-function scaleStroke(stroke: CanvasStroke, scale: number): CanvasStroke {
-	const scalePoints = (points: number[]) => points.map((v, i) => (i % 3 === 2 ? v : v * scale));
-	return { ...stroke, size: stroke.size * scale, points: scalePoints(stroke.points), ...(stroke.clip != null ? { clip: scalePoints(stroke.clip) } : {}) };
-}
-
 export class DrawCanvasEngine {
 	public readonly width: number;
 	public readonly height: number;
@@ -486,6 +563,10 @@ export class DrawCanvasEngine {
 	private overlayRequested = false;
 	// 途中の線が取り除かれたなど、重ね描き用のキャンバスを最初から描き直す必要がある
 	private overlayNeedsFullRedraw = false;
+	// 途中の線が取り除かれて、重ね描き用のキャンバスのその範囲だけを描き直せばよいところ
+	private overlayRegion: Rect | null = null;
+	// 表示用のキャンバスのうち、次に描き直す範囲('full'は全体)。大きいキャンバス全体を毎回重ね直すとGPUが追いつかないため
+	private displayRegion: Rect | 'full' | null = 'full';
 	// 半透明の途中の線ごとのキャンバスを使い回すための置き場(作っては捨てるのを避ける)
 	private strokeCanvasPool: HTMLCanvasElement[] = [];
 	private probe: HTMLCanvasElement | null = null;
@@ -494,6 +575,15 @@ export class DrawCanvasEngine {
 	// 自分のレイヤーを常に一番上に表示するか
 	public myLayerOnTop = true;
 	public myUserId: string | null = null;
+	// JUICE: 自分が今描いているレイヤーのキー。表示用にまとめるとき、このレイヤーだけを分けて重ねる
+	public activeKey: string | null = null;
+	// JUICE: 見ている人が自分の画面だけで隠している人(その人の全てのレイヤー)
+	private hiddenOwners = new Set<string>();
+
+	// 表示するか(レイヤーの表示の設定と、見ている人が隠しているか)
+	private isShown(layer: Layer): boolean {
+		return layer.visible && !this.hiddenOwners.has(layer.ownerId);
+	}
 	// JUICE: 全体マップの内容(描き終わった線・表示するレイヤー・重ね順)が変わったときに呼ぶ。
 	// 全体マップは線のデータから小さいキャンバスに描き、表示用の大きいキャンバスからは読み出さない
 	// (大きいキャンバスを読み出すと、ブラウザがGPUでの描画をやめてしまい、描くのが遅くなるため)
@@ -501,6 +591,119 @@ export class DrawCanvasEngine {
 	// JUICE: 描き終わった線(と表示するレイヤー)が変わるたびに増やす。参照用の画像の作り直しの判断に使う
 	private committedVersion = 0;
 	private referenceCache: { version: number; image: ImageData } | null = null;
+	// JUICE: 表示用に、自分のレイヤーより下・上のレイヤーをまとめて重ねておいたキャンバス。
+	// 人数が多いと、毎回全員のレイヤー(1枚ずつがキャンバスの大きさ)を重ね直すのが重いので、
+	// 変わったときだけ作り直し、ほかの人が描き終えた線はまとめたキャンバスに直接描き足す
+	private groupCanvas: Record<'below' | 'above', HTMLCanvasElement | null> = { below: null, above: null };
+	private groupDirty: Record<'below' | 'above', boolean> = { below: true, above: true };
+	// まとめたキャンバスのうち、その範囲だけ重ね直せばよいところ(全体を作り直すときはgroupDirty)
+	private groupRegion: Record<'below' | 'above', Rect | null> = { below: null, above: null };
+
+	// レイヤーが、表示用にまとめるどの組(自分より下・自分・自分より上)にあるか
+	private splitGroups(): { below: Layer[]; mine: Layer | null; above: Layer[] } {
+		const ordered = this.orderedLayers();
+		const i = this.activeKey == null ? -1 : ordered.findIndex(layer => layer.key === this.activeKey);
+		if (i === -1) return { below: ordered, mine: null, above: [] };
+		return { below: ordered.slice(0, i), mine: ordered[i], above: ordered.slice(i + 1) };
+	}
+
+	private groupOf(layer: Layer): 'below' | 'mine' | 'above' {
+		const { below, mine } = this.splitGroups();
+		if (mine === layer) return 'mine';
+		return below.includes(layer) ? 'below' : 'above';
+	}
+
+	// そのレイヤーを含む組を、次に表示するときに作り直す
+	private markLayerDirty(layer: Layer): void {
+		this.displayRegion = 'full';
+		const group = this.groupOf(layer);
+		if (group !== 'mine') this.groupDirty[group] = true;
+	}
+
+	// そのレイヤーを含む組の、その範囲だけを次に表示するときに重ね直す(全員のレイヤーを全体で重ね直すと重いため)
+	private markLayerRegion(layer: Layer, rect: Rect | null): void {
+		if (rect == null) return;
+		this.addDisplayRegion(rect);
+		const group = this.groupOf(layer);
+		if (group === 'mine' || this.groupDirty[group]) return;
+		this.groupRegion[group] = unionRect(this.groupRegion[group], rect);
+	}
+
+	// 消しゴムの途中の線を反映したキャンバスの、その範囲(省略すると全体)を次に使うときに描き直す
+	private invalidateLive(layer: Layer, rect?: Rect | null): void {
+		if (layer.live == null) return;
+		layer.liveDirty = rect == null || layer.liveDirty === 'full' ? 'full' : unionRect(layer.liveDirty, rect);
+	}
+
+	private markAllGroupsDirty(): void {
+		this.displayRegion = 'full';
+		this.groupDirty.below = true;
+		this.groupDirty.above = true;
+	}
+
+	/**
+	 * 描き終わった線を、まとめたキャンバスに反映する。組の一番上の不透明なレイヤーなら直接描き足し、
+	 * そうでなければ(消しゴム・薄いレイヤー・上に別のレイヤーがある等)線の範囲だけを重ね直す
+	 */
+	private appendToGroup(layer: Layer, stroke: CanvasStroke): void {
+		const group = this.groupOf(layer);
+		if (group === 'mine' || this.groupDirty[group] || !this.isShown(layer)) return;
+		const canvas = this.groupCanvas[group];
+		if (canvas == null) return;
+		const layers = group === 'below' ? this.splitGroups().below : this.splitGroups().above;
+		if (stroke.tool === 'eraser' || layer.opacity < 1 || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !isOverlayStroke(entry))) {
+			this.markLayerRegion(layer, strokeRect(stroke));
+			return;
+		}
+		drawStroke(canvas.getContext('2d')!, stroke);
+	}
+
+	// まとめたキャンバスを返す(変わっていれば作り直す)。自分より下の組は白い紙の上に重ねる
+	private groupImage(group: 'below' | 'above', layers: Layer[]): HTMLCanvasElement {
+		const canvas = this.groupCanvas[group] ??= createCanvas(this.width, this.height);
+		if (this.groupDirty[group]) {
+			const ctx = canvas.getContext('2d')!;
+			ctx.globalCompositeOperation = 'source-over';
+			if (group === 'below') {
+				ctx.fillStyle = '#ffffff';
+				ctx.fillRect(0, 0, this.width, this.height);
+			} else {
+				ctx.clearRect(0, 0, this.width, this.height);
+			}
+			for (const layer of layers) {
+				if (!this.isShown(layer)) continue;
+				ctx.globalAlpha = layer.opacity;
+				ctx.drawImage(this.layerImage(layer), 0, 0);
+			}
+			ctx.globalAlpha = 1;
+			this.groupDirty[group] = false;
+			this.groupRegion[group] = null;
+		} else if (this.groupRegion[group] != null) {
+			const r = this.groupRegion[group];
+			this.groupRegion[group] = null;
+			const x = Math.max(0, r.x0);
+			const y = Math.max(0, r.y0);
+			const w = Math.min(this.width, r.x1) - x;
+			const h = Math.min(this.height, r.y1) - y;
+			if (w > 0 && h > 0) {
+				const ctx = canvas.getContext('2d')!;
+				ctx.globalCompositeOperation = 'source-over';
+				if (group === 'below') {
+					ctx.fillStyle = '#ffffff';
+					ctx.fillRect(x, y, w, h);
+				} else {
+					ctx.clearRect(x, y, w, h);
+				}
+				for (const layer of layers) {
+					if (!this.isShown(layer)) continue;
+					ctx.globalAlpha = layer.opacity;
+					ctx.drawImage(this.layerImage(layer), x, y, w, h, x, y, w, h);
+				}
+				ctx.globalAlpha = 1;
+			}
+		}
+		return canvas;
+	}
 
 	private committedChanged(): void {
 		this.committedVersion++;
@@ -533,21 +736,26 @@ export class DrawCanvasEngine {
 	}
 
 	/**
-	 * 途中の線が取り除かれた・表示が変わったときに、表示用と重ね描き用の両方を描き直す
+	 * 途中の線が取り除かれた・表示が変わったときに、表示用と重ね描き用の両方を描き直す。
+	 * rectを渡すと、その範囲だけを描き直す(取り除いた線の範囲)
 	 */
-	private pendingChanged(): void {
-		this.overlayNeedsFullRedraw = true;
+	private pendingChanged(rect?: Rect | null): void {
+		if (rect === undefined) this.overlayNeedsFullRedraw = true;
+		else this.overlayRegion = unionRect(this.overlayRegion, rect);
 		this.requestOverlay();
-		this.requestRender();
+		this.requestRender(rect);
 	}
 
 	private ensureLayer(userId: string): Layer {
 		let layer = this.layers.get(userId);
 		if (layer == null) {
 			layer = {
-				userId,
+				key: userId,
+				ownerId: ownerOfLayerKey(userId),
+				opacity: 1,
 				committed: createCanvas(this.width, this.height),
 				live: null,
+				liveDirty: null,
 				strokes: [],
 				thumb: createCanvas(this.thumbWidth, this.thumbHeight),
 				pending: new Map(),
@@ -555,20 +763,91 @@ export class DrawCanvasEngine {
 			};
 			this.layers.set(userId, layer);
 			this.order.push(userId);
+			this.markAllGroupsDirty();
 		}
 		return layer;
 	}
 
-	public get layerUserIds(): string[] {
+	/**
+	 * JUICE: 自分が描くレイヤーを変える(表示用にまとめる組が変わるので作り直す)
+	 */
+	public setActiveKey(key: string): void {
+		if (this.activeKey === key) return;
+		this.activeKey = key;
+		this.markAllGroupsDirty();
+		this.requestRender();
+	}
+
+	// 全てのレイヤーのキー(重なり順、下から)
+	public get layerKeys(): string[] {
 		return [...this.order];
 	}
 
-	public isLayerVisible(userId: string): boolean {
-		return this.layers.get(userId)?.visible ?? true;
+	// レイヤーを持っている人(重なり順に初めて出てくる順)
+	public get ownerIds(): string[] {
+		return [...new Set(this.order.map(ownerOfLayerKey))];
+	}
+
+	// その人のレイヤーのキー(重なり順、下から)
+	public keysOf(userId: string): string[] {
+		return this.order.filter(key => ownerOfLayerKey(key) === userId);
+	}
+
+	// その人のどのレイヤーにその線があるか
+	public findStrokeKey(userId: string, strokeId: string): string | null {
+		return this.keysOf(userId).find(key => this.layers.get(key)?.strokes.some(stroke => stroke.id === strokeId)) ?? null;
+	}
+
+	public hasStrokesOf(userId: string): boolean {
+		return this.keysOf(userId).some(key => (this.layers.get(key)?.strokes.length ?? 0) > 0);
+	}
+
+	public isOwnerHidden(userId: string): boolean {
+		return this.hiddenOwners.has(userId);
+	}
+
+	/**
+	 * JUICE: 見ている人が、自分の画面だけでその人(の全てのレイヤー)を隠す・出す
+	 */
+	public setOwnerHidden(userId: string, hidden: boolean): void {
+		if (hidden) this.hiddenOwners.add(userId);
+		else this.hiddenOwners.delete(userId);
+		this.markAllGroupsDirty();
+		this.pendingChanged();
+		this.committedChanged();
+	}
+
+	/**
+	 * JUICE: その人のレイヤーの一覧(重なり順は下から)に合わせて、レイヤーを作る・消す・並べ替える・表示と濃さを変える。
+	 * その人のレイヤーは、今の重なり順の中の同じ位置にまとめて置く
+	 */
+	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number }[]): void {
+		const keys = metas.map(meta => drawLayerKey(userId, meta.id));
+		const old = [...this.order];
+		for (const key of old) {
+			if (ownerOfLayerKey(key) !== userId || keys.includes(key)) continue;
+			// 消すレイヤーが消しゴム・移動の途中のキャンバスを持っていたら、予備に戻して使い回す
+			const live = this.layers.get(key)?.live;
+			if (live != null && this.liveSpare == null) this.liveSpare = live;
+			this.layers.delete(key);
+		}
+		for (const [i, meta] of metas.entries()) {
+			const layer = this.ensureLayer(keys[i]);
+			layer.visible = meta.visible;
+			layer.opacity = Math.min(1, Math.max(0, meta.opacity));
+		}
+		const others = old.filter(key => ownerOfLayerKey(key) !== userId);
+		const first = old.findIndex(key => ownerOfLayerKey(key) === userId);
+		const insertAt = first === -1 ? others.length : old.slice(0, first).filter(key => ownerOfLayerKey(key) !== userId).length;
+		this.order = [...others.slice(0, insertAt), ...keys, ...others.slice(insertAt)];
+		this.markAllGroupsDirty();
+		this.pendingChanged();
+		this.committedChanged();
 	}
 
 	public setLayerVisible(userId: string, visible: boolean): void {
 		this.ensureLayer(userId).visible = visible;
+		this.markAllGroupsDirty();
 		this.pendingChanged();
 		this.committedChanged();
 	}
@@ -578,6 +857,7 @@ export class DrawCanvasEngine {
 	 */
 	public setMyLayerOnTop(value: boolean): void {
 		this.myLayerOnTop = value;
+		this.markAllGroupsDirty();
 		this.pendingChanged();
 		this.committedChanged();
 	}
@@ -591,21 +871,124 @@ export class DrawCanvasEngine {
 	 */
 	public load(layers: { userId: string; strokes: CanvasStroke[] }[]): void {
 		for (const { userId, strokes } of layers) {
-			const layer = this.ensureLayer(userId);
-			layer.strokes = [...strokes];
-			layer.pending.clear();
-			this.redrawCommitted(layer);
+			this.beginLoadLayer(userId);
+			this.loadStrokes(userId, strokes, 0, Infinity);
 		}
-		this.pendingChanged();
+		this.finishLoad(layers.map(layer => layer.userId));
 	}
 
-	private redrawCommitted(layer: Layer): void {
+	/**
+	 * JUICE: 読み込み(少しずつ描いて画面を固めないための3つ組)。まずレイヤーを空にする
+	 */
+	public beginLoadLayer(key: string): void {
+		const layer = this.ensureLayer(key);
+		layer.strokes = [];
+		layer.pending.clear();
+		layer.committed.getContext('2d')!.clearRect(0, 0, this.width, this.height);
+		this.invalidateLive(layer);
+	}
+
+	/**
+	 * 線をfrom番目から、deadline(performance.now()の時刻)になるまで描き足す。描いた本数を返す
+	 */
+	public loadStrokes(key: string, strokes: readonly CanvasStroke[], from: number, deadline: number): number {
+		const layer = this.layers.get(key);
+		if (layer == null) return strokes.length - from;
+		const ctx = layer.committed.getContext('2d')!;
+		let i = from;
+		while (i < strokes.length) {
+			layer.strokes.push(strokes[i]);
+			drawStroke(ctx, strokes[i]);
+			i++;
+			if (performance.now() >= deadline) break;
+		}
+		return i - from;
+	}
+
+	/**
+	 * 線を、別に描いておいた画像(Workerで描いたもの)ごと入れる。画像は使い終わったら閉じる
+	 */
+	public loadLayerImage(key: string, strokes: CanvasStroke[], image: ImageBitmap): void {
+		const layer = this.layers.get(key);
+		if (layer == null) {
+			image.close();
+			return;
+		}
+		layer.strokes = strokes;
+		const ctx = layer.committed.getContext('2d')!;
+		ctx.globalCompositeOperation = 'copy';
+		ctx.drawImage(image, 0, 0);
+		ctx.globalCompositeOperation = 'source-over';
+		image.close();
+		this.invalidateLive(layer);
+	}
+
+	/**
+	 * 読み込んだレイヤーの全体マップ用の縮小を作り、表示を作り直す
+	 */
+	public finishLoad(keys: string[]): void {
+		for (const key of keys) {
+			const layer = this.layers.get(key);
+			if (layer != null) this.redrawThumb(layer);
+		}
+		this.markAllGroupsDirty();
+		this.pendingChanged();
+		this.committedChanged();
+	}
+
+	/**
+	 * 描き終わった線を描き直す。rectを渡すと、その範囲にかかる線だけをその範囲で描き直す(1本の線を取り消したときなど)
+	 */
+	private redrawCommitted(layer: Layer, rect?: Rect | null): void {
+		if (rect != null) {
+			this.redrawCommittedRegion(layer, rect);
+			return;
+		}
+		this.markLayerDirty(layer);
+		this.invalidateLive(layer);
 		const ctx = layer.committed.getContext('2d')!;
 		ctx.clearRect(0, 0, this.width, this.height);
 		for (const stroke of layer.strokes) drawStroke(ctx, stroke);
-		const thumbCtx = layer.thumb.getContext('2d')!;
-		thumbCtx.clearRect(0, 0, this.thumbWidth, this.thumbHeight);
-		for (const stroke of layer.strokes) drawStroke(thumbCtx, scaleStroke(stroke, this.thumbScale));
+		this.redrawThumb(layer);
+		this.committedChanged();
+	}
+
+	/**
+	 * 全体マップ用の縮小したレイヤーを、描き終わった線のキャンバスを縮小して作り直す。
+	 * rectを渡すと、その範囲だけ(線を1本ずつ縮小して描き直すより、ずっと速い)
+	 */
+	private redrawThumb(layer: Layer, rect?: Rect | null): void {
+		const ctx = layer.thumb.getContext('2d')!;
+		const s = this.thumbScale;
+		const tx0 = rect == null ? 0 : Math.max(0, Math.floor(rect.x0 * s));
+		const ty0 = rect == null ? 0 : Math.max(0, Math.floor(rect.y0 * s));
+		const tx1 = rect == null ? this.thumbWidth : Math.min(this.thumbWidth, Math.ceil(rect.x1 * s));
+		const ty1 = rect == null ? this.thumbHeight : Math.min(this.thumbHeight, Math.ceil(rect.y1 * s));
+		if (tx1 <= tx0 || ty1 <= ty0) return;
+		ctx.clearRect(tx0, ty0, tx1 - tx0, ty1 - ty0);
+		ctx.imageSmoothingEnabled = true;
+		ctx.imageSmoothingQuality = 'high';
+		ctx.drawImage(layer.committed, tx0 / s, ty0 / s, (tx1 - tx0) / s, (ty1 - ty0) / s, tx0, ty0, tx1 - tx0, ty1 - ty0);
+	}
+
+	private redrawCommittedRegion(layer: Layer, rect: Rect): void {
+		this.markLayerRegion(layer, rect);
+		this.invalidateLive(layer, rect);
+		const strokes = layer.strokes.filter(stroke => {
+			const r = strokeRect(stroke);
+			return r != null && rectsIntersect(r, rect);
+		});
+		const redraw = (ctx: CanvasRenderingContext2D, r: Rect) => {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+			ctx.clip();
+			ctx.clearRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+			for (const stroke of strokes) drawStroke(ctx, stroke);
+			ctx.restore();
+		};
+		redraw(layer.committed.getContext('2d')!, rect);
+		this.redrawThumb(layer, rect);
 		this.committedChanged();
 	}
 
@@ -616,12 +999,16 @@ export class DrawCanvasEngine {
 		const layer = this.ensureLayer(userId);
 		// 自分の線は送信前にローカルで確定させているので、サーバーから戻ってきた同じ線は重複させない
 		if (layer.strokes.some(s => s.id === stroke.id)) return;
+		const pendingEntry = layer.pending.get(stroke.id);
 		const wasPending = layer.pending.delete(stroke.id);
 		layer.strokes.push(stroke);
 		drawStroke(layer.committed.getContext('2d')!, stroke);
-		drawStroke(layer.thumb.getContext('2d')!, scaleStroke(stroke, this.thumbScale));
-		if (wasPending) this.pendingChanged();
-		else this.requestRender();
+		this.redrawThumb(layer, strokeRect(stroke));
+		this.invalidateLive(layer, strokeRect(stroke));
+		this.appendToGroup(layer, stroke);
+		const rect = strokeRect(stroke);
+		if (wasPending) this.pendingChanged(unionRect(rect, pendingRect(pendingEntry!)));
+		else this.requestRender(rect);
 		this.committedChanged();
 	}
 
@@ -632,14 +1019,22 @@ export class DrawCanvasEngine {
 		const layer = this.ensureLayer(userId);
 		if (layer.strokes.some(s => s.id === part.id)) return;
 		const pending = layer.pending.get(part.id);
+		// 増えた点と、形が変わる直前の2点(点の間は曲線でつなぐため)の範囲
+		const changed = pointsRect([...(pending?.points.slice(-6) ?? []), ...part.points], part.size + 2);
 		if (pending == null) {
 			layer.pending.set(part.id, { ...part, points: [...part.points], updatedAt: Date.now(), drawnSegments: 0, canvas: null });
 		} else {
 			pending.points.push(...part.points);
 			pending.updatedAt = Date.now();
 		}
-		if (isOverlayStroke(part)) this.requestOverlay();
-		else this.requestRender();
+		if (isOverlayStroke(part)) {
+			this.requestOverlay();
+		} else {
+			// 消しゴムの途中の線は、変わった範囲だけ描き直して見せる
+			this.invalidateLive(layer, changed);
+			this.markLayerRegion(layer, changed);
+			this.requestRender(changed);
+		}
 	}
 
 	/**
@@ -647,8 +1042,18 @@ export class DrawCanvasEngine {
 	 */
 	public removePending(userId: string, strokeId: string): void {
 		const layer = this.layers.get(userId);
-		if (layer == null || !layer.pending.delete(strokeId)) return;
-		this.pendingChanged();
+		const entry = layer?.pending.get(strokeId);
+		if (layer == null || entry == null) return;
+		layer.pending.delete(strokeId);
+		if (!isOverlayStroke(entry)) this.erasingRemoved(layer, entry);
+		this.pendingChanged(pendingRect(entry));
+	}
+
+	// 消しゴムの途中の線を取り除いたので、その線の範囲を描き直す
+	private erasingRemoved(layer: Layer, entry: PendingEntry): void {
+		const rect = pendingRect(entry);
+		this.invalidateLive(layer, rect);
+		this.markLayerRegion(layer, rect);
 	}
 
 	/**
@@ -657,8 +1062,10 @@ export class DrawCanvasEngine {
 	public clearPending(userId: string): void {
 		const layer = this.layers.get(userId);
 		if (layer == null || layer.pending.size === 0) return;
+		const entries = [...layer.pending.values()];
 		layer.pending.clear();
-		this.pendingChanged();
+		for (const entry of entries) if (!isOverlayStroke(entry)) this.erasingRemoved(layer, entry);
+		this.pendingChanged(entries.reduce<Rect | null>((r, entry) => unionRect(r, pendingRect(entry)), null));
 	}
 
 	/**
@@ -667,28 +1074,36 @@ export class DrawCanvasEngine {
 	public pruneStalePending(): void {
 		const now = Date.now();
 		let changed = false;
+		let rect: Rect | null = null;
 		for (const layer of this.layers.values()) {
 			// 自分の描きかけの線は、自分で確定・取りやめを管理しているので対象外
-			if (layer.userId === this.myUserId) continue;
+			if (layer.ownerId === this.myUserId) continue;
 			for (const [id, pending] of layer.pending) {
 				if (now - pending.updatedAt > PENDING_STROKE_TIMEOUT_MS) {
 					layer.pending.delete(id);
+					if (!isOverlayStroke(pending)) this.erasingRemoved(layer, pending);
+					rect = unionRect(rect, pendingRect(pending));
 					changed = true;
 				}
 			}
 		}
-		if (changed) this.pendingChanged();
+		if (changed) this.pendingChanged(rect);
 	}
 
 	public removeStroke(userId: string, strokeId: string): void {
 		const layer = this.layers.get(userId);
 		if (layer == null) return;
-		const before = layer.strokes.length;
-		layer.strokes = layer.strokes.filter(s => s.id !== strokeId);
+		const old = layer.strokes;
+		const before = old.length;
+		layer.strokes = old.filter(s => s.id !== strokeId);
+		const removed = layer.strokes.length !== before ? strokeRect(old.find(s => s.id === strokeId)!) : null;
+		const pendingEntry = layer.pending.get(strokeId);
 		const wasPending = layer.pending.delete(strokeId);
-		if (layer.strokes.length !== before) this.redrawCommitted(layer);
-		if (wasPending) this.pendingChanged();
-		else this.requestRender();
+		if (pendingEntry != null && !isOverlayStroke(pendingEntry)) this.erasingRemoved(layer, pendingEntry);
+		// 取り消した線の範囲だけを描き直す
+		if (removed != null) this.redrawCommitted(layer, removed);
+		if (wasPending) this.pendingChanged(unionRect(removed, pendingRect(pendingEntry!)));
+		else this.requestRender(removed);
 	}
 
 	//#region 選択・移動(JUICE)
@@ -768,6 +1183,8 @@ export class DrawCanvasEngine {
 		const layer = this.layers.get(userId);
 		if (layer == null || splits.length === 0) return;
 		const map = new Map(splits.map(split => [split.id, split.pieces]));
+		// このレイヤーに無い線なら何もしない(その人の全てのレイヤーに同じ操作をすることがあるため)
+		if (!layer.strokes.some(stroke => map.has(stroke.id))) return;
 		layer.strokes = layer.strokes.flatMap(stroke => map.get(stroke.id) ?? [stroke]);
 		this.redrawCommitted(layer);
 		this.requestRender();
@@ -787,6 +1204,7 @@ export class DrawCanvasEngine {
 	public moveStrokes(userId: string, ids: Set<string> | null, dx: number, dy: number): void {
 		const layer = this.layers.get(userId);
 		if (layer == null || (dx === 0 && dy === 0)) return;
+		if (ids != null && !layer.strokes.some(stroke => ids.has(stroke.id))) return;
 		layer.strokes = layer.strokes.map(stroke => (ids == null || ids.has(stroke.id) ? {
 			...stroke,
 			points: shiftPoints(stroke.points, dx, dy),
@@ -862,10 +1280,19 @@ export class DrawCanvasEngine {
 		this.pendingChanged();
 	}
 
+	// 消しゴム・移動の途中に使うキャンバスの予備(1枚だけ持っておく)
+	private liveSpare: HTMLCanvasElement | null = null;
+
+	private takeLiveCanvas(): HTMLCanvasElement {
+		const canvas = this.liveSpare ?? createCanvas(this.width, this.height);
+		this.liveSpare = null;
+		return canvas;
+	}
+
 	private layerImage(layer: Layer): HTMLCanvasElement {
 		// 移動ツールでドラッグしている間は、動かさない線の上に動かす線をずらして重ねる
-		if (this.moving != null && this.moving.userId === layer.userId) {
-			layer.live ??= createCanvas(this.width, this.height);
+		if (this.moving != null && this.moving.userId === layer.key) {
+			layer.live ??= this.takeLiveCanvas();
 			const ctx = layer.live.getContext('2d')!;
 			ctx.globalCompositeOperation = 'copy';
 			ctx.drawImage(this.moving.still, 0, 0);
@@ -877,17 +1304,48 @@ export class DrawCanvasEngine {
 			ctx.translate(-m.pivotX, -m.pivotY);
 			ctx.drawImage(m.moving, 0, 0);
 			ctx.restore();
+			layer.liveDirty = 'full';
 			return layer.live;
 		}
 		// ペンの途中の線は重ね描き用のキャンバスに描くので、ここでは消しゴムの途中の線だけを扱う
 		const erasing = [...layer.pending.values()].filter(stroke => !isOverlayStroke(stroke));
-		if (erasing.length === 0) return layer.committed;
-		layer.live ??= createCanvas(this.width, this.height);
+		if (erasing.length === 0) {
+			// 消しゴム・移動の途中に使ったキャンバスは、使い終わったら予備に戻す(スマホ等でメモリを使いすぎないように)
+			if (layer.live != null && this.liveSpare == null) this.liveSpare = layer.live;
+			layer.live = null;
+			layer.liveDirty = null;
+			return layer.committed;
+		}
+		if (layer.live == null) {
+			layer.live = this.takeLiveCanvas();
+			layer.liveDirty = 'full';
+		}
+		const dirty = layer.liveDirty;
+		if (dirty == null) return layer.live;
+		layer.liveDirty = null;
 		const ctx = layer.live.getContext('2d')!;
-		ctx.globalCompositeOperation = 'copy';
-		ctx.drawImage(layer.committed, 0, 0);
+		if (dirty === 'full') {
+			ctx.globalCompositeOperation = 'copy';
+			ctx.drawImage(layer.committed, 0, 0);
+			ctx.globalCompositeOperation = 'source-over';
+			for (const stroke of erasing) drawStroke(ctx, stroke);
+			return layer.live;
+		}
+		// 変わった範囲だけ、描き終わった絵に戻してから消しゴムの途中の線を描き直す
+		const x = Math.max(0, dirty.x0);
+		const y = Math.max(0, dirty.y0);
+		const w = Math.min(this.width, dirty.x1) - x;
+		const h = Math.min(this.height, dirty.y1) - y;
+		if (w <= 0 || h <= 0) return layer.live;
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(x, y, w, h);
+		ctx.clip();
 		ctx.globalCompositeOperation = 'source-over';
+		ctx.clearRect(x, y, w, h);
+		ctx.drawImage(layer.committed, x, y, w, h, x, y, w, h);
 		for (const stroke of erasing) drawStroke(ctx, stroke);
+		ctx.restore();
 		return layer.live;
 	}
 
@@ -911,7 +1369,10 @@ export class DrawCanvasEngine {
 		const ctx = overlay.getContext('2d')!;
 		const full = this.overlayNeedsFullRedraw;
 		this.overlayNeedsFullRedraw = false;
-		if (full) ctx.clearRect(0, 0, this.width, this.height);
+		if (full) {
+			ctx.clearRect(0, 0, this.width, this.height);
+			this.overlayRegion = null;
+		}
 
 		// 取り除かれた途中の線のキャンバスは、置き場に戻して次の線で使い回す
 		const inUse = new Set<HTMLCanvasElement>();
@@ -919,13 +1380,13 @@ export class DrawCanvasEngine {
 			for (const entry of layer.pending.values()) if (entry.canvas != null) inUse.add(entry.canvas);
 		}
 		for (const canvas of this.strokeCanvasInUse) {
-			if (!inUse.has(canvas) && this.strokeCanvasPool.length < 4) this.strokeCanvasPool.push(canvas);
+			if (!inUse.has(canvas) && this.strokeCanvasPool.length < 2) this.strokeCanvasPool.push(canvas);
 		}
 		this.strokeCanvasInUse = inUse;
 
 		const translucent: PendingEntry[] = [];
 		for (const layer of this.orderedLayers()) {
-			if (!layer.visible) continue;
+			if (!this.isShown(layer)) continue;
 			for (const entry of layer.pending.values()) {
 				if (!isOverlayStroke(entry)) continue;
 				if ((entry.opacity ?? 1) < 1) {
@@ -944,6 +1405,32 @@ export class DrawCanvasEngine {
 					if (full) entry.drawnSegments = 0;
 					entry.drawnSegments = drawStrokeIncrement(ctx, entry, entry.drawnSegments);
 				}
+			}
+		}
+
+		// 取り除かれた線の範囲だけ消して、そこにかかる残りの線を描き直す
+		const region = full ? null : this.overlayRegion;
+		this.overlayRegion = null;
+		if (region != null) {
+			const x = Math.max(0, region.x0);
+			const y = Math.max(0, region.y0);
+			const w = Math.min(this.width, region.x1) - x;
+			const h = Math.min(this.height, region.y1) - y;
+			if (w > 0 && h > 0) {
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(x, y, w, h);
+				ctx.clip();
+				ctx.clearRect(x, y, w, h);
+				for (const layer of this.orderedLayers()) {
+					if (!this.isShown(layer)) continue;
+					for (const entry of layer.pending.values()) {
+						if (!isOverlayStroke(entry) || (entry.opacity ?? 1) < 1) continue;
+						const r = pendingRect(entry);
+						if (r != null && rectsIntersect(r, region)) drawStrokeIncrement(ctx, entry, 0);
+					}
+				}
+				ctx.restore();
 			}
 		}
 
@@ -971,9 +1458,11 @@ export class DrawCanvasEngine {
 
 	private orderedLayers(): Layer[] {
 		const ids = [...this.order];
-		if (this.myLayerOnTop && this.myUserId != null && ids.includes(this.myUserId)) {
-			ids.splice(ids.indexOf(this.myUserId), 1);
-			ids.push(this.myUserId);
+		// 自分のレイヤーを一番上に表示するときは、自分のレイヤーをまとめて(順は保ったまま)一番上に置く
+		if (this.myLayerOnTop && this.myUserId != null) {
+			const mine = ids.filter(key => ownerOfLayerKey(key) === this.myUserId);
+			const others = ids.filter(key => ownerOfLayerKey(key) !== this.myUserId);
+			return [...others, ...mine].map(id => this.layers.get(id)!);
 		}
 		return ids.map(id => this.layers.get(id)!);
 	}
@@ -986,19 +1475,62 @@ export class DrawCanvasEngine {
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, this.width, this.height);
 		for (const layer of this.orderedLayers()) {
-			if (onlyVisible && !layer.visible) continue;
+			if (onlyVisible && !this.isShown(layer)) continue;
+			ctx.globalAlpha = layer.opacity;
 			ctx.drawImage(this.layerImage(layer), 0, 0);
 		}
+		ctx.globalAlpha = 1;
 	}
 
-	public requestRender(): void {
+	// 表示用のキャンバスを次に描き直す。rectを渡すとその範囲だけ(nullなら範囲は増やさない)、省略すると全体
+	public requestRender(rect?: Rect | null): void {
+		if (rect === undefined) this.displayRegion = 'full';
+		else if (rect != null) this.addDisplayRegion(rect);
 		if (this.renderRequested || this.display == null) return;
 		this.renderRequested = true;
 		window.requestAnimationFrame(() => {
 			this.renderRequested = false;
 			if (this.display == null) return;
-			this.composite(this.display.getContext('2d')!, true);
+			this.renderDisplay(this.display.getContext('2d')!);
 		});
+	}
+
+	// JUICE: 表示用のキャンバスに、自分より下の組・自分のレイヤー・自分より上の組を重ねる(人数によらず3枚まで)
+	private addDisplayRegion(rect: Rect): void {
+		if (this.displayRegion !== 'full') this.displayRegion = unionRect(this.displayRegion, rect);
+	}
+
+	private renderDisplay(ctx: CanvasRenderingContext2D): void {
+		const { below, mine, above } = this.splitGroups();
+		const region = this.groupDirty.below || this.groupDirty.above ? 'full' : this.displayRegion;
+		this.displayRegion = null;
+		if (region == null) return;
+		if (region !== 'full') {
+			// 変わった範囲だけを重ね直す(下の組は白い紙の上に重ねてあるので、そのまま上書きできる)
+			const x = Math.max(0, region.x0);
+			const y = Math.max(0, region.y0);
+			const w = Math.min(this.width, region.x1) - x;
+			const h = Math.min(this.height, region.y1) - y;
+			if (w <= 0 || h <= 0) return;
+			ctx.globalCompositeOperation = 'source-over';
+			ctx.drawImage(this.groupImage('below', below), x, y, w, h, x, y, w, h);
+			if (mine != null && this.isShown(mine)) {
+				ctx.globalAlpha = mine.opacity;
+				ctx.drawImage(this.layerImage(mine), x, y, w, h, x, y, w, h);
+				ctx.globalAlpha = 1;
+			}
+			if (above.some(layer => this.isShown(layer))) ctx.drawImage(this.groupImage('above', above), x, y, w, h, x, y, w, h);
+			return;
+		}
+		ctx.globalCompositeOperation = 'copy';
+		ctx.drawImage(this.groupImage('below', below), 0, 0);
+		ctx.globalCompositeOperation = 'source-over';
+		if (mine != null && this.isShown(mine)) {
+			ctx.globalAlpha = mine.opacity;
+			ctx.drawImage(this.layerImage(mine), 0, 0);
+			ctx.globalAlpha = 1;
+		}
+		if (above.some(layer => this.isShown(layer))) ctx.drawImage(this.groupImage('above', above), 0, 0);
 	}
 
 	/**
@@ -1014,9 +1546,11 @@ export class DrawCanvasEngine {
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, 1, 1);
 		for (const layer of this.orderedLayers()) {
-			if (!layer.visible) continue;
+			if (!this.isShown(layer)) continue;
+			ctx.globalAlpha = layer.opacity;
 			ctx.drawImage(this.layerImage(layer), px, py, 1, 1, 0, 0, 1, 1);
 		}
+		ctx.globalAlpha = 1;
 		const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
 		return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 	}
@@ -1045,13 +1579,16 @@ export class DrawCanvasEngine {
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, target.width, target.height);
 		for (const layer of this.orderedLayers()) {
-			if (!layer.visible) continue;
+			if (!this.isShown(layer)) continue;
+			ctx.globalAlpha = layer.opacity;
 			ctx.drawImage(layer.thumb, 0, 0, target.width, target.height);
 		}
+		ctx.globalAlpha = 1;
 	}
 
 	/**
-	 * 全員のレイヤーを重ねた画像のキャンバスを作る(保存用)。非表示にしているレイヤーも含め、
+	 * 全員のレイヤーを重ねた画像のキャンバスを作る(保存用)。見ている人が自分の画面だけで隠している人も含め、
+	 * レイヤーの表示・濃さの設定(描いた人が決めたもの)に従う。
 	 * 描き終わった線だけを使う(描いている途中の線は含めず、ほかの人の画面にも影響しない)。
 	 * areaを指定すると、その範囲だけを切り出す
 	 */
@@ -1065,18 +1602,23 @@ export class DrawCanvasEngine {
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, width, height);
 		for (const layer of this.orderedLayers()) {
+			if (!layer.visible) continue;
+			ctx.globalAlpha = layer.opacity;
 			ctx.drawImage(layer.committed, x, y, width, height, 0, 0, width, height);
 		}
+		ctx.globalAlpha = 1;
 		return canvas;
 	}
 
 	public dispose(): void {
 		this.moving = null;
 		this.referenceCache = null;
+		this.groupCanvas = { below: null, above: null };
 		this.display = null;
 		this.overlay = null;
 		this.overlayAlpha = null;
 		this.strokeCanvasPool = [];
+		this.liveSpare = null;
 		this.strokeCanvasInUse.clear();
 		this.layers.clear();
 		this.order = [];

@@ -408,7 +408,8 @@ function onChangeEmail(): void {
 	misskeyApi('email-address/available', {
 		emailAddress: email.value,
 	}, undefined, emailAbortController.signal).then(result => {
-		emailState.value = result.available ? 'ok' :
+		// JUICE: +タグ・Gmailのドットの禁止はアカウント向けの設定なので、お問い合わせでは使えるものとして扱う
+		emailState.value = result.available || result.reason === 'plusTag' || result.reason === 'gmailDot' ? 'ok' :
 			result.reason === 'format' ? 'unavailable:format' :
 			result.reason === 'disposable' ? 'unavailable:disposable' :
 			result.reason === 'banned' ? 'unavailable:banned' :

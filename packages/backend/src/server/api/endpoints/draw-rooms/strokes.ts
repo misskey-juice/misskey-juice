@@ -43,6 +43,16 @@ export const meta = {
 						ref: 'DrawStroke',
 					},
 				},
+				// JUICE: その人のレイヤーの一覧(重なり順は下から)。無ければ最初のレイヤー1枚だけ
+				layers: {
+					type: 'array',
+					optional: false, nullable: false,
+					items: {
+						type: 'object',
+						optional: false, nullable: false,
+						ref: 'DrawLayer',
+					},
+				},
 			},
 		},
 	},

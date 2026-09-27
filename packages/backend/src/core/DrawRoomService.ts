@@ -11,7 +11,7 @@ import { bindThis } from '@/decorators.js';
 import type { DrawRoomMembersRepository, DrawRoomLayersRepository, DrawRoomsRepository } from '@/models/_.js';
 import { MiDrawRoom, type DrawRoomChatMessage, type DrawRoomVisibility } from '@/models/DrawRoom.js';
 import { MiDrawRoomMember } from '@/models/DrawRoomMember.js';
-import { MiDrawRoomLayer, type DrawStroke } from '@/models/DrawRoomLayer.js';
+import { MiDrawRoomLayer, DEFAULT_DRAW_LAYERS, type DrawLayerMeta, type DrawStroke } from '@/models/DrawRoomLayer.js';
 import type { MiUser } from '@/models/User.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { IdService } from '@/core/IdService.js';
@@ -73,6 +73,8 @@ export const DRAW_CHAT_MAX_LENGTH = 500;
 // 終了時のDB保存(1レイヤー=1行)が際限なく膨らまないようにする
 const LAYER_MAX_STROKES = 3000;
 export const DRAW_LAYER_MAX_STROKES = LAYER_MAX_STROKES;
+// JUICE: 1人が持てるレイヤーの数の上限
+export const DRAW_USER_MAX_LAYERS = 8;
 export const DRAW_LAYER_MAX_BYTES = 8 * 1024 * 1024;
 const LAYER_MAX_BYTES = DRAW_LAYER_MAX_BYTES;
 const CHAT_LOG_LENGTH = 100;
@@ -102,9 +104,18 @@ export class DrawRoomError extends Error {
 
 // 線を自分のレイヤーに追加する。部屋が終了していれば何もしない(終了処理と同時に届いた線が、
 // 保存し終わった後のRedisにキーを作り直して取り残されないように、確認と書き込みを1回で行う)
-// KEYS: ended, strokes, bytes, drawers, lastActivity / ARGV: stroke(JSON), userId, now, maxStrokes, maxBytes, ttl
+// KEYS: ended, strokes, bytes, drawers, lastActivity, layers / ARGV: stroke(JSON), userId, now, maxStrokes, maxBytes, ttl, layerId
+// 返り値: 1=追加した・0=終了済み・-1=上限・-2=無いレイヤー
 const ADD_STROKE_SCRIPT = `
 if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+-- JUICE: 描いた人のレイヤーの一覧に無いレイヤーへの線は入れない(消したレイヤーに線が残り続けないように)。
+-- 一覧が無ければ最初のレイヤー('0')だけ。レイヤーのidは英数字・_・-だけなので、そのまま文字列として探せる
+local layers = redis.call('GET', KEYS[6])
+if layers then
+	if not string.find(layers, '"id":"' .. ARGV[7] .. '"', 1, true) then return -2 end
+elseif ARGV[7] ~= '0' then
+	return -2
+end
 if redis.call('LLEN', KEYS[2]) >= tonumber(ARGV[4]) then return -1 end
 local bytes = tonumber(redis.call('GET', KEYS[3]) or '0')
 if bytes + string.len(ARGV[1]) > tonumber(ARGV[5]) then return -1 end
@@ -113,6 +124,8 @@ redis.call('INCRBY', KEYS[3], string.len(ARGV[1]))
 redis.call('SADD', KEYS[4], ARGV[2])
 redis.call('SET', KEYS[5], ARGV[3])
 for i = 2, 5 do redis.call('EXPIRE', KEYS[i], tonumber(ARGV[6])) end
+-- 描き続けている間に、レイヤーの一覧だけ期限切れにならないように
+if layers then redis.call('EXPIRE', KEYS[6], tonumber(ARGV[6])) end
 return 1
 `;
 
@@ -123,6 +136,76 @@ if redis.call('EXISTS', KEYS[1]) == 1 then return nil end
 local last = redis.call('RPOP', KEYS[2])
 if last then redis.call('DECRBY', KEYS[3], string.len(last)) end
 return last
+`;
+
+// JUICE: 線(JSON)のレイヤーのid(無ければ'0')。線を丸ごと読み解くと重いので、文字列から取り出す
+// (線の中の文字列は、base64の点の列・色・idなどで、"layer":"を含むことは無い)
+const LAYER_OF_STROKE_LUA = `
+local function layerOf(raw)
+	return string.match(raw, '"layer":"([%w_%-]+)"') or '0'
+end
+`;
+
+// JUICE: 線の一覧から、shouldRemove(レイヤーのid)が真の線を消す。返り値は消した線の数
+// KEYS[2]: strokes, KEYS[3]: bytes を使う
+const REMOVE_STROKES_BY_LAYER_LUA = `
+local function removeStrokes(shouldRemove, ttl)
+	local list = redis.call('LRANGE', KEYS[2], 0, -1)
+	local kept = {}
+	local bytes = 0
+	local removed = 0
+	for _, raw in ipairs(list) do
+		if shouldRemove(layerOf(raw)) then
+			removed = removed + 1
+		else
+			table.insert(kept, raw)
+			bytes = bytes + string.len(raw)
+		end
+	end
+	if removed == 0 then return 0 end
+	redis.call('DEL', KEYS[2])
+	for i = 1, #kept, 500 do
+		redis.call('RPUSH', KEYS[2], unpack(kept, i, math.min(i + 499, #kept)))
+	end
+	redis.call('SET', KEYS[3], bytes)
+	if #kept > 0 then redis.call('EXPIRE', KEYS[2], ttl) end
+	redis.call('EXPIRE', KEYS[3], ttl)
+	return removed
+end
+`;
+
+// JUICE: 指定したレイヤー(1人が持つレイヤーのid。線にlayerが無ければ'0')の線だけを消す。
+// 返り値は消した線の数(終了済みなら-1)
+// KEYS: ended, strokes, bytes / ARGV: layerId, ttl
+const REMOVE_LAYER_STROKES_SCRIPT = LAYER_OF_STROKE_LUA + REMOVE_STROKES_BY_LAYER_LUA + `
+if redis.call('EXISTS', KEYS[1]) == 1 then return -1 end
+return removeStrokes(function(id) return id == ARGV[1] end, tonumber(ARGV[2]))
+`;
+
+// JUICE: 自分のレイヤーの一覧を置き換え、一覧に無いレイヤーの線を消す(途中で部屋が終わったり、
+// 消したレイヤーへの線が割り込んだりしないよう、まとめて行う)。返り値は消した線の数(終了済みなら-1)
+// KEYS: ended, strokes, bytes, layers, drawers / ARGV: layers(JSON), keepIds(JSON), userId, ttl
+const SET_LAYERS_SCRIPT = LAYER_OF_STROKE_LUA + REMOVE_STROKES_BY_LAYER_LUA + `
+if redis.call('EXISTS', KEYS[1]) == 1 then return -1 end
+local ttl = tonumber(ARGV[4])
+local keep = {}
+for _, id in ipairs(cjson.decode(ARGV[2])) do keep[id] = true end
+-- 前の一覧のレイヤーが全て残るなら、線を見なくてよい(線は一覧にあるレイヤーにしか入らないため)
+local before = redis.call('GET', KEYS[4])
+local dropped = false
+if before then
+	for _, layer in ipairs(cjson.decode(before)) do
+		if not keep[layer.id] then dropped = true end
+	end
+elseif not keep['0'] then
+	dropped = true
+end
+redis.call('SET', KEYS[4], ARGV[1], 'EX', ttl)
+-- 線を描いていなくてもレイヤーの一覧を配れるよう、描いた人の集合に入れておく
+redis.call('SADD', KEYS[5], ARGV[3])
+redis.call('EXPIRE', KEYS[5], ttl)
+if not dropped then return 0 end
+return removeStrokes(function(id) return not keep[id] end, ttl)
 `;
 
 // 自分のレイヤーの線を全て消す。返り値は、消したなら1・終了済みなら0・消す線が無かったなら2
@@ -170,10 +253,22 @@ return #updates
 
 // JUICE: 選択範囲の境目で切った線を、切った後の線の並びに置き換える(同じ位置に入れて重なり順を保つ)。
 // 返り値は置き換えた線の数(終了済みなら-1、線の数・大きさの上限を超えるか、置き換えた後に同じidの線ができるなら-2)
-// KEYS: ended, strokes, bytes / ARGV: splits(JSON: 元の線のid → 置き換える線のJSON文字列の配列), maxStrokes, maxBytes, ttl, pieceIds(JSON)
-const SPLIT_STROKES_SCRIPT = `
+// JUICE: 置き換える線のレイヤーも、描いた人のレイヤーの一覧にあるものに限る(-2で断る)
+// KEYS: ended, strokes, bytes, layers / ARGV: splits(JSON: 元の線のid → 置き換える線のJSON文字列の配列), maxStrokes, maxBytes, ttl, pieceIds(JSON)
+const SPLIT_STROKES_SCRIPT = LAYER_OF_STROKE_LUA + `
 if redis.call('EXISTS', KEYS[1]) == 1 then return -1 end
 local splits = cjson.decode(ARGV[1])
+local layers = redis.call('GET', KEYS[4])
+for _, pieces in pairs(splits) do
+	for _, piece in ipairs(pieces) do
+		local id = layerOf(piece)
+		if layers then
+			if not string.find(layers, '"id":"' .. id .. '"', 1, true) then return -2 end
+		elseif id ~= '0' then
+			return -2
+		end
+	end
+end
 local pieceIds = {}
 for _, id in ipairs(cjson.decode(ARGV[5])) do pieceIds[id] = true end
 local list = redis.call('LRANGE', KEYS[2], 0, -1)
@@ -301,6 +396,11 @@ export class DrawRoomService implements OnApplicationShutdown {
 		return `drawroom:${roomId}:bytes:${userId}`;
 	}
 
+	// JUICE: その人のレイヤーの一覧(DrawLayerMetaの配列のJSON)。無ければ最初のレイヤー1枚だけ
+	private layersKey(roomId: MiDrawRoom['id'], userId: MiUser['id']): string {
+		return `drawroom:${roomId}:layers:${userId}`;
+	}
+
 	// 1本でも線を描いたことがあるユーザー(=レイヤーを持つユーザー)の集合。メンバーを抜けても線は残る
 	private drawersKey(roomId: MiDrawRoom['id']): string {
 		return `drawroom:${roomId}:drawers`;
@@ -347,7 +447,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 	private async deleteRedisData(roomId: MiDrawRoom['id']): Promise<void> {
 		const drawers = await this.redisClient.smembers(this.drawersKey(roomId));
 		await this.redisClient.del(
-			...drawers.flatMap(userId => [this.strokesKey(roomId, userId), this.bytesKey(roomId, userId)]),
+			...drawers.flatMap(userId => [this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId)]),
 			this.drawersKey(roomId),
 			this.chatKey(roomId),
 			this.lastActivityKey(roomId),
@@ -612,6 +712,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 							roomId: room.id,
 							userId: layer.userId,
 							strokes: layer.strokes,
+							layers: layer.layers,
 						});
 					}
 					await em.update(MiDrawRoom, room.id, { isEnded: true, endedAt, chatLog: await this.getChatFromRedis(room.id) });
@@ -706,22 +807,62 @@ export class DrawRoomService implements OnApplicationShutdown {
 
 	//#region 線(ユーザーごとのレイヤー)
 	@bindThis
-	private async getStrokesFromRedis(roomId: MiDrawRoom['id']): Promise<{ userId: MiUser['id']; strokes: DrawStroke[] }[]> {
+	private async getStrokesFromRedis(roomId: MiDrawRoom['id']): Promise<{ userId: MiUser['id']; strokes: DrawStroke[]; layers: DrawLayerMeta[] }[]> {
 		const drawers = await this.redisClient.smembers(this.drawersKey(roomId));
 		return await Promise.all(drawers.map(async userId => ({
 			userId,
 			strokes: (await this.redisClient.lrange(this.strokesKey(roomId, userId), 0, -1)).map(x => JSON.parse(x) as DrawStroke),
+			layers: await this.getUserLayers(roomId, userId),
 		})));
+	}
+
+	// JUICE: 線を動かす・切る・消すなど、線を足さない操作だけが続いても、レイヤーの一覧が線より先に期限切れにならないようにする
+	// (期限切れになると最初のレイヤーだけに戻り、ほかのレイヤーの線が一覧に無いレイヤーの線になってしまうため)
+	@bindThis
+	private async touchLayers(roomId: MiDrawRoom['id'], userId: MiUser['id']): Promise<void> {
+		await this.redisClient.expire(this.layersKey(roomId, userId), REDIS_KEY_TTL_SEC);
+	}
+
+	// JUICE: その人のレイヤーの一覧(無ければ最初のレイヤー1枚だけ)
+	@bindThis
+	private async getUserLayers(roomId: MiDrawRoom['id'], userId: MiUser['id']): Promise<DrawLayerMeta[]> {
+		const raw = await this.redisClient.get(this.layersKey(roomId, userId));
+		// 共有の初期値を書き換えられないよう、複製して返す
+		const defaults = () => DEFAULT_DRAW_LAYERS.map(layer => ({ ...layer }));
+		if (raw == null) return defaults();
+		try {
+			const layers = JSON.parse(raw) as DrawLayerMeta[];
+			return Array.isArray(layers) && layers.length > 0 ? layers : defaults();
+		} catch {
+			return defaults();
+		}
+	}
+
+	/**
+	 * JUICE: 自分のレイヤーの一覧を置き換える(追加・削除・名前・並び・表示・濃さ)。一覧から消したレイヤーの線も消す。
+	 * 呼び出し側で、一覧の形(1〜DRAW_USER_MAX_LAYERS枚、idが重ならない等)を確認済みであること
+	 */
+	@bindThis
+	public async setUserLayers(roomId: MiDrawRoom['id'], userId: MiUser['id'], layers: DrawLayerMeta[]): Promise<boolean> {
+		const result = await this.redisClient.eval(
+			SET_LAYERS_SCRIPT, 5,
+			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), this.drawersKey(roomId),
+			JSON.stringify(layers), JSON.stringify(layers.map(layer => layer.id)), userId, REDIS_KEY_TTL_SEC.toString(),
+		) as number;
+		if (result < 0) return false;
+		await this.touch(roomId);
+		this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers });
+		return true;
 	}
 
 	/**
 	 * 全員のレイヤーの線。途中参加・再接続・保存された部屋の閲覧用
 	 */
 	@bindThis
-	public async getLayers(room: MiDrawRoom): Promise<{ userId: MiUser['id']; strokes: DrawStroke[] }[]> {
+	public async getLayers(room: MiDrawRoom): Promise<{ userId: MiUser['id']; strokes: DrawStroke[]; layers: DrawLayerMeta[] }[]> {
 		if (room.isEnded && room.keepAfterEnd) {
 			const layers = await this.drawRoomLayersRepository.findBy({ roomId: room.id });
-			return layers.map(layer => ({ userId: layer.userId, strokes: layer.strokes }));
+			return layers.map(layer => ({ userId: layer.userId, strokes: layer.strokes, layers: layer.layers ?? DEFAULT_DRAW_LAYERS.map(meta => ({ ...meta })) }));
 		}
 		return await this.getStrokesFromRedis(room.id);
 	}
@@ -743,9 +884,9 @@ export class DrawRoomService implements OnApplicationShutdown {
 	@bindThis
 	public async addStroke(roomId: MiDrawRoom['id'], userId: MiUser['id'], stroke: DrawStroke): Promise<boolean> {
 		const result = await this.redisClient.eval(
-			ADD_STROKE_SCRIPT, 5,
-			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId),
-			JSON.stringify(stroke), userId, Date.now().toString(), LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(),
+			ADD_STROKE_SCRIPT, 6,
+			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId), this.layersKey(roomId, userId),
+			JSON.stringify(stroke), userId, Date.now().toString(), LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0',
 		) as number;
 		if (result !== 1) return false;
 		this.globalEventService.publishDrawRoomStream(roomId, 'stroke', { userId, stroke });
@@ -898,6 +1039,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (moved === -2) return false;
 		if (moved <= 0) return true;
 		await this.touch(roomId);
+		await this.touchLayers(roomId, userId);
 		this.globalEventService.publishDrawRoomStream(roomId, 'strokesMoved', { userId, strokeIds, dx, dy });
 		return true;
 	}
@@ -910,12 +1052,13 @@ export class DrawRoomService implements OnApplicationShutdown {
 		const map: Record<string, string[]> = {};
 		for (const split of splits) map[split.id] = split.pieces.map(piece => JSON.stringify(piece));
 		const replaced = await this.redisClient.eval(
-			SPLIT_STROKES_SCRIPT, 3,
-			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId),
+			SPLIT_STROKES_SCRIPT, 4,
+			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId),
 			JSON.stringify(map), LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(),
 			JSON.stringify(splits.flatMap(split => split.pieces.map(piece => piece.id))),
 		) as number;
 		if (replaced <= 0) return false;
+		await this.touchLayers(roomId, userId);
 		this.globalEventService.publishDrawRoomStream(roomId, 'strokesSplit', { userId, splits });
 		return true;
 	}
@@ -932,6 +1075,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		) as number;
 		if (removed <= 0) return;
 		await this.touch(roomId);
+		await this.touchLayers(roomId, userId);
 		this.globalEventService.publishDrawRoomStream(roomId, 'strokesDeleted', { userId, strokeIds });
 	}
 
@@ -939,7 +1083,22 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 * レイヤーの線を全て消す(自分のレイヤー、または部屋主がほかの人のレイヤーを)
 	 */
 	@bindThis
-	public async clearLayer(roomId: MiDrawRoom['id'], userId: MiUser['id']): Promise<void> {
+	public async clearLayer(roomId: MiDrawRoom['id'], userId: MiUser['id'], layer?: string): Promise<void> {
+		// JUICE: レイヤーを指定したら、その人のそのレイヤーの線だけを消す
+		if (layer != null) {
+			// その人が持っていないレイヤーなら、線を見に行かない(存在しないレイヤーの指定を繰り返して重くされないように)
+			if (!(await this.getUserLayers(roomId, userId)).some(meta => meta.id === layer)) return;
+			const removed = await this.redisClient.eval(
+				REMOVE_LAYER_STROKES_SCRIPT, 3,
+				this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId),
+				layer, REDIS_KEY_TTL_SEC.toString(),
+			) as number;
+			if (removed > 0) {
+				await this.touchLayers(roomId, userId);
+				this.globalEventService.publishDrawRoomStream(roomId, 'clearLayer', { userId, layer });
+			}
+			return;
+		}
 		const result = await this.redisClient.eval(
 			CLEAR_LAYER_SCRIPT, 3,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId),

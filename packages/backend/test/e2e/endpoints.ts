@@ -12,7 +12,7 @@ import { describe, beforeAll, afterAll, test, expect, vi } from 'vitest';
 import { Blob } from 'node-fetch';
 import { api, castAsError, initTestDb, post, randomString, role, signup, simpleGet, uploadFile } from '../utils.js';
 import type * as misskey from 'misskey-js';
-import { MiUser, MiNote, MiRelay, MiFollowing, MiFollowRequest } from '@/models/_.js';
+import { MiUser, MiNote, MiRelay, MiFollowing, MiFollowRequest, MiUserPending, MiUserProfile } from '@/models/_.js';
 
 const waitForPushToTlOptions = { timeout: 3000, interval: 25 };
 
@@ -1512,6 +1512,131 @@ describe('Endpoints', () => {
 				choice: 1,
 			}, bob);
 			assert.strictEqual(second.status, 204);
+		});
+	});
+
+	describe('email-address/available (JUICE)', () => {
+		test('+タグを禁止すると、既存のアカウントが無くても+を含むアドレスは使えない', async () => {
+			await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: true }, alice);
+			try {
+				const plus = await api('email-address/available', { emailAddress: 'nobody-juice+1@example.com' }, alice);
+				assert.strictEqual(plus.status, 200);
+				assert.deepStrictEqual(plus.body, { available: false, reason: 'plusTag' });
+
+				const plain = await api('email-address/available', { emailAddress: 'nobody-juice@example.com' }, alice);
+				assert.strictEqual(plain.status, 200);
+				assert.deepStrictEqual(plain.body, { available: true, reason: null });
+			} finally {
+				await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: false }, alice);
+			}
+
+			const off = await api('email-address/available', { emailAddress: 'nobody-juice+1@example.com' }, alice);
+			assert.deepStrictEqual(off.body, { available: true, reason: null });
+		});
+	});
+
+	describe('email-address/available (JUICE, Gmail dot)', () => {
+		test('Gmailのドットを禁止すると、既存のアカウントが無くても.を含むGmailのアドレスは使えない(ほかのドメインは使える)', async () => {
+			await api('admin/juice/update-settings', { blockEmailDotAliasRegistration: true }, alice);
+			try {
+				const gmailDot = await api('email-address/available', { emailAddress: 'no.body.juice@Gmail.com' }, alice);
+				assert.deepStrictEqual(gmailDot.body, { available: false, reason: 'gmailDot' });
+
+				const googlemailDot = await api('email-address/available', { emailAddress: 'no.body.juice@googlemail.com' }, alice);
+				assert.deepStrictEqual(googlemailDot.body, { available: false, reason: 'gmailDot' });
+
+				const gmailPlain = await api('email-address/available', { emailAddress: 'nobodyjuice@gmail.com' }, alice);
+				assert.deepStrictEqual(gmailPlain.body, { available: true, reason: null });
+
+				const otherDot = await api('email-address/available', { emailAddress: 'no.body.juice@example.com' }, alice);
+				assert.deepStrictEqual(otherDot.body, { available: true, reason: null });
+			} finally {
+				await api('admin/juice/update-settings', { blockEmailDotAliasRegistration: false }, alice);
+			}
+
+			const off = await api('email-address/available', { emailAddress: 'no.body.juice@gmail.com' }, alice);
+			assert.deepStrictEqual(off.body, { available: true, reason: null });
+		});
+	});
+
+	describe('確認のリンクを開いたときのメールアドレスの確認 (JUICE)', () => {
+		test('メールアドレスの変更: 受付の後に、同じアドレスがほかのアカウントで確認済みになっていたら確認済みにしない', async () => {
+			const connection = await initTestDb(true);
+			const profiles = connection.getRepository(MiUserProfile);
+			const first = await signup();
+			const second = await signup();
+			const email = `dup-verify-${randomString()}@example.com`;
+			const code = randomString();
+			await profiles.update({ userId: first.id }, { email, emailVerified: true });
+			await profiles.update({ userId: second.id }, { email, emailVerified: false, emailVerifyCode: code });
+
+			const res = await api('verify-email', { code });
+			assert.strictEqual(res.status, 400);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'EMAIL_ALREADY_USED');
+			assert.strictEqual((await profiles.findOneByOrFail({ userId: second.id })).emailVerified, false);
+		});
+
+		test('メールアドレスの変更: 受付の後に+タグを禁止したら確認済みにしない', async () => {
+			const connection = await initTestDb(true);
+			const profiles = connection.getRepository(MiUserProfile);
+			const user = await signup();
+			const code = randomString();
+			await profiles.update({ userId: user.id }, { email: `plus-verify-${randomString()}+1@example.com`, emailVerified: false, emailVerifyCode: code });
+			await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: true }, alice);
+			try {
+				const res = await api('verify-email', { code });
+				assert.strictEqual(res.status, 400);
+				assert.strictEqual(castAsError(res.body as any).error.code, 'UNAVAILABLE_EMAIL');
+			} finally {
+				await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: false }, alice);
+			}
+		});
+
+		test('新規登録: 同じアドレスで受け付けた登録は、先に確認した方だけがアカウントになる', async () => {
+			const connection = await initTestDb(true);
+			const pendings = connection.getRepository(MiUserPending);
+			const email = `dup-signup-${randomString()}@example.com`;
+			const usernames = [randomString(), randomString()];
+			await api('admin/update-meta', { emailRequiredForSignup: true }, alice);
+			try {
+				for (const username of usernames) {
+					const res = await api('signup', { username, password: 'test', emailAddress: email });
+					assert.strictEqual(res.status, 204);
+				}
+				const codes = await Promise.all(usernames.map(async username => (await pendings.findOneByOrFail({ username })).code));
+
+				const first = await api('signup-pending', { code: codes[0] });
+				assert.strictEqual(first.status, 200);
+				const second = await api('signup-pending', { code: codes[1] });
+				assert.strictEqual(second.status, 400);
+				// 断った登録は残さない
+				assert.strictEqual(await pendings.countBy({ username: usernames[1] }), 0);
+			} finally {
+				await api('admin/update-meta', { emailRequiredForSignup: false }, alice);
+			}
+		});
+
+		test('新規登録: 受付の後に+タグを禁止したら、アカウントを作らない', async () => {
+			const connection = await initTestDb(true);
+			const pendings = connection.getRepository(MiUserPending);
+			const username = randomString();
+			await api('admin/update-meta', { emailRequiredForSignup: true }, alice);
+			try {
+				const res = await api('signup', { username, password: 'test', emailAddress: `plus-signup-${randomString()}+1@example.com` });
+				assert.strictEqual(res.status, 204);
+				const { code } = await pendings.findOneByOrFail({ username });
+				await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: true }, alice);
+				try {
+					const confirmed = await api('signup-pending', { code });
+					assert.strictEqual(confirmed.status, 400);
+					assert.match(JSON.stringify(confirmed.body), /UNAVAILABLE_EMAIL/);
+					assert.strictEqual(await pendings.countBy({ username }), 0);
+				} finally {
+					await api('admin/juice/update-settings', { blockEmailPlusAliasRegistration: false }, alice);
+				}
+			} finally {
+				await api('admin/update-meta', { emailRequiredForSignup: false }, alice);
+			}
 		});
 	});
 
