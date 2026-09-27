@@ -13,6 +13,7 @@ import {
 	UserLite,
 	DrawRoom,
 	DrawStroke,
+	DrawLayer,
 	DrawRoomChatMessage,
 } from './autogen/models.js';
 import {
@@ -296,12 +297,14 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; points: string; }) => void;
+			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; }) => void;
 			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
 			stroke: (payload: { userId: User['id']; stroke: DrawStroke; }) => void;
 			undo: (payload: { userId: User['id']; strokeId: string; }) => void;
-			clearLayer: (payload: { userId: User['id']; }) => void;
+			clearLayer: (payload: { userId: User['id']; layer?: string; }) => void;
+			// JUICE: その人のレイヤーの一覧が変わった(一覧から消えたレイヤーの線も消えている)
+			layersUpdated: (payload: { userId: User['id']; layers: DrawLayer[]; }) => void;
 			strokesMoved: (payload: { userId: User['id']; strokeIds: string[] | null; dx: number; dy: number; }) => void;
 			strokesDeleted: (payload: { userId: User['id']; strokeIds: string[]; }) => void;
 			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; }) => void;
@@ -316,13 +319,15 @@ export type Channels = {
 			ended: (payload: { room: DrawRoom; }) => void;
 		};
 		receives: {
-			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; points: string; };
+			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; };
 			cursor: { x: number | null; y: number | null; };
 			visibility: { visible: boolean; };
 			strokeCancel: { strokeId: string; };
 			stroke: DrawStroke;
 			undo: null | Record<string, never>;
-			clearLayer: null | Record<string, never>;
+			clearLayer: null | Record<string, never> | { layer: string; };
+			// JUICE: 自分のレイヤーの一覧を置き換える
+			setLayers: { layers: DrawLayer[]; };
 			moveStrokes: { strokeIds: string[] | null; dx: number; dy: number; splits?: { id: string; pieces: DrawStroke[]; }[]; };
 			deleteStrokes: { strokeIds: string[]; splits?: { id: string; pieces: DrawStroke[]; }[]; };
 			replaceStrokes: { replacements: { id: string; pieces: DrawStroke[]; }[]; };

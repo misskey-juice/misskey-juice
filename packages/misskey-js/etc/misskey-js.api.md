@@ -1086,6 +1086,7 @@ export type Channels = {
                 opacity?: number;
                 brush?: DrawStroke['brush'];
                 clip?: string;
+                layer?: string;
                 points: string;
             }) => void;
             cursors: (payload: {
@@ -1109,6 +1110,11 @@ export type Channels = {
             }) => void;
             clearLayer: (payload: {
                 userId: User['id'];
+                layer?: string;
+            }) => void;
+            layersUpdated: (payload: {
+                userId: User['id'];
+                layers: DrawLayer[];
             }) => void;
             strokesMoved: (payload: {
                 userId: User['id'];
@@ -1161,6 +1167,7 @@ export type Channels = {
                 opacity?: number;
                 brush?: DrawStroke['brush'];
                 clip?: string;
+                layer?: string;
                 points: string;
             };
             cursor: {
@@ -1175,7 +1182,12 @@ export type Channels = {
             };
             stroke: DrawStroke;
             undo: null | Record<string, never>;
-            clearLayer: null | Record<string, never>;
+            clearLayer: null | Record<string, never> | {
+                layer: string;
+            };
+            setLayers: {
+                layers: DrawLayer[];
+            };
             moveStrokes: {
                 strokeIds: string[] | null;
                 dx: number;
@@ -1600,6 +1612,9 @@ type ContactFormSubmitResponse = operations['contact-form___submit']['responses'
 
 // @public (undocumented)
 type DateString = string;
+
+// @public (undocumented)
+type DrawLayer = components['schemas']['DrawLayer'];
 
 // @public (undocumented)
 type DrawRoom = components['schemas']['DrawRoom'];
@@ -2800,6 +2815,7 @@ declare namespace entities {
         ChatRoomMembership,
         DrawRoom,
         DrawStroke,
+        DrawLayer,
         DrawRoomChatMessage
     }
 }
@@ -4389,8 +4405,8 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:274:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:289:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:275:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:290:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

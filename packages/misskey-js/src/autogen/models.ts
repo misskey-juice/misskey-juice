@@ -77,4 +77,5 @@ export type ChatRoomInvitation = components['schemas']['ChatRoomInvitation'];
 export type ChatRoomMembership = components['schemas']['ChatRoomMembership'];
 export type DrawRoom = components['schemas']['DrawRoom'];
 export type DrawStroke = components['schemas']['DrawStroke'];
+export type DrawLayer = components['schemas']['DrawLayer'];
 export type DrawRoomChatMessage = components['schemas']['DrawRoomChatMessage'];

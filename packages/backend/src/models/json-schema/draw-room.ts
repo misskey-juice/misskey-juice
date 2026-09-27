@@ -109,7 +109,7 @@ export const packedDrawStrokeSchema = {
 		brush: {
 			type: 'string',
 			optional: true, nullable: false,
-			enum: ['soft', 'dot'],
+			enum: ['soft', 'dot', 'area'],
 		},
 		// JUICE: 線の中だけ塗る(はみ出し防止)で塗れる範囲の多角形(pointsと同じ形式)
 		clip: {
@@ -123,6 +123,11 @@ export const packedDrawStrokeSchema = {
 		},
 		dy: {
 			type: 'number',
+			optional: true, nullable: false,
+		},
+		// JUICE: 描いた人のどのレイヤーの線か。無ければ最初のレイヤー('0')
+		layer: {
+			type: 'string',
 			optional: true, nullable: false,
 		},
 		// 1点5バイト(x・yは1/8px単位のint16、筆圧は0〜255のuint8、リトルエンディアン)を並べてbase64にしたもの
@@ -150,6 +155,29 @@ export const packedDrawRoomChatMessageSchema = {
 			optional: false, nullable: false,
 		},
 		createdAt: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+	},
+} as const;
+
+// JUICE: 1人が持つレイヤー(重なり順・表示・濃さはほかの人の画面にも反映される)
+export const packedDrawLayerSchema = {
+	type: 'object',
+	properties: {
+		id: {
+			type: 'string',
+			optional: false, nullable: false,
+		},
+		name: {
+			type: 'string',
+			optional: false, nullable: false,
+		},
+		visible: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		opacity: {
 			type: 'number',
 			optional: false, nullable: false,
 		},

@@ -6649,11 +6649,18 @@ export type components = {
             size: number;
             opacity?: number;
             /** @enum {string} */
-            brush?: 'soft' | 'dot';
+            brush?: 'soft' | 'dot' | 'area';
             clip?: string;
             dx?: number;
             dy?: number;
+            layer?: string;
             points: string;
+        };
+        DrawLayer: {
+            id: string;
+            name: string;
+            visible: boolean;
+            opacity: number;
         };
         DrawRoomChatMessage: {
             id: string;
@@ -23227,6 +23234,7 @@ export interface operations {
                     'application/json': {
                         userId: string;
                         strokes: components['schemas']['DrawStroke'][];
+                        layers: components['schemas']['DrawLayer'][];
                     }[];
                 };
             };

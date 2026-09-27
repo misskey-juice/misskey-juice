@@ -12,6 +12,7 @@ import {
 	DRAW_ROOM_PRESENCE_HEARTBEAT_MS,
 	DRAW_LAYER_MAX_BYTES,
 	DRAW_LAYER_MAX_STROKES,
+	DRAW_USER_MAX_LAYERS,
 	DRAW_STROKE_MAX_POINTS,
 	DRAW_STROKE_MAX_SIZE,
 	DRAW_STROKE_PART_MAX_POINTS,
@@ -19,7 +20,7 @@ import {
 	decodeDrawPoints,
 } from '@/core/DrawRoomService.js';
 import type { MiDrawRoom } from '@/models/DrawRoom.js';
-import type { DrawStroke } from '@/models/DrawRoomLayer.js';
+import type { DrawLayerMeta, DrawStroke } from '@/models/DrawRoomLayer.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { isJsonObject } from '@/misc/json-value.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
@@ -145,14 +146,18 @@ export class DrawRoomChannel extends Channel {
 	@bindThis
 	private parseStrokeBody(body: JsonObject, maxPoints: number, margin: number = DRAW_STROKE_MAX_SIZE): Omit<DrawStroke, 'id'> | null {
 		if (this.room == null) return null;
-		const { tool, color, size, opacity, points, brush, clip } = body;
+		const { tool, color, size, opacity, points, brush, clip, layer } = body;
+		// JUICE: どのレイヤーの線か(省略したら最初のレイヤー)
+		if (layer !== undefined && !this.isValidLayerId(layer)) return null;
 		if (tool !== 'pen' && tool !== 'eraser' && tool !== 'fill') return null;
 		if (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)) return null;
 		if (typeof size !== 'number' || !Number.isFinite(size) || size < 0.5 || size > DRAW_STROKE_MAX_SIZE) return null;
 		// 不透明度は省略できる(省略・1なら不透明)
 		if (opacity !== undefined && (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0.05 || opacity > 1)) return null;
 		// 筆の種類・線の中だけ塗る範囲は省略できる
-		if (brush !== undefined && brush !== 'soft' && brush !== 'dot') return null;
+		if (brush !== undefined && brush !== 'soft' && brush !== 'dot' && brush !== 'area') return null;
+		// JUICE: 囲った範囲を消すのは消しゴムだけ(ペンで囲って塗るのはtool: 'fill')
+		if (brush === 'area' && tool !== 'eraser') return null;
 		if (clip !== undefined && (typeof clip !== 'string' || decodeDrawPoints(clip, DRAW_STROKE_MAX_POINTS) == null)) return null;
 		if (typeof points !== 'string') return null;
 		const decoded = decodeDrawPoints(points, maxPoints);
@@ -169,8 +174,36 @@ export class DrawRoomChannel extends Channel {
 			...(opacity !== undefined && opacity < 1 ? { opacity: Math.round(opacity * 100) / 100 } : {}),
 			...(brush !== undefined ? { brush } : {}),
 			...(clip !== undefined ? { clip } : {}),
+			...(layer !== undefined && layer !== '0' ? { layer } : {}),
 			points,
 		};
+	}
+
+	@bindThis
+	private isValidLayerId(id: JsonValue | undefined): id is string {
+		return typeof id === 'string' && /^[0-9a-zA-Z_-]{1,16}$/.test(id);
+	}
+
+	/**
+	 * JUICE: 自分のレイヤーの一覧を検証する(1〜DRAW_USER_MAX_LAYERS枚、idが重ならない、名前は32文字まで、濃さは0〜1)。不正ならnull
+	 */
+	@bindThis
+	private parseLayers(value: JsonValue | undefined): DrawLayerMeta[] | null {
+		if (!Array.isArray(value) || value.length < 1 || value.length > DRAW_USER_MAX_LAYERS) return null;
+		const ids = new Set<string>();
+		const layers: DrawLayerMeta[] = [];
+		for (const item of value) {
+			if (!isJsonObject(item) || !this.isValidLayerId(item.id) || ids.has(item.id)) return null;
+			const { visible, opacity } = item;
+			if (typeof item.name !== 'string' || typeof visible !== 'boolean') return null;
+			// 名前は改行などの制御文字を除き、前後の空白を取ってから長さを確かめる
+			const name = item.name.replace(/\p{Cc}/gu, '').trim();
+			if (name.length > 32) return null;
+			if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
+			ids.add(item.id);
+			layers.push({ id: item.id, name, visible, opacity: Math.round(opacity * 100) / 100 });
+		}
+		return layers;
 	}
 
 	/**
@@ -305,8 +338,19 @@ export class DrawRoomChannel extends Channel {
 				break;
 			}
 			case 'clearLayer': {
+				// JUICE: layerを指定したら、自分のそのレイヤーだけを消去する
+				const layer = isJsonObject(body) ? body.layer : undefined;
+				if (layer !== undefined && !this.isValidLayerId(layer)) return;
 				if (!this.canDraw() || !await rate('other')) return;
-				this.drawRoomService.clearLayer(room.id, user.id);
+				this.drawRoomService.clearLayer(room.id, user.id, layer);
+				break;
+			}
+			case 'setLayers': {
+				// JUICE: 自分のレイヤーの一覧(追加・削除・名前・並び・表示・濃さ)を置き換える
+				if (!this.canDraw() || !isJsonObject(body)) return;
+				const layers = this.parseLayers(body.layers);
+				if (layers == null || !await rate('other')) return;
+				if (!await this.drawRoomService.setUserLayers(room.id, user.id, layers)) this.rejectOperation();
 				break;
 			}
 			case 'moveStrokes': {

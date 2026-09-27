@@ -82,7 +82,7 @@ import { packedChatMessageSchema, packedChatMessageLiteSchema, packedChatMessage
 import { packedChatRoomSchema } from '@/models/json-schema/chat-room.js';
 import { packedChatRoomInvitationSchema } from '@/models/json-schema/chat-room-invitation.js';
 import { packedChatRoomMembershipSchema } from '@/models/json-schema/chat-room-membership.js';
-import { packedDrawRoomSchema, packedDrawStrokeSchema, packedDrawRoomChatMessageSchema } from '@/models/json-schema/draw-room.js';
+import { packedDrawRoomSchema, packedDrawStrokeSchema, packedDrawLayerSchema, packedDrawRoomChatMessageSchema } from '@/models/json-schema/draw-room.js';
 import { packedAchievementNameSchema, packedAchievementSchema } from '@/models/json-schema/achievement.js';
 import { packedNoteDraftSchema } from '@/models/json-schema/note-draft.js';
 import { packedContactFormSchema } from '@/models/json-schema/contact-form.js';
@@ -166,6 +166,7 @@ export const refs = {
 	ChatRoomMembership: packedChatRoomMembershipSchema,
 	DrawRoom: packedDrawRoomSchema,
 	DrawStroke: packedDrawStrokeSchema,
+	DrawLayer: packedDrawLayerSchema,
 	DrawRoomChatMessage: packedDrawRoomChatMessageSchema,
 };
 

@@ -27,7 +27,7 @@ import type { MiDrawRoom } from '@/models/DrawRoom.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
-import type { DrawStroke } from '@/models/DrawRoomLayer.js';
+import type { DrawLayerMeta, DrawStroke } from '@/models/DrawRoomLayer.js';
 import { bindThis } from '@/decorators.js';
 import { Serialized } from '@/types.js';
 import type Emitter from 'strict-event-emitter-types';
@@ -266,8 +266,9 @@ export interface DrawRoomEventTypes {
 		color: string;
 		size: number;
 		opacity?: number;
-		brush?: 'soft' | 'dot';
+		brush?: 'soft' | 'dot' | 'area';
 		clip?: string;
+		layer?: string;
 		points: string;
 	};
 	// カーソルの位置(保存しない)。一定間隔でまとめて配る。x・yがnullならキャンバスの外に出た
@@ -292,8 +293,16 @@ export interface DrawRoomEventTypes {
 		userId: MiUser['id'];
 		strokeId: string;
 	};
+	// layerがあればその人のそのレイヤーだけ、無ければその人の全てのレイヤーを消去した
 	clearLayer: {
 		userId: MiUser['id'];
+		layer?: string;
+	};
+	// JUICE: その人のレイヤーの一覧(追加・削除・名前・並び・表示・濃さ)が変わった。
+	// 一覧から消えたレイヤーの線は、そのレイヤーごと消えている
+	layersUpdated: {
+		userId: MiUser['id'];
+		layers: DrawLayerMeta[];
 	};
 	// 移動ツールで線をずらした(strokeIdsがnullならレイヤー全体)
 	strokesMoved: {

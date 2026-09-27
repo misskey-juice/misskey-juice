@@ -5117,6 +5117,10 @@ export interface Locale extends ILocale {
      */
     "emailVerificationFailedError": string;
     /**
+     * このメールアドレス(または同じアドレスとみなされる別名)は、ほかのアカウントで使われています。
+     */
+    "emailAlreadyUsedByOtherAccount": string;
+    /**
      * 「内容を隠す」がオンの場合は注釈の記述が必要です。
      */
     "cwNotationRequired": string;
@@ -8699,6 +8703,14 @@ export interface Locale extends ILocale {
          */
         "smtp": string;
         /**
+         * +を含むメールアドレスは使えません
+         */
+        "plusTag": string;
+        /**
+         * Gmailでは、@より前に.を含むメールアドレスは使えません
+         */
+        "gmailDot": string;
+        /**
          * このメールアドレスでは登録できません
          */
         "banned": string;
@@ -9428,6 +9440,18 @@ export interface Locale extends ILocale {
              * 小説フラグと小説ビューワー(縦書きの文庫本風ページめくり・見開き表示、ルビ・青空文庫記法、.txtファイルの長編対応)
              */
             "novel": string;
+            /**
+             * 絵チャ(お絵かきチャット。筆圧対応、1人で複数のレイヤー、参加人数・公開範囲の設定、見学、チャット、完成画像のドライブ保存・ノート投稿)
+             */
+            "drawRoom": string;
+            /**
+             * 小説エディター(縦書き・横書きのプレビュー、ルビ・傍点・改ページなどの入力補助、文字数の表示、投稿前のチェック、下書きの自動保存)
+             */
+            "novelEditor": string;
+            /**
+             * MFMの「○○ 検索」で使う検索エンジンを、ユーザーごとに選べる(Google・Yahoo!・Yahoo! JAPAN・Bing・DuckDuckGo・Kagi・Brave Search・Startpage・Ecosia・Perplexity・任意のURL)
+             */
+            "mfmSearchEngine": string;
         };
         /**
          * どういう経路で実装されたか
@@ -9726,6 +9750,74 @@ export interface Locale extends ILocale {
          */
         "clipTooComplex": string;
         /**
+         * ほかの人のカーソルを表示
+         */
+        "showCursors": string;
+        /**
+         * ほかの人のカーソルの濃さ
+         */
+        "cursorOpacity": string;
+        /**
+         * 横のパネルを表示
+         */
+        "showSidePanel": string;
+        /**
+         * 横のパネルを隠す
+         */
+        "hideSidePanel": string;
+        /**
+         * パネルの幅を変える
+         */
+        "resizeSidePanel": string;
+        /**
+         * レイヤーとチャットの高さを変える
+         */
+        "resizeLayersChat": string;
+        /**
+         * レイヤーの操作
+         */
+        "layerMenu": string;
+        /**
+         * このレイヤーは非表示
+         */
+        "layerHidden": string;
+        /**
+         * レイヤーを追加
+         */
+        "addLayer": string;
+        /**
+         * レイヤー{n}
+         */
+        "layerN": ParameterizedString<"n">;
+        /**
+         * 名前を変える
+         */
+        "renameLayer": string;
+        /**
+         * レイヤーを削除
+         */
+        "deleteLayer": string;
+        /**
+         * 「{name}」を削除しますか？このレイヤーの線も全て消えます。
+         */
+        "deleteLayerConfirm": ParameterizedString<"name">;
+        /**
+         * 濃さ
+         */
+        "layerOpacity": string;
+        /**
+         * 上へ
+         */
+        "moveLayerUp": string;
+        /**
+         * 下へ
+         */
+        "moveLayerDown": string;
+        /**
+         * 囲って塗る(なぞって囲った範囲を、ペンなら塗り、消しゴムなら消す)
+         */
+        "brushAreaHint": string;
+        /**
          * キャンバスを読み込み中
          */
         "loadingCanvas": string;
@@ -9834,13 +9926,13 @@ export interface Locale extends ILocale {
          */
         "undo": string;
         /**
-         * 自分のレイヤーを消去
+         * 描いているレイヤーを消去
          */
         "clearMyLayer": string;
         /**
-         * 自分のレイヤーの線を全て消しますか？
+         * 「{name}」の線を全て消しますか？
          */
-        "clearMyLayerConfirm": string;
+        "clearMyLayerConfirm": ParameterizedString<"name">;
         /**
          * 画面に合わせる
          */
@@ -9918,7 +10010,7 @@ export interface Locale extends ILocale {
          */
         "imageFormat": string;
         /**
-         * PNG(無圧縮)
+         * PNG(劣化なし)
          */
         "formatPng": string;
         /**
@@ -15285,19 +15377,19 @@ export interface Locale extends ILocale {
          */
         "defaultEmailLangCaption": string;
         /**
-         * Gmailのドット無視による多重登録を防ぐ
+         * Gmailで.を含むメールアドレスを使えないようにする
          */
         "blockEmailDotAliasRegistration": string;
         /**
-         * Gmail等のドット無視(example@gmail.com / ex.ample@gmail.com は同一)を使った複数アカウント登録を、新規登録・メールアドレス変更時の重複チェックで検出してブロックします。対象はGmail/Googlemailドメインに限定されるため、他のプロバイダのアドレスが誤ってブロックされることはありません。
+         * 新規登録・メールアドレス変更で、ローカルパート(@より前)に.を含むGmailのアドレス(ex.ample@gmail.com など)を、既存のアカウントの有無に関係なく受け付けません。あわせて、.を除くと同じになるGmailのアドレスも重複として扱います。対象はGmail/Googlemailドメインだけなので、ほかのプロバイダのアドレスには影響しません。お問い合わせフォームには適用されません。
          */
         "blockEmailDotAliasRegistrationCaption": string;
         /**
-         * +タグによる多重登録を防ぐ
+         * +を含むメールアドレスを使えないようにする
          */
         "blockEmailPlusAliasRegistration": string;
         /**
-         * +タグ(example+1@gmail.com)を使った複数アカウント登録を、新規登録・メールアドレス変更時の重複チェックで検出してブロックします。ドメインを問わず適用されるため、+をサブアドレッシングとして扱わないメールプロバイダでは、+を含む文字列がそのまま別の正当なアドレスとして機能している場合に、無関係な既存アカウントと誤って重複判定される可能性があります。
+         * 新規登録・メールアドレス変更で、+タグを含むメールアドレス(example+1@gmail.com など)を、既存のアカウントの有無に関係なく受け付けません。あわせて、+タグで登録済みのアカウントと+より前が同じアドレスも、重複として扱います。お問い合わせフォームには適用されません。
          */
         "blockEmailPlusAliasRegistrationCaption": string;
         /**
