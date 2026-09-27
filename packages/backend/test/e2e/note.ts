@@ -947,6 +947,21 @@ describe('Note', () => {
 		});
 	});
 
+	// JUICE: 「リノート解除して再リノート」で、引用まで消さないための onlyPureRenotes
+	describe('notes/unrenote', () => {
+		test('onlyPureRenotes なら普通のリノートだけを消し、引用は残す', async () => {
+			const target = (await api('notes/create', { text: 'unrenote target' }, bob)).body.createdNote;
+			const renote = (await api('notes/create', { renoteId: target.id }, alice)).body.createdNote;
+			const quote = (await api('notes/create', { renoteId: target.id, text: 'quote' }, alice)).body.createdNote;
+
+			assert.strictEqual((await api('notes/unrenote', { noteId: target.id, onlyPureRenotes: true }, alice)).status, 204);
+			// 削除は後から進むことがあるので、少し待つ
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			assert.strictEqual(await Notes.findOneBy({ id: renote.id }), null);
+			assert.notStrictEqual(await Notes.findOneBy({ id: quote.id }), null);
+		});
+	});
+
 	describe('notes/delete', () => {
 		test('delete a reply', async () => {
 			const mainNoteRes = await api('notes/create', {

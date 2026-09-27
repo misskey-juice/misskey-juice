@@ -38,7 +38,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				role="slider"
 				tabindex="0"
 				:aria-label="i18n.ts._drawRoom.saturationValue"
-				:aria-valuetext="`S ${Math.round(hsv.s * 100)}%, V ${Math.round(hsv.v * 100)}%`"
+				:aria-valuenow="Math.round(hsv.v * 100)"
+				aria-valuemin="0"
+				aria-valuemax="100"
+				:aria-valuetext="`${i18n.ts._drawRoom.saturation} ${Math.round(hsv.s * 100)}%, ${i18n.ts._drawRoom.brightness} ${Math.round(hsv.v * 100)}%`"
 				@pointerdown="onSquareDown"
 				@pointermove="onSquareMove"
 				@pointerup="dragging = null"
@@ -57,23 +60,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</label>
 		</div>
 		<div :class="$style.row">
-			<label v-for="(channel, i) in (['R', 'G', 'B'] as const)" :key="channel" :class="$style.field">
-				<span>{{ channel }}</span>
-				<input type="number" min="0" max="255" :value="rgb[i]" :class="$style.numberInput" :aria-label="channel" @change="onRgbInput(i, ($event.target as HTMLInputElement).valueAsNumber)"/>
+			<label v-for="(channel, i) in RGB_CHANNELS" :key="channel.short" :class="$style.field">
+				<span aria-hidden="true">{{ channel.short }}</span>
+				<input type="number" min="0" max="255" :value="rgb[i]" :class="$style.numberInput" :aria-label="channel.label" @change="onRgbInput(i, ($event.target as HTMLInputElement).valueAsNumber)"/>
 			</label>
 		</div>
 		<div :class="$style.row">
 			<label :class="$style.field">
-				<span>H</span>
-				<input type="number" min="0" max="359" :value="Math.round(hsv.h)" :class="$style.numberInput" aria-label="H" @change="setHsv({ h: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 359) })"/>
+				<span aria-hidden="true">H</span>
+				<input type="number" min="0" max="359" :value="Math.round(hsv.h)" :class="$style.numberInput" :aria-label="i18n.ts._drawRoom.hue" @change="setHsv({ h: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 359) })"/>
 			</label>
 			<label :class="$style.field">
-				<span>S</span>
-				<input type="number" min="0" max="100" :value="Math.round(hsv.s * 100)" :class="$style.numberInput" aria-label="S" @change="setHsv({ s: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 100) / 100 })"/>
+				<span aria-hidden="true">S</span>
+				<input type="number" min="0" max="100" :value="Math.round(hsv.s * 100)" :class="$style.numberInput" :aria-label="i18n.ts._drawRoom.saturation" @change="setHsv({ s: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 100) / 100 })"/>
 			</label>
 			<label :class="$style.field">
-				<span>V</span>
-				<input type="number" min="0" max="100" :value="Math.round(hsv.v * 100)" :class="$style.numberInput" aria-label="V" @change="setHsv({ v: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 100) / 100 })"/>
+				<span aria-hidden="true">V</span>
+				<input type="number" min="0" max="100" :value="Math.round(hsv.v * 100)" :class="$style.numberInput" :aria-label="i18n.ts._drawRoom.brightness" @change="setHsv({ v: clamp(($event.target as HTMLInputElement).valueAsNumber, 0, 100) / 100 })"/>
 			</label>
 		</div>
 
@@ -136,6 +139,11 @@ const RING_WIDTH = 20;
 // 輪の内側に収まる四角(輪との間に少し隙間を空ける)
 const SQUARE_SIZE = Math.floor((WHEEL_SIZE - RING_WIDTH * 2 - 12) / Math.SQRT2);
 const MAX_SAVED = 40;
+const RGB_CHANNELS = [
+	{ short: 'R', label: i18n.ts._drawRoom.colorRed },
+	{ short: 'G', label: i18n.ts._drawRoom.colorGreen },
+	{ short: 'B', label: i18n.ts._drawRoom.colorBlue },
+] as const;
 
 const modal = useTemplateRef('modal');
 

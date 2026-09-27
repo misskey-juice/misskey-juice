@@ -293,7 +293,8 @@ export class DrawRoomChannel extends Channel {
 				pieceIds.add(piece.id);
 				const parsed = this.parseStrokeBody(piece, DRAW_STROKE_MAX_POINTS, margin);
 				if (parsed == null) return undefined;
-				pieces.push({ ...parsed, id: piece.id });
+				// idを先頭にする(Redisの処理で、大きな点の列をたどらずにidを取り出せるように)
+				pieces.push({ id: piece.id, ...parsed });
 			}
 			total += pieces.length;
 			if (total > DRAW_LAYER_MAX_STROKES) return undefined;
@@ -328,6 +329,18 @@ export class DrawRoomChannel extends Channel {
 
 	@bindThis
 	public async onMessage(type: string, body: JsonValue) {
+		// JUICE: カーソル以外の操作は、届いた順に1つずつ処理する(描いた直後の取り消しが、線より先に処理されて
+		// 1つ前の操作を戻してしまわないように)。カーソルは順番が関係なく頻繁なので、待たせない
+		if (type === 'cursor') return await this.handleMessage(type, body);
+		const run = this.messageQueue.then(() => this.handleMessage(type, body));
+		this.messageQueue = run.catch(() => {});
+		return await run;
+	}
+
+	private messageQueue: Promise<void> = Promise.resolve();
+
+	@bindThis
+	private async handleMessage(type: string, body: JsonValue) {
 		if (this.room == null || this.user == null) return;
 		if (!this.hasWritePermission()) return;
 		if (!await this.stillAllowed()) return;
@@ -391,7 +404,8 @@ export class DrawRoomChannel extends Channel {
 					this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
 					return;
 				}
-				const added = await this.drawRoomService.addStroke(room.id, user.id, { ...stroke, id: body.id });
+				// idを先頭にする(Redisの処理で、大きな点の列をたどらずにidを取り出せるように)
+				const added = await this.drawRoomService.addStroke(room.id, user.id, { id: body.id, ...stroke });
 				if (!added) this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
 				break;
 			}

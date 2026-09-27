@@ -315,6 +315,11 @@ function drawLockedStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): v
 	ctx.globalCompositeOperation = 'source-atop';
 	ctx.drawImage(lockScratch, 0, 0, w, h, x0, y0, w, h);
 	ctx.restore();
+	// 大きな線に使った後は小さくしておく(大きいキャンバスで、作業用のキャンバスがメモリを持ち続けないように)
+	if (w * h > 1024 * 1024) {
+		lockScratch.width = 1;
+		lockScratch.height = 1;
+	}
 }
 
 function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
@@ -631,6 +636,12 @@ export class DrawCanvasEngine {
 	// JUICE: 見ている人が自分の画面だけで隠している人(その人の全てのレイヤー)
 	private hiddenOwners = new Set<string>();
 
+	// JUICE: 描いている途中の線を、重ね描き用のキャンバスに描くか。合成モードのレイヤーの線は、下の絵と正しく合成して見せるため、
+	// 消しゴム・透明度ロックの線と同じくレイヤーに重ねて描く
+	private isOverlay(layer: Layer, stroke: { tool: DrawTool; lock?: boolean }): boolean {
+		return isOverlayStroke(stroke) && layer.blend === 'source-over';
+	}
+
 	// 表示するか(レイヤーの表示の設定と、見ている人が隠しているか)
 	private isShown(layer: Layer): boolean {
 		return layer.visible && !this.hiddenOwners.has(layer.ownerId);
@@ -702,7 +713,7 @@ export class DrawCanvasEngine {
 		const canvas = this.groupCanvas[group];
 		if (canvas == null) return;
 		const layers = group === 'below' ? this.splitGroups().below : this.splitGroups().above;
-		if (stroke.tool === 'eraser' || stroke.lock === true || layer.opacity < 1 || layer.blend !== 'source-over' || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !isOverlayStroke(entry))) {
+		if (stroke.tool === 'eraser' || stroke.lock === true || layer.opacity < 1 || layer.blend !== 'source-over' || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !this.isOverlay(layer, entry))) {
 			this.markLayerRegion(layer, strokeRect(stroke));
 			return;
 		}
@@ -891,7 +902,10 @@ export class DrawCanvasEngine {
 			layer.visible = meta.visible;
 			layer.opacity = Math.min(1, Math.max(0, meta.opacity));
 			layer.private = meta.private === true;
-			layer.blend = meta.blend != null && (DRAW_LAYER_BLENDS as readonly string[]).includes(meta.blend) ? meta.blend : 'source-over';
+			const blend = meta.blend != null && (DRAW_LAYER_BLENDS as readonly string[]).includes(meta.blend) ? meta.blend : 'source-over';
+			// 合成モードが変わると、描いている途中の線の描き方(重ね描き用か、レイヤーか)も変わるので描き直す
+			if (layer.blend !== blend) this.invalidateLive(layer);
+			layer.blend = blend;
 		}
 		const others = old.filter(key => ownerOfLayerKey(key) !== userId);
 		const first = old.findIndex(key => ownerOfLayerKey(key) === userId);
@@ -1084,7 +1098,7 @@ export class DrawCanvasEngine {
 			pending.points.push(...part.points);
 			pending.updatedAt = Date.now();
 		}
-		if (isOverlayStroke(part)) {
+		if (this.isOverlay(layer, part)) {
 			this.requestOverlay();
 		} else {
 			// 消しゴムの途中の線は、変わった範囲だけ描き直して見せる
@@ -1102,7 +1116,7 @@ export class DrawCanvasEngine {
 		const entry = layer?.pending.get(strokeId);
 		if (layer == null || entry == null) return;
 		layer.pending.delete(strokeId);
-		if (!isOverlayStroke(entry)) this.erasingRemoved(layer, entry);
+		if (!this.isOverlay(layer, entry)) this.erasingRemoved(layer, entry);
 		this.pendingChanged(pendingRect(entry));
 	}
 
@@ -1121,7 +1135,7 @@ export class DrawCanvasEngine {
 		if (layer == null || layer.pending.size === 0) return;
 		const entries = [...layer.pending.values()];
 		layer.pending.clear();
-		for (const entry of entries) if (!isOverlayStroke(entry)) this.erasingRemoved(layer, entry);
+		for (const entry of entries) if (!this.isOverlay(layer, entry)) this.erasingRemoved(layer, entry);
 		this.pendingChanged(entries.reduce<Rect | null>((r, entry) => unionRect(r, pendingRect(entry)), null));
 	}
 
@@ -1138,7 +1152,7 @@ export class DrawCanvasEngine {
 			for (const [id, pending] of layer.pending) {
 				if (now - pending.updatedAt > PENDING_STROKE_TIMEOUT_MS) {
 					layer.pending.delete(id);
-					if (!isOverlayStroke(pending)) this.erasingRemoved(layer, pending);
+					if (!this.isOverlay(layer, pending)) this.erasingRemoved(layer, pending);
 					rect = unionRect(rect, pendingRect(pending));
 					changed = true;
 				}
@@ -1156,7 +1170,7 @@ export class DrawCanvasEngine {
 		const removed = layer.strokes.length !== before ? strokeRect(old.find(s => s.id === strokeId)!) : null;
 		const pendingEntry = layer.pending.get(strokeId);
 		const wasPending = layer.pending.delete(strokeId);
-		if (pendingEntry != null && !isOverlayStroke(pendingEntry)) this.erasingRemoved(layer, pendingEntry);
+		if (pendingEntry != null && !this.isOverlay(layer, pendingEntry)) this.erasingRemoved(layer, pendingEntry);
 		// 取り消した線の範囲だけを描き直す
 		if (removed != null) this.redrawCommitted(layer, removed);
 		if (wasPending) this.pendingChanged(unionRect(removed, pendingRect(pendingEntry!)));
@@ -1253,36 +1267,40 @@ export class DrawCanvasEngine {
 	public insertStrokes(userId: string, items: { before: string | null; stroke: CanvasStroke }[]): void {
 		const layer = this.ensureLayer(userId);
 		const present = new Set(layer.strokes.map(stroke => stroke.id));
-		const beforeAnchor = new Map<string, CanvasStroke[]>();
-		const atEnd: CanvasStroke[] = [];
-		for (const { before, stroke } of items) {
-			if (present.has(stroke.id)) continue;
+		const inserting = items.filter(({ stroke }) => {
+			if (present.has(stroke.id)) return false;
 			present.add(stroke.id);
-			if (before == null) {
-				atEnd.push(stroke);
-			} else {
-				const waiting = beforeAnchor.get(before) ?? [];
-				waiting.push(stroke);
-				beforeAnchor.set(before, waiting);
-			}
+			return true;
+		});
+		if (inserting.length === 0) return;
+		const beforeAnchor = new Map<string, CanvasStroke[]>();
+		for (const { before, stroke } of inserting) {
+			if (before == null) continue;
+			const waiting = beforeAnchor.get(before) ?? [];
+			waiting.push(stroke);
+			beforeAnchor.set(before, waiting);
 		}
-		if (beforeAnchor.size === 0 && atEnd.length === 0) return;
 		const result: CanvasStroke[] = [];
+		const placed = new Set<string>();
 		for (const stroke of layer.strokes) {
 			const waiting = beforeAnchor.get(stroke.id);
 			if (waiting != null) {
 				result.push(...waiting);
-				beforeAnchor.delete(stroke.id);
+				placed.add(stroke.id);
 			}
 			result.push(stroke);
 		}
-		// 目印の線が無くなっていたら、最後に入れる
-		for (const waiting of beforeAnchor.values()) result.push(...waiting);
-		result.push(...atEnd);
+		// 目印の無い線と、目印の線が無くなっていた線は、手順の順に最後に入れる(サーバーと同じ並びにする)
+		for (const { before, stroke } of inserting) {
+			if (before == null || !placed.has(before)) result.push(stroke);
+		}
 		layer.strokes = result;
-		this.redrawCommitted(layer);
-		this.requestRender();
-		this.committedChanged();
+		// 戻した線の範囲だけを描き直す(線の多いレイヤーで、取り消すたびに全部を描き直さないように)
+		let rect: Rect | null = null;
+		for (const { stroke } of inserting) rect = unionRect(rect, strokeRect(stroke));
+		if (rect == null) return;
+		this.redrawCommitted(layer, rect);
+		this.requestRender(rect);
 	}
 
 	public strokesOf(userId: string): readonly CanvasStroke[] {
@@ -1403,7 +1421,7 @@ export class DrawCanvasEngine {
 			return layer.live;
 		}
 		// ペンの途中の線は重ね描き用のキャンバスに描くので、ここでは消しゴムの途中の線だけを扱う
-		const erasing = [...layer.pending.values()].filter(stroke => !isOverlayStroke(stroke));
+		const erasing = [...layer.pending.values()].filter(stroke => !this.isOverlay(layer, stroke));
 		if (erasing.length === 0) {
 			// 消しゴム・移動の途中に使ったキャンバスは、使い終わったら予備に戻す(スマホ等でメモリを使いすぎないように)
 			if (layer.live != null && this.liveSpare == null) this.liveSpare = layer.live;
@@ -1483,7 +1501,7 @@ export class DrawCanvasEngine {
 		for (const layer of this.orderedLayers()) {
 			if (!this.isShown(layer)) continue;
 			for (const entry of layer.pending.values()) {
-				if (!isOverlayStroke(entry)) continue;
+				if (!this.isOverlay(layer, entry)) continue;
 				if ((entry.opacity ?? 1) < 1) {
 					if (entry.canvas == null) {
 						entry.canvas = this.strokeCanvasPool.pop() ?? createCanvas(this.width, this.height);
@@ -1520,7 +1538,7 @@ export class DrawCanvasEngine {
 				for (const layer of this.orderedLayers()) {
 					if (!this.isShown(layer)) continue;
 					for (const entry of layer.pending.values()) {
-						if (!isOverlayStroke(entry) || (entry.opacity ?? 1) < 1) continue;
+						if (!this.isOverlay(layer, entry) || (entry.opacity ?? 1) < 1) continue;
 						const r = pendingRect(entry);
 						if (r != null && rectsIntersect(r, region)) drawStrokeIncrement(ctx, entry, 0);
 					}

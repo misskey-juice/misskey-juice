@@ -37189,6 +37189,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
+                    /** @default false */
+                    onlyPureRenotes?: boolean;
                 };
             };
         };

@@ -293,7 +293,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div :class="$style.minimapBar">
 						<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える) -->
 						<button
-							v-if="room != null && !room.isEnded && !room.viewOnly"
+							v-if="canPet"
 							v-tooltip="i18n.ts._drawRoom.petToolHint"
 							class="_button"
 							:class="[$style.minimapToggle, { [$style.minimapToggleActive]: petting }]"
@@ -960,6 +960,15 @@ const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: numb
 
 // JUICE: なでるツール。オンの間は、ドラッグしても描かず・表示も動かさず、なでている位置を送る
 const petting = ref(false);
+// なでられるのは開催中の部屋だけ(終了した部屋・確認のために開いている部屋では、ボタンも出さない)
+const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly);
+watch(canPet, (value) => {
+	if (!value) petting.value = false;
+});
+// ほかの人の「なでている」は、続きが届かなければしばらくして普通のカーソルに戻す
+// (なで終わりの知らせが回数制限で届かなかったときに、手が出たままにならないように)
+const PET_STALE_MS = 800;
+const petStaleTimers = new Map<string, number>();
 let petPointerId: number | null = null;
 // なでたところに出るハート(キャンバス座標)。しばらくしたら消す
 const petHearts = ref<{ id: number; x: number; y: number; drift: number }[]>([]);
@@ -1219,7 +1228,16 @@ function connect(): void {
 				continue;
 			}
 			cursors.set(cursor.userId, { x: cursor.x, y: cursor.y, updatedAt: now, pet: cursor.pet === true });
-			if (cursor.pet === true) spawnPetHeart(cursor.userId, cursor.x, cursor.y);
+			if (cursor.pet === true) {
+				spawnPetHeart(cursor.userId, cursor.x, cursor.y);
+				const userId = cursor.userId;
+				window.clearTimeout(petStaleTimers.get(userId));
+				petStaleTimers.set(userId, window.setTimeout(() => {
+					petStaleTimers.delete(userId);
+					const c = cursors.get(userId);
+					if (c != null && c.pet) cursors.set(userId, { ...c, pet: false });
+				}, PET_STALE_MS));
+			}
 		}
 		ensureUsers([...cursors.keys()]);
 	});
@@ -2047,7 +2065,7 @@ function onPointerDown(ev: PointerEvent): void {
 		}
 	}
 	// JUICE: なでるツール(見学者も)。左ドラッグでなでる
-	if (petting.value && !spaceHeld.value && ev.button === 0 && !selecting.value) {
+	if (petting.value && canPet.value && !spaceHeld.value && ev.button === 0 && !selecting.value) {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		petPointerId = ev.pointerId;
 		sendCursor(ev, true);
@@ -2115,7 +2133,7 @@ function onPointerDown(ev: PointerEvent): void {
 const LONG_PRESS_MS = 500;
 // 長押しとみなす、指のぶれの大きさ(画面のpx)
 const LONG_PRESS_MOVE_PX = 10;
-let longPress: { pointerId: number; startX: number; startY: number; last: PointerEvent; timer: number } | null = null;
+let longPress: { pointerId: number; startX: number; startY: number; moved: number; last: PointerEvent; timer: number } | null = null;
 // 長押しでスポイトにした指。離すまで、動かした先の色を拾い続ける
 let pickingPointerId: number | null = null;
 
@@ -2126,6 +2144,7 @@ function startLongPress(ev: PointerEvent): void {
 		pointerId,
 		startX: ev.clientX,
 		startY: ev.clientY,
+		moved: 0,
 		last: ev,
 		timer: window.setTimeout(() => {
 			const press = longPress;
@@ -2211,8 +2230,10 @@ function onPointerMove(ev: PointerEvent): void {
 		}
 	}
 	// JUICE: 長押しの途中で指が動いたら、長押しではない(そのまま線を描く)
+	// (小さく塗り込んでいるときも長押しにしないよう、動いた距離の合計でも見る)
 	if (longPress != null && longPress.pointerId === ev.pointerId) {
-		if (Math.hypot(ev.clientX - longPress.startX, ev.clientY - longPress.startY) > LONG_PRESS_MOVE_PX) cancelLongPress();
+		longPress.moved += Math.hypot(ev.clientX - longPress.last.clientX, ev.clientY - longPress.last.clientY);
+		if (Math.hypot(ev.clientX - longPress.startX, ev.clientY - longPress.startY) > LONG_PRESS_MOVE_PX || longPress.moved > LONG_PRESS_MOVE_PX * 2) cancelLongPress();
 		else longPress.last = ev;
 	}
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
@@ -3808,7 +3829,7 @@ definePage(() => ({
 	top: -8px;
 	left: -8px;
 	font-size: 16px;
-	color: #ff6b9a;
+	color: var(--MI_THEME-love);
 	pointer-events: none;
 	filter: drop-shadow(0 0 2px var(--MI_THEME-bg));
 

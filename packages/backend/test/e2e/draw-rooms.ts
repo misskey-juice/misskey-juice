@@ -547,6 +547,62 @@ describe('絵チャ', () => {
 		await call('draw-rooms/end', { roomId: room.id }, alice);
 	});
 
+	test('取り消し・やり直しで戻した下描きの線は、ほかの人に届かない。部屋主が消去した線は取り消しで戻せない', async () => {
+		const room = await createRoom(alice);
+		await call('draw-rooms/join', { roomId: room.id }, bob);
+		const patched: { steps: { t: string; items?: { stroke: { id: string } }[] }[] }[] = [];
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		const bobWs = await connectStream(bob, 'drawRoom', (msg) => {
+			if (msg.type === 'strokesPatched' && msg.body.userId === alice.id) patched.push(msg.body);
+		}, { roomId: room.id });
+		const strokesOf = async (userId: string) => ((await layersOf(room, alice)).find(l => l.userId === userId)?.strokes ?? []).map(s => s.id);
+		const send = async (ws: WebSocket, type: string, body: unknown) => {
+			sendToChannel(ws, type, body);
+			await new Promise(resolve => setTimeout(resolve, 250));
+		};
+		try {
+			await send(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			sendToChannel(aliceWs, 'stroke', stroke('p1'));
+			sendToChannel(aliceWs, 'stroke', { ...stroke('d1'), layer: 'draft' });
+			await vi.waitFor(async () => assert.deepStrictEqual(await strokesOf(alice.id), ['p1', 'd1']), { timeout: 5000, interval: 200 });
+
+			// 下描きのレイヤーを消去して取り消す(下描きの線が戻る)。皆に見える線を消して取り消す
+			await send(aliceWs, 'clearLayer', { layer: 'draft' });
+			await send(aliceWs, 'undo', {});
+			await send(aliceWs, 'deleteStrokes', { strokeIds: ['p1'] });
+			await send(aliceWs, 'undo', {});
+			// 戻した線は、同じレイヤーの中の順番に戻る(ほかのレイヤーの線との並びは問わない)
+			await vi.waitFor(async () => assert.deepStrictEqual((await strokesOf(alice.id)).sort(), ['d1', 'p1']), { timeout: 5000, interval: 200 });
+			// bobには皆に見える線(p1)の戻しだけが届き、下描きの線(d1)は届かない
+			await vi.waitFor(() => assert.ok(patched.some(p => p.steps.some(step => step.items?.some(item => item.stroke.id === 'p1')))), { timeout: 5000, interval: 200 });
+			assert.ok(!patched.some(p => p.steps.some(step => step.items?.some(item => item.stroke.id === 'd1'))));
+
+			// bobが消した線は、部屋主(alice)がbobのレイヤーを消去した後は、取り消しで戻せない
+			sendToChannel(bobWs, 'stroke', stroke('b1'));
+			sendToChannel(bobWs, 'stroke', stroke('b2'));
+			await vi.waitFor(async () => assert.deepStrictEqual(await strokesOf(bob.id), ['b1', 'b2']), { timeout: 5000, interval: 200 });
+			await send(bobWs, 'deleteStrokes', { strokeIds: ['b1'] });
+			await send(aliceWs, 'clearLayerOf', { userId: bob.id });
+			await vi.waitFor(async () => assert.deepStrictEqual(await strokesOf(bob.id), []), { timeout: 5000, interval: 200 });
+			await send(bobWs, 'undo', {});
+			await send(bobWs, 'undo', {});
+			await send(bobWs, 'chat', { text: 'barrier-2' });
+			await vi.waitFor(async () => {
+				const chat = (await call('draw-rooms/chat-history', { roomId: room.id }, alice)).body as { message: { text: string } }[];
+				assert.ok(chat.some(item => item.message.text === 'barrier-2'));
+			}, { timeout: 5000, interval: 200 });
+			assert.deepStrictEqual(await strokesOf(bob.id), []);
+		} finally {
+			aliceWs.close();
+			bobWs.close();
+		}
+
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+	});
+
 	test('移動ツールで線をずらし、選んだ線だけを消せる。部屋主はほかの人のレイヤーを消去できる', async () => {
 		const room = await createRoom(alice);
 		await call('draw-rooms/join', { roomId: room.id }, bob);

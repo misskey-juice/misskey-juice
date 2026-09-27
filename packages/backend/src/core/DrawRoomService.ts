@@ -77,8 +77,9 @@ export const DRAW_LAYER_MAX_STROKES = LAYER_MAX_STROKES;
 export const DRAW_USER_MAX_LAYERS = 8;
 export const DRAW_LAYER_MAX_BYTES = 8 * 1024 * 1024;
 const LAYER_MAX_BYTES = DRAW_LAYER_MAX_BYTES;
-// JUICE: 取り消し・やり直しの履歴の上限(1人・1部屋ごと)。取り消しとやり直しの両方を合わせた大きさを、レイヤーの上限と同じにする
-const HISTORY_MAX_BYTES = DRAW_LAYER_MAX_BYTES;
+// JUICE: 取り消し・やり直しの履歴の上限(1人・1部屋ごと。取り消しとやり直しの両方を合わせた大きさ)。
+// 履歴は線の写しを持つので、Redisの使用量が増えすぎないよう、レイヤーの上限の半分にする
+const HISTORY_MAX_BYTES = 4 * 1024 * 1024;
 const HISTORY_MAX_ENTRIES = 100;
 const CHAT_LOG_LENGTH = 100;
 // 終了した「保存しない」部屋を消すまでの猶予(PNG保存・投稿のため)
@@ -121,34 +122,54 @@ end
 // 線は本人しか変えないので、戻すときは本人の今の線の並びに対して、idで場所を決めて行う
 // (途中で消えた線・レイヤーへの手順は、飛ばすだけで壊れない)
 const HISTORY_LUA = `
+-- 線のid。点の列(大きい)を正規表現でたどらないよう、"id":" の位置を文字列のまま探してから取り出す
 local function strokeIdOf(raw)
-	return string.match(raw, '"id":"([%w_%-]+)"')
+	local _, e = string.find(raw, '"id":"', 1, true)
+	if not e then return nil end
+	return string.match(raw, '^[%w_%-]+', e + 1)
+end
+-- レイヤーの一覧(JSON。無ければnil)に、そのidの下描きのレイヤーがあるか
+local function isPrivateLayer(layersRaw, id)
+	if not layersRaw then return false end
+	for _, layer in ipairs(cjson.decode(layersRaw)) do
+		if layer.id == id then return layer.private == true end
+	end
+	return false
 end
 -- 操作の前後の線の並びから、その操作の履歴(取り消す手順とやり直す手順)を作る。変わっていなければnil
 local function diffEntry(before, after)
+	-- 線のidは1回だけ取り出す
+	local beforeIds = {}
+	local afterIds = {}
 	local beforeById = {}
 	local afterById = {}
-	for _, raw in ipairs(before) do beforeById[strokeIdOf(raw)] = raw end
-	for _, raw in ipairs(after) do afterById[strokeIdOf(raw)] = raw end
+	for i, raw in ipairs(before) do
+		beforeIds[i] = strokeIdOf(raw)
+		beforeById[beforeIds[i]] = raw
+	end
+	for i, raw in ipairs(after) do
+		afterIds[i] = strokeIdOf(raw)
+		afterById[afterIds[i]] = raw
+	end
 	local removed = {}
 	local inserted = {}
 	local removedIds = {}
 	local insertedIds = {}
 	for i, raw in ipairs(before) do
-		if afterById[strokeIdOf(raw)] ~= raw then
+		if afterById[beforeIds[i]] ~= raw then
 			removed[i] = true
-			table.insert(removedIds, strokeIdOf(raw))
+			table.insert(removedIds, beforeIds[i])
 		end
 	end
 	for i, raw in ipairs(after) do
-		if beforeById[strokeIdOf(raw)] ~= raw then
+		if beforeById[afterIds[i]] ~= raw then
 			inserted[i] = true
-			table.insert(insertedIds, strokeIdOf(raw))
+			table.insert(insertedIds, afterIds[i])
 		end
 	end
 	if #removedIds == 0 and #insertedIds == 0 then return nil end
 	-- 戻す線ごとに、同じレイヤーで次にある(この操作で変わらない)線を目印にする
-	local function withAnchors(list, marked)
+	local function withAnchors(list, ids, marked)
 		local items = {}
 		local nextOfLayer = {}
 		for i = #list, 1, -1 do
@@ -157,7 +178,7 @@ local function diffEntry(before, after)
 			if marked[i] then
 				table.insert(items, 1, { a = nextOfLayer[layer], s = raw })
 			else
-				nextOfLayer[layer] = strokeIdOf(raw)
+				nextOfLayer[layer] = ids[i]
 			end
 		end
 		return items
@@ -165,9 +186,9 @@ local function diffEntry(before, after)
 	local u = {}
 	local r = {}
 	if #insertedIds > 0 then table.insert(u, { t = 'del', ids = insertedIds }) end
-	if #removedIds > 0 then table.insert(u, { t = 'ins', items = withAnchors(before, removed) }) end
+	if #removedIds > 0 then table.insert(u, { t = 'ins', items = withAnchors(before, beforeIds, removed) }) end
 	if #removedIds > 0 then table.insert(r, { t = 'del', ids = removedIds }) end
-	if #insertedIds > 0 then table.insert(r, { t = 'ins', items = withAnchors(after, inserted) }) end
+	if #insertedIds > 0 then table.insert(r, { t = 'ins', items = withAnchors(after, afterIds, inserted) }) end
 	return { u = u, r = r }
 end
 -- 履歴に1件積む(新しい操作をしたら、やり直しの履歴は捨てる)。mergeなら、直前の1件とまとめて1回の操作にする
@@ -245,11 +266,11 @@ return 1
 `;
 
 // JUICE: 取り消し(ARGV[1]='u')・やり直し(ARGV[1]='r')。履歴の最後の1件の手順を行い、もう一方の履歴へ移す。
-// 返り値は {1, 行った手順(JSON), 変えた後のレイヤーの一覧(JSON。変えていなければ'')}。
+// 返り値は {1, 行った手順(JSON), 今のレイヤーの一覧(JSON), レイヤーの一覧を変えたか(1/0)}。
 // 履歴が無い・終了済みなら {0, '', ''}、線の数・大きさの上限を超えるなら {-2, '', ''}(履歴はそのまま)
 // KEYS: ended, strokes, bytes, layers, history, redo, historyBytes, redoBytes / ARGV: 'u'|'r', maxStrokes, maxBytes, ttl, maxLayers
 const UNDO_REDO_SCRIPT = LAYER_OF_STROKE_LUA + HISTORY_LUA + `
-if redis.call('EXISTS', KEYS[1]) == 1 then return { 0, '', '' } end
+if redis.call('EXISTS', KEYS[1]) == 1 then return { 0, '', '', 0 } end
 local undo = ARGV[1] == 'u'
 local fromKey = undo and KEYS[5] or KEYS[6]
 local toKey = undo and KEYS[6] or KEYS[5]
@@ -257,7 +278,7 @@ local fromBytes = undo and KEYS[7] or KEYS[8]
 local toBytes = undo and KEYS[8] or KEYS[7]
 local ttl = tonumber(ARGV[4])
 local raw = redis.call('RPOP', fromKey)
-if not raw then return { 0, '', '' } end
+if not raw then return { 0, '', '', 0 } end
 local entry = cjson.decode(raw)
 local list = redis.call('LRANGE', KEYS[2], 0, -1)
 local layersRaw = redis.call('GET', KEYS[4])
@@ -301,32 +322,34 @@ for _, step in ipairs(entry[ARGV[1]]) do
 		for _, s in ipairs(list) do present[strokeIdOf(s)] = true end
 		local items = {}
 		local beforeAnchor = {}
-		local atEnd = {}
 		for _, item in ipairs(step.items) do
 			local id = strokeIdOf(item.s)
 			-- 無くなったレイヤーの線・もうある線は戻さない
 			if not present[id] and hasLayer(layerOf(item.s)) then
 				present[id] = true
 				table.insert(items, item)
-				if item.a and beforeAnchor[item.a] == nil then beforeAnchor[item.a] = {} end
-				if item.a then table.insert(beforeAnchor[item.a], item.s) else table.insert(atEnd, item.s) end
+				if item.a then
+					if beforeAnchor[item.a] == nil then beforeAnchor[item.a] = {} end
+					table.insert(beforeAnchor[item.a], item.s)
+				end
 			end
 		end
 		if #items > 0 then
 			local result = {}
+			local placed = {}
 			for _, s in ipairs(list) do
-				local waiting = beforeAnchor[strokeIdOf(s)]
+				local sid = strokeIdOf(s)
+				local waiting = beforeAnchor[sid]
 				if waiting then
 					for _, w in ipairs(waiting) do table.insert(result, w) end
-					beforeAnchor[strokeIdOf(s)] = nil
+					placed[sid] = true
 				end
 				table.insert(result, s)
 			end
-			-- 目印の線が無くなっていたら、最後に入れる
-			for _, waiting in pairs(beforeAnchor) do
-				for _, w in ipairs(waiting) do table.insert(result, w) end
+			-- 目印の無い線と、目印の線が無くなっていた線は、手順の順に最後に入れる
+			for _, item in ipairs(items) do
+				if not (item.a and placed[item.a]) then table.insert(result, item.s) end
 			end
-			for _, w in ipairs(atEnd) do table.insert(result, w) end
 			list = result
 			table.insert(applied, { t = 'ins', items = items })
 		end
@@ -349,7 +372,7 @@ local bytes = 0
 for _, s in ipairs(list) do bytes = bytes + string.len(s) end
 if #list > tonumber(ARGV[2]) or bytes > tonumber(ARGV[3]) then
 	redis.call('RPUSH', fromKey, raw)
-	return { -2, '', '' }
+	return { -2, '', '', 0 }
 end
 redis.call('DEL', KEYS[2])
 for i = 1, #list, 500 do
@@ -357,13 +380,15 @@ for i = 1, #list, 500 do
 end
 redis.call('SET', KEYS[3], bytes, 'EX', ttl)
 if #list > 0 then redis.call('EXPIRE', KEYS[2], ttl) end
-if layersChanged then redis.call('SET', KEYS[4], cjson.encode(layers), 'EX', ttl) end
+if layersChanged then redis.call('SET', KEYS[4], cjson.encode(layers), 'EX', ttl) elseif layersRaw then redis.call('EXPIRE', KEYS[4], ttl) end
 redis.call('DECRBY', fromBytes, string.len(raw))
 redis.call('RPUSH', toKey, raw)
 redis.call('INCRBY', toBytes, string.len(raw))
 for i = 5, 8 do redis.call('EXPIRE', KEYS[i], ttl) end
-if #applied == 0 then return { 1, '', layersChanged and cjson.encode(layers) or '' } end
-return { 1, cjson.encode(applied), layersChanged and cjson.encode(layers) or '' }
+-- 行った手順・今のレイヤーの一覧(下描きの線をほかの人に配らないため、同じ処理の中で読んだもの)・一覧を変えたか
+local layersNow = (layersChanged or not layersRaw) and cjson.encode(layers) or layersRaw
+if #applied == 0 then return { 1, '', layersNow, layersChanged and 1 or 0 } end
+return { 1, cjson.encode(applied), layersNow, layersChanged and 1 or 0 }
 `;
 
 // JUICE: 線の一覧から、shouldRemove(レイヤーのid)が真の線を消す。返り値は消した線の数
@@ -396,16 +421,23 @@ end
 
 // JUICE: 指定したレイヤー(1人が持つレイヤーのid。線にlayerが無ければ'0')の線だけを消す。
 // 返り値は消した線の数(終了済みなら-1)
-// JUICE: ARGV[3]が'1'(下描きのレイヤー)なら、取り消せるよう履歴に積む
-// KEYS: ended, strokes, bytes, history, redo, historyBytes, redoBytes / ARGV: layerId, ttl, record('1'|'0')
+// JUICE: 下描きのレイヤーなら、取り消せるよう履歴に積む。皆に見えるレイヤーの消去は取り消せないので、それより前の履歴も捨てる
+// (消した線が、前の操作の取り消し・やり直しで戻ってこないように)。下描きかは、消すのと同じ処理の中で決める。
+// 返り値は {消した線の数(終了済みなら-1), 下描きのレイヤーか(1/0)}
+// KEYS: ended, strokes, bytes, layers, history, redo, historyBytes, redoBytes / ARGV: layerId, ttl
 const REMOVE_LAYER_STROKES_SCRIPT = LAYER_OF_STROKE_LUA + REMOVE_STROKES_BY_LAYER_LUA + HISTORY_LUA + `
-if redis.call('EXISTS', KEYS[1]) == 1 then return -1 end
+if redis.call('EXISTS', KEYS[1]) == 1 then return { -1, 0 } end
+local isPrivate = isPrivateLayer(redis.call('GET', KEYS[4]), ARGV[1])
 local removed, before, after = removeStrokes(function(id) return id == ARGV[1] end, tonumber(ARGV[2]))
-if removed > 0 and ARGV[3] == '1' then
-	local entry = diffEntry(before, after)
-	if entry then record(KEYS[4], KEYS[5], KEYS[6], KEYS[7], entry, false, tonumber(ARGV[2])) end
+if removed > 0 then
+	if isPrivate then
+		local entry = diffEntry(before, after)
+		if entry then record(KEYS[5], KEYS[6], KEYS[7], KEYS[8], entry, false, tonumber(ARGV[2])) end
+	else
+		redis.call('DEL', KEYS[5], KEYS[6], KEYS[7], KEYS[8])
+	end
 end
-return removed
+return { removed, isPrivate and 1 or 0 }
 `;
 
 // JUICE: 自分のレイヤーの一覧を置き換え、一覧に無いレイヤーの線を消す(途中で部屋が終わったり、
@@ -428,6 +460,18 @@ if before then
 	end
 elseif not keep['0'] then
 	dropped = true
+end
+-- JUICE: 下描き⇔皆に見せるを切り替えたら、やり直しの履歴は捨てる(切り替える前の状態に向けたやり直しで、
+-- 皆に見えるレイヤーを消したり、下描きに戻したりしないように)
+local beforePrivate = {}
+if before then
+	for _, layer in ipairs(cjson.decode(before)) do beforePrivate[layer.id] = layer.private == true end
+end
+for _, layer in ipairs(cjson.decode(ARGV[1])) do
+	if beforePrivate[layer.id] ~= nil and beforePrivate[layer.id] ~= (layer.private == true) then
+		redis.call('DEL', KEYS[7], KEYS[9])
+		break
+	end
 end
 redis.call('SET', KEYS[4], ARGV[1], 'EX', ttl)
 -- 線を描いていなくてもレイヤーの一覧を配れるよう、描いた人の集合に入れておく
@@ -455,6 +499,10 @@ if allPrivate and #droppedLayers > 0 then
 	for _, step in ipairs(entry.r) do table.insert(r, step) end
 	for _, dropped in ipairs(droppedLayers) do table.insert(r, { t = 'rmLayer', id = dropped.layer.id }) end
 	record(KEYS[6], KEYS[7], KEYS[8], KEYS[9], { u = u, r = r }, false, ttl)
+elseif #droppedLayers > 0 then
+	-- 皆に見えるレイヤーの削除は取り消せないので、それより前の履歴も捨てる(同じidのレイヤーを作り直したときに、
+	-- 前の取り消しで古い線がそこへ戻らないように)
+	redis.call('DEL', KEYS[6], KEYS[7], KEYS[8], KEYS[9])
 end
 return { removed, before or '' }
 `;
@@ -487,8 +535,8 @@ local list = redis.call('LRANGE', KEYS[2], 0, -1)
 local updates = {}
 local delta = 0
 for i, raw in ipairs(list) do
-	local s = cjson.decode(raw)
-	if all or ids[s.id] then
+	if all or ids[strokeIdOf(raw)] then
+		local s = cjson.decode(raw)
 		s.dx = (s.dx or 0) + dx
 		s.dy = (s.dy or 0) + dy
 		local encoded = cjson.encode(s)
@@ -581,8 +629,7 @@ local kept = {}
 local bytes = 0
 local removed = 0
 for _, raw in ipairs(list) do
-	local s = cjson.decode(raw)
-	if ids[s.id] then
+	if ids[strokeIdOf(raw)] then
 		removed = removed + 1
 	else
 		table.insert(kept, raw)
@@ -1351,24 +1398,26 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async undoRedo(roomId: MiDrawRoom['id'], userId: MiUser['id'], direction: 'undo' | 'redo'): Promise<boolean> {
-		const [result, stepsRaw, layersRaw] = await this.redisClient.eval(
+		const [result, stepsRaw, layersRaw, layersChanged] = await this.redisClient.eval(
 			UNDO_REDO_SCRIPT, 8,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
 			direction === 'undo' ? 'u' : 'r', LAYER_MAX_STROKES.toString(), LAYER_MAX_BYTES.toString(), REDIS_KEY_TTL_SEC.toString(), DRAW_USER_MAX_LAYERS.toString(),
-		) as [number, string, string];
+		) as [number, string, string, number];
 		if (result === -2) return false;
 		if (result !== 1) return true;
 		await this.touch(roomId);
+		const layers = this.parseLayers(layersRaw);
 		// レイヤーを戻した・消したときは、線より先にレイヤーの一覧を配る(戻す線のレイヤーを先に用意してもらう)
-		if (layersRaw !== '') this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers: this.parseLayers(layersRaw) });
+		if (layersChanged === 1) this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers });
 		if (stepsRaw === '') return true;
 		const steps = (JSON.parse(stepsRaw) as ({ t: 'del'; ids: string[] } | { t: 'mv'; ids: string[] | '*'; dx: number; dy: number } | { t: 'ins'; items: { a?: string; s: string }[] })[]).map(step => {
 			if (step.t === 'del') return { t: 'del' as const, ids: step.ids };
 			if (step.t === 'mv') return { t: 'mv' as const, ids: step.ids === '*' ? null : step.ids, dx: step.dx, dy: step.dy };
 			return { t: 'ins' as const, items: step.items.map(item => ({ before: item.a ?? null, stroke: JSON.parse(item.s) as DrawStroke })) };
 		});
-		// 下描きのレイヤーの線は、ほかの人のストリームでは除いて流す(channels/draw-room.ts)
-		const privateLayers = [...await this.privateLayerIds(roomId, userId)];
+		// 下描きのレイヤーの線は、ほかの人のストリームでは除いて流す(channels/draw-room.ts)。
+		// 下描きかは、戻したのと同じ処理の中で読んだ一覧で決める(直後に一覧が変わっても、古い判定で配らないように)
+		const privateLayers = layers.filter(layer => layer.private).map(layer => layer.id);
 		this.globalEventService.publishDrawRoomStream(roomId, 'strokesPatched', { userId, steps, ...(privateLayers.length > 0 ? { privateLayers } : {}) });
 		return true;
 	}
@@ -1439,16 +1488,15 @@ export class DrawRoomService implements OnApplicationShutdown {
 			// その人が持っていないレイヤーなら、線を見に行かない(存在しないレイヤーの指定を繰り返して重くされないように)
 			const metas = await this.getUserLayers(roomId, userId);
 			if (!metas.some(meta => meta.id === layer)) return;
-			// 下描きのレイヤーの消去だけ、取り消せるよう履歴に積む
-			const isPrivate = metas.some(meta => meta.id === layer && meta.private);
-			const removed = await this.redisClient.eval(
-				REMOVE_LAYER_STROKES_SCRIPT, 7,
-				this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), ...this.historyKeys(roomId, userId),
-				layer, REDIS_KEY_TTL_SEC.toString(), isPrivate ? '1' : '0',
-			) as number;
+			// 下描きのレイヤーの消去だけ、取り消せるよう履歴に積む(下描きかは、消すのと同じ処理の中で決める)
+			const [removed, isPrivate] = await this.redisClient.eval(
+				REMOVE_LAYER_STROKES_SCRIPT, 8,
+				this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
+				layer, REDIS_KEY_TTL_SEC.toString(),
+			) as [number, number];
 			if (removed > 0) {
 				await this.touchLayers(roomId, userId);
-				this.globalEventService.publishDrawRoomStream(roomId, 'clearLayer', { userId, layer, ...(isPrivate ? { private: true } : {}) });
+				this.globalEventService.publishDrawRoomStream(roomId, 'clearLayer', { userId, layer, ...(isPrivate === 1 ? { private: true } : {}) });
 			}
 			return;
 		}

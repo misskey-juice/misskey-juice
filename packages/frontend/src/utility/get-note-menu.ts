@@ -722,10 +722,17 @@ export function getRenoteMenu(props: {
 		visibility?: Visibility;
 	}, toastText: string) => {
 		if (props.mock) return;
-		await misskeyApi('notes/unrenote', { noteId: appearNote.id });
-		const res = await misskeyApi('notes/create', payload);
-		os.toast(toastText);
-		globalEvents.emit('notePosted', res.createdNote);
+		try {
+			// JUICE: 引用は消さず、普通のリノートだけを解除する
+			await misskeyApi('notes/unrenote', { noteId: appearNote.id, onlyPureRenotes: true });
+			const res = await misskeyApi('notes/create', payload);
+			os.toast(toastText);
+			globalEvents.emit('notePosted', res.createdNote);
+		} catch (err) {
+			// JUICE: 解除できてリノートし直せなかったときなども、黙って終わらないよう知らせる
+			const message = typeof err === 'object' && err != null && 'message' in err && typeof err.message === 'string' ? err.message : null;
+			os.alert({ type: 'error', text: message ?? i18n.ts.somethingHappened });
+		}
 	};
 
 	const channelRenoteItems: MenuItem[] = [];

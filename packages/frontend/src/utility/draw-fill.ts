@@ -104,30 +104,49 @@ function floodFillClosingGaps(width: number, height: number, sx: number, sy: num
 			dist[i] = d;
 		}
 	}
-	const threshold = gap * 3;
 	const seed = sy * width + sx;
-	if (dist[seed] <= threshold) return floodFillBy(width, height, sx, sy, i => fillable[i] === 1);
+	// 描き始めた所が線に近いときは、そこから線までの距離に合わせて閉じる隙間を狭める
+	// (細い所を塗ったときに、隙間閉じが効かずに外へあふれないように)
+	const threshold = Math.min(gap * 3, dist[seed] - 1);
+	if (threshold < 3) return floodFillBy(width, height, sx, sy, i => fillable[i] === 1);
 	const mask = floodFillBy(width, height, sx, sy, i => dist[i] > threshold);
-	// 塗る範囲の縁から、元々塗れる画素の中だけを、gap+1画素ぶん広げる(幅優先で、隙間の外へは少ししか出ない)
-	// 広げ始めるのは、範囲の縁の画素だけ(大きな範囲で全ての画素を並べないように)
-	let frontier: number[] = [];
-	for (let i = 0; i < size; i++) {
-		if (mask[i] === 0) continue;
-		const x = i % width;
-		if ((x > 0 && mask[i - 1] === 0) || (x < width - 1 && mask[i + 1] === 0) || (i >= width && mask[i - width] === 0) || (i + width < size && mask[i + width] === 0)) frontier.push(i);
-	}
-	for (let step = 0; step <= gap && frontier.length > 0; step++) {
-		const next: number[] = [];
-		for (const i of frontier) {
-			const x = i % width;
-			const neighbors = [x > 0 ? i - 1 : -1, x < width - 1 ? i + 1 : -1, i - width, i + width];
-			for (const n of neighbors) {
-				if (n < 0 || n >= size || mask[n] === 1 || fillable[n] === 0) continue;
-				mask[n] = 1;
-				next.push(n);
+	// 塗る範囲から、元々塗れる画素の中だけを、削ったのと同じ距離(縦横3・斜め4)で広げ直す(線の際まで塗る。
+	// 斜めの線沿いにも塗り残しが出ないよう、8方向で測る)。距離の表は使い回す
+	const limit = threshold + 3;
+	for (let i = 0; i < size; i++) dist[i] = mask[i] === 1 ? 0 : INF;
+	const relax = (i: number, j: number, w: number) => {
+		const d = dist[j] + w;
+		if (d < dist[i]) dist[i] = d;
+	};
+	// 線を回り込む所もたどれるよう、前から・後ろからの2回を2周する
+	for (let round = 0; round < 2; round++) {
+		for (let y = 0; y < height; y++) {
+			for (let x = 0; x < width; x++) {
+				const i = y * width + x;
+				if (fillable[i] === 0 || dist[i] === 0) continue;
+				if (x > 0) relax(i, i - 1, 3);
+				if (y > 0) {
+					relax(i, i - width, 3);
+					if (x > 0) relax(i, i - width - 1, 4);
+					if (x < width - 1) relax(i, i - width + 1, 4);
+				}
 			}
 		}
-		frontier = next;
+		for (let y = height - 1; y >= 0; y--) {
+			for (let x = width - 1; x >= 0; x--) {
+				const i = y * width + x;
+				if (fillable[i] === 0 || dist[i] === 0) continue;
+				if (x < width - 1) relax(i, i + 1, 3);
+				if (y < height - 1) {
+					relax(i, i + width, 3);
+					if (x < width - 1) relax(i, i + width + 1, 4);
+					if (x > 0) relax(i, i + width - 1, 4);
+				}
+			}
+		}
+	}
+	for (let i = 0; i < size; i++) {
+		if (fillable[i] === 1 && dist[i] <= limit) mask[i] = 1;
 	}
 	return mask;
 }

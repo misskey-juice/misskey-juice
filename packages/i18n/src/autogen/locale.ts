@@ -10086,6 +10086,26 @@ export interface Locale extends ILocale {
          */
         "hue": string;
         /**
+         * 鮮やかさ
+         */
+        "saturation": string;
+        /**
+         * 明るさ
+         */
+        "brightness": string;
+        /**
+         * 赤
+         */
+        "colorRed": string;
+        /**
+         * 緑
+         */
+        "colorGreen": string;
+        /**
+         * 青
+         */
+        "colorBlue": string;
+        /**
          * 鮮やかさ・明るさ
          */
         "saturationValue": string;
