@@ -136,6 +136,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 							misskey-tempura
 							<template #suffix>GitHub</template>
 						</FormLink>
+						<FormLink to="https://github.com/harumaki2000/misskey-springroll" external>
+							<template #icon><i class="ti ti-bulb"></i></template>
+							misskey-springroll
+							<template #suffix>GitHub</template>
+						</FormLink>
 						<FormLink to="https://github.com/pixelfed/pixelfed" external>
 							<template #icon><i class="ti ti-bulb"></i></template>
 							PixelFed
