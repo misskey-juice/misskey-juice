@@ -102,6 +102,7 @@ export const paramDef = {
 		// 事実上の機能無効化を避けるため1KB、最大値は暴走防止のため50MBに制限する
 		midiPlayerMaxSize: { type: 'integer', minimum: 1024, maximum: 50 * 1024 * 1024 },
 		drawRoomEnabled: { type: 'boolean' },
+		drawRoomMaxRoomMegabytes: { type: 'integer', minimum: 16, maximum: 512 },
 	},
 } as const;
 
@@ -168,6 +169,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.microsoftOauthClientSecret !== undefined) set.microsoftOauthClientSecret = ps.microsoftOauthClientSecret;
 			if (ps.midiPlayerMaxSize !== undefined) set.midiPlayerMaxSize = ps.midiPlayerMaxSize;
 			if (ps.drawRoomEnabled !== undefined) set.drawRoomEnabled = ps.drawRoomEnabled;
+			if (ps.drawRoomMaxRoomMegabytes !== undefined) set.drawRoomMaxRoomMegabytes = ps.drawRoomMaxRoomMegabytes;
 
 			const after = await this.juiceSettingsService.update(set);
 

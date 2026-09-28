@@ -409,7 +409,13 @@ export class DrawRoomChannel extends Channel {
 				if (result === 'added') break;
 				this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
 				// JUICE: 上限に達して描けなかったことを、描いた本人に知らせる(黙って線が消えないように)
-				if (result === 'strokes' || result === 'bytes' || result === 'room') this.send('strokeLimitReached', { kind: result });
+				// 上限の値(本数、またはMB)も一緒に送る
+				if (result === 'strokes' || result === 'bytes') {
+					const limits = await this.drawRoomService.strokeLimits(user.id);
+					this.send('strokeLimitReached', { kind: result, limit: result === 'strokes' ? limits.strokes : Math.round(limits.bytes / 1024 / 1024) });
+				} else if (result === 'room') {
+					this.send('strokeLimitReached', { kind: result, limit: Math.round(await this.drawRoomService.maxRoomBytes() / 1024 / 1024) });
+				}
 				break;
 			}
 			case 'undo':

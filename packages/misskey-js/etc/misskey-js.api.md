@@ -1148,6 +1148,7 @@ export type Channels = {
             operationRejected: (payload: Record<string, never>) => void;
             strokeLimitReached: (payload: {
                 kind: 'strokes' | 'bytes' | 'room';
+                limit: number;
             }) => void;
             chat: (payload: {
                 message: DrawRoomChatMessage;

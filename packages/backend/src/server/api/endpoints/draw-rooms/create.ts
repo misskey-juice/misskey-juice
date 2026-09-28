@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { DrawRoomService, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_CANVAS_PRESETS, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
+import { DrawRoomService, normalizeCw, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_CANVAS_PRESETS, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
 import { drawRoomVisibilities } from '@/models/DrawRoom.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
 import { ApiError } from '@/server/api/error.js';
@@ -51,6 +51,9 @@ export const paramDef = {
 		canvasWidth: { type: 'integer', minimum: DRAW_ROOM_CANVAS_MIN_SIZE, maximum: DRAW_ROOM_CANVAS_MAX_SIZE },
 		canvasHeight: { type: 'integer', minimum: DRAW_ROOM_CANVAS_MIN_SIZE, maximum: DRAW_ROOM_CANVAS_MAX_SIZE },
 		keepAfterEnd: { type: 'boolean', default: false },
+		// JUICE: 部屋を開く前に出す注意書き(CW)と、センシティブ(NSFW)の印
+		cw: { type: 'string', nullable: true, maxLength: 128 },
+		isSensitive: { type: 'boolean', default: false },
 	},
 	required: ['title', 'visibility', 'maxMembers'],
 } as const;
@@ -71,6 +74,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					canvasPreset: ps.canvasPreset,
 					canvasSize: ps.canvasWidth != null && ps.canvasHeight != null ? { width: ps.canvasWidth, height: ps.canvasHeight } : undefined,
 					keepAfterEnd: ps.keepAfterEnd,
+					cw: normalizeCw(ps.cw),
+					isSensitive: ps.isSensitive,
 				});
 				return await this.drawRoomService.pack(room, me);
 			} catch (err) {

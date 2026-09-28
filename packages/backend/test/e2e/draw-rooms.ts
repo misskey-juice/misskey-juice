@@ -358,6 +358,20 @@ describe('絵チャ', () => {
 		await call('admin/roles/unassign', { userId: dave.id, roleId: limited.id }, alice);
 	});
 
+	test('部屋に注意書き(CW)とセンシティブの印を付け、後から変えられる', async () => {
+		const room = await call('draw-rooms/create', { title: 'cw room', visibility: 'local', maxMembers: 2, cw: '  グロ\nあり  ', isSensitive: true }, alice);
+		assert.strictEqual(room.status, 200);
+		// 改行などは空白にし、前後の空白を取る
+		assert.strictEqual(room.body.cw, 'グロ あり');
+		assert.strictEqual(room.body.isSensitive, true);
+		const updated = await call('draw-rooms/update', { roomId: room.body.id, cw: '   ', isSensitive: false }, alice);
+		assert.strictEqual(updated.status, 200);
+		// 空白だけなら注意書き無し
+		assert.strictEqual(updated.body.cw, null);
+		assert.strictEqual(updated.body.isSensitive, false);
+		await call('draw-rooms/end', { roomId: room.body.id }, alice);
+	});
+
 	test('部屋主は自分を外せず、終了した部屋ではメンバーを外せない。幅・高さの片方だけの指定はエラー', async () => {
 		const onlyWidth = await call('draw-rooms/create', { title: 'x', visibility: 'local', maxMembers: 2, canvasWidth: 800 }, alice);
 		assert.strictEqual(onlyWidth.body.error.code, 'INVALID_CANVAS_SIZE');

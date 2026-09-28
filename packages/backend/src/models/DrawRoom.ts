@@ -68,6 +68,19 @@ export class MiDrawRoom {
 	})
 	public keepAfterEnd: boolean;
 
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+		comment: 'Content warning shown before opening the room (JUICE).',
+	})
+	public cw: string | null;
+
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether the room contains sensitive (NSFW) drawings (JUICE).',
+	})
+	public isSensitive: boolean;
+
 	@Index()
 	@Column('boolean', {
 		default: false,

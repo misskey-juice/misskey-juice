@@ -21,7 +21,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DEFAULT_POLICIES, RoleService } from '@/core/RoleService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
-import { resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
+import { resolveDrawRoomLimitSettings, resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
 
 export const DRAW_ROOM_CANVAS_PRESETS = {
 	landscape: [1600, 900],
@@ -69,15 +69,23 @@ export function decodeDrawPoints(encoded: string, maxPoints: number): number[] |
 	return points;
 }
 export const DRAW_CHAT_MAX_LENGTH = 500;
+
+/**
+ * JUICE: 部屋の注意書き(CW)を整える(改行などの制御文字を除き、前後の空白を取る)。空ならnull(注意書き無し)
+ */
+export function normalizeCw(cw: string | null | undefined): string | null {
+	if (cw == null) return null;
+	const text = cw.replace(/\p{Cc}/gu, ' ').trim();
+	return text === '' ? null : text;
+}
 // 1人が1つの部屋に置ける線の本数と、線のデータ量(JSONのバイト数)の上限。描き続けてRedisや
 // 終了時のDB保存(1人=1行)が際限なく膨らまないようにする。
 // JUICE: 上限はロールのポリシー(drawRoomMaxStrokes・drawRoomMaxStrokeMegabytes)で決め、ここはその最大値(ロールでもこれより大きくはできない)
 export const DRAW_LAYER_MAX_STROKES = 200000;
 // (終了後に保存する部屋では1人分を1行のjsonbに入れるので、jsonbに入る大きさより十分小さくする)
 export const DRAW_LAYER_MAX_BYTES = 128 * 1024 * 1024;
-// JUICE: 1つの部屋の全員の線のデータ量の合計の上限。線は全員分をまとめて読み出す(途中参加・保存した部屋の表示)ので、
-// 1回の応答・読み込みが大きくなりすぎないようにする
-export const DRAW_ROOM_MAX_BYTES = 256 * 1024 * 1024;
+// JUICE: 1つの部屋の全員の線のデータ量の合計の上限は、JUICEの設定(drawRoomMaxRoomMegabytes)で決める。
+// 線は全員分をまとめて読み出す(途中参加・保存した部屋の表示)ので、1回の応答・読み込みが大きくなりすぎないようにする
 // JUICE: 1人が持てるレイヤーの数の上限
 export const DRAW_USER_MAX_LAYERS = 8;
 // JUICE: 取り消し・やり直しの履歴の上限(1人・1部屋ごと。取り消しとやり直しの両方を合わせた大きさ)。
@@ -876,6 +884,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 			canvasWidth: room.canvasWidth,
 			canvasHeight: room.canvasHeight,
 			keepAfterEnd: room.keepAfterEnd,
+			cw: room.cw,
+			isSensitive: room.isSensitive,
 			isEnded: room.isEnded,
 			endedAt: room.endedAt?.toISOString() ?? null,
 			deletesAt: room.isEnded && !room.keepAfterEnd && room.endedAt != null ? new Date(room.endedAt.getTime() + UNKEPT_ROOM_RETENTION_MS).toISOString() : null,
@@ -895,6 +905,9 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// 大きさを直接指定するとき(canvasPresetより優先)
 		canvasSize?: { width: number; height: number };
 		keepAfterEnd: boolean;
+		// JUICE: 注意書き(CW)と、センシティブ(NSFW)の印
+		cw?: string | null;
+		isSensitive?: boolean;
 	}): Promise<MiDrawRoom> {
 		await this.ensureEnabled();
 		// JUICE: 部屋を作れるのは、ロールで許されている人だけ(見学・参加は誰でもできる)
@@ -921,6 +934,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 					canvasWidth,
 					canvasHeight,
 					keepAfterEnd: params.keepAfterEnd,
+					cw: params.cw ?? null,
+					isSensitive: params.isSensitive ?? false,
 				}).then(x => em.findOneByOrFail(MiDrawRoom, x.identifiers[0]));
 				// 部屋主もメンバー(描ける人)の1人として数える
 				await em.insert(MiDrawRoomMember, {
@@ -1007,6 +1022,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 		title?: string;
 		maxMembers?: number;
 		keepAfterEnd?: boolean;
+		cw?: string | null;
+		isSensitive?: boolean;
 		// 途中で大きさを変えるときは左上を基準に広げる・切り詰める(線はそのまま残り、はみ出た分は見えなくなるだけ)
 		canvasWidth?: number;
 		canvasHeight?: number;
@@ -1020,6 +1037,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 			...(params.title !== undefined ? { title: params.title } : {}),
 			...(params.maxMembers !== undefined ? { maxMembers: params.maxMembers } : {}),
 			...(params.keepAfterEnd !== undefined ? { keepAfterEnd: params.keepAfterEnd } : {}),
+			...(params.cw !== undefined ? { cw: params.cw } : {}),
+			...(params.isSensitive !== undefined ? { isSensitive: params.isSensitive } : {}),
 			...(params.canvasWidth !== undefined ? { canvasWidth: params.canvasWidth } : {}),
 			...(params.canvasHeight !== undefined ? { canvasHeight: params.canvasHeight } : {}),
 		});
@@ -1283,6 +1302,14 @@ export class DrawRoomService implements OnApplicationShutdown {
 	}
 
 	/**
+	 * JUICE: 1つの部屋の全員の線のデータ量の合計の上限(バイト。JUICEの設定)
+	 */
+	@bindThis
+	public async maxRoomBytes(): Promise<number> {
+		return resolveDrawRoomLimitSettings(await this.juiceSettingsService.fetch()).drawRoomMaxRoomMegabytes * 1024 * 1024;
+	}
+
+	/**
 	 * JUICE: その人が1つの部屋に置ける線の本数・データ量(バイト)の上限(ロールのポリシー)
 	 */
 	@bindThis
@@ -1309,7 +1336,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			ADD_STROKE_SCRIPT, 10,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
 			JSON.stringify(stroke), userId, Date.now().toString(), limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0', stroke.id,
-			this.bytesKey(roomId, ''), DRAW_ROOM_MAX_BYTES.toString(),
+			this.bytesKey(roomId, ''), (await this.maxRoomBytes()).toString(),
 		) as number;
 		if (result === -1) return 'strokes';
 		if (result === -3) return 'bytes';

@@ -50,6 +50,16 @@ export const packedDrawRoomSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		// JUICE: 部屋を開く前に出す注意書き(CW)。無ければnull
+		cw: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		// JUICE: センシティブ(NSFW)な絵の部屋か
+		isSensitive: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		isEnded: {
 			type: 'boolean',
 			optional: false, nullable: false,

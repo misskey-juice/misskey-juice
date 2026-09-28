@@ -260,6 +260,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #caption>{{ i18n.ts._drawRoom.enabledCaption }}</template>
 								</MkSwitch>
 							</SearchMarker>
+							<!-- JUICE: 1つの部屋の全員の線のデータ量の合計の上限 -->
+							<SearchMarker>
+								<MkInput v-model="drawRoomMaxRoomMegabytes" type="number" :min="16" :max="512">
+									<template #label><SearchLabel>{{ i18n.ts._drawRoom.maxRoomMegabytes }}</SearchLabel></template>
+									<template #suffix>MB</template>
+									<template #caption>{{ i18n.ts._drawRoom.maxRoomMegabytesCaption }}</template>
+								</MkInput>
+							</SearchMarker>
 						</div>
 					</MkFolder>
 				</SearchMarker>
@@ -479,6 +487,7 @@ const midiPlayerMaxSizeKb = ref(settings.midiPlayerMaxSize / 1024);
 const midiPlayerMaxSize = computed(() => Math.round(midiPlayerMaxSizeKb.value * 1024));
 const latexEnabled = ref(settings.latexEnabled);
 const drawRoomEnabled = ref(settings.drawRoomEnabled);
+const drawRoomMaxRoomMegabytes = ref(settings.drawRoomMaxRoomMegabytes);
 const reactionPiggybackOnRemoteEnabled = ref(settings.reactionPiggybackOnRemoteEnabled);
 const contactFormEnabled = ref(settings.contactFormEnabled);
 const contactFormLimit = ref(settings.contactFormLimit);
@@ -616,6 +625,7 @@ function save() {
 		midiPlayerMaxSize: midiPlayerMaxSize.value,
 		latexEnabled: latexEnabled.value,
 		drawRoomEnabled: drawRoomEnabled.value,
+		drawRoomMaxRoomMegabytes: Math.min(512, Math.max(16, Math.floor(Number(drawRoomMaxRoomMegabytes.value) || 256))),
 		reactionPiggybackOnRemoteEnabled: reactionPiggybackOnRemoteEnabled.value,
 		contactFormEnabled: contactFormEnabled.value,
 		contactFormLimit: contactFormLimit.value,

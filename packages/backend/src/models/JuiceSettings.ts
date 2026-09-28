@@ -140,6 +140,8 @@ export interface JuiceSettingsValue {
 	 * 絵チャ(お絵かきチャット)機能を使えるようにするか。既定は有効
 	 */
 	drawRoomEnabled?: boolean;
+	// JUICE: 絵チャの1つの部屋の全員の線のデータ量の合計の上限(MB)
+	drawRoomMaxRoomMegabytes?: number;
 
 	/**
 	 * リモートのユーザー(Misskey系)のアイコンのデコレーションを表示するか。既定は有効
@@ -482,6 +484,20 @@ export function resolveDrawRoomSettings(settings: JuiceSettingsValue): {
 } {
 	return {
 		drawRoomEnabled: settings.drawRoomEnabled ?? true,
+	};
+}
+
+// JUICE: 絵チャの部屋の全員の線のデータ量の合計の上限(MB)。線は全員分をまとめて読み出すので、512MBまで
+export const DRAW_ROOM_MAX_ROOM_MEGABYTES_RANGE = { min: 16, max: 512 } as const;
+
+export function resolveDrawRoomLimitSettings(settings: JuiceSettingsValue): {
+	drawRoomMaxRoomMegabytes: number;
+} {
+	const value = settings.drawRoomMaxRoomMegabytes;
+	return {
+		drawRoomMaxRoomMegabytes: typeof value === 'number' && Number.isFinite(value)
+			? Math.min(DRAW_ROOM_MAX_ROOM_MEGABYTES_RANGE.max, Math.max(DRAW_ROOM_MAX_ROOM_MEGABYTES_RANGE.min, Math.floor(value)))
+			: 256,
 	};
 }
 

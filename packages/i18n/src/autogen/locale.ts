@@ -9530,6 +9530,14 @@ export interface Locale extends ILocale {
          */
         "enabledCaption": string;
         /**
+         * 1つの部屋の線のデータ量の上限
+         */
+        "maxRoomMegabytes": string;
+        /**
+         * 1つの部屋の全員の線のデータ量の合計の上限です(16〜512MB)。部屋を開くときや終了後に見るとき、全員の線をまとめて読み込むので、大きくするとサーバーと見る人の端末の負担が増えます。1人あたりの上限はロールで決めます
+         */
+        "maxRoomMegabytesCaption": string;
+        /**
          * 部屋主
          */
         "owner": string;
@@ -9629,6 +9637,34 @@ export interface Locale extends ILocale {
          * オフにすると、終了してから1時間後に絵とチャットが削除されます(それまでは画像の保存・投稿ができます)
          */
         "keepAfterEndCaption": string;
+        /**
+         * 注意書き(CW)
+         */
+        "roomCw": string;
+        /**
+         * グロテスクな表現など、見る前に知らせたいことがあれば書きます。部屋を開いたとき、絵の代わりにこの注意書きが出て、開くと決めた人だけが見られます(128文字まで)
+         */
+        "roomCwCaption": string;
+        /**
+         * センシティブ(NSFW)な絵の部屋
+         */
+        "roomSensitive": string;
+        /**
+         * センシティブなメディアを隠す設定の人には、開くと決めるまで絵を隠します。この部屋の絵をノートに投稿するときは、センシティブなファイルとして上げます
+         */
+        "roomSensitiveCaption": string;
+        /**
+         * NSFW
+         */
+        "roomSensitiveBadge": string;
+        /**
+         * この部屋にはセンシティブな絵が含まれます
+         */
+        "roomSensitiveGate": string;
+        /**
+         * 開く
+         */
+        "openRoomContent": string;
         /**
          * 開催中の部屋はありません
          */
@@ -9854,9 +9890,9 @@ export interface Locale extends ILocale {
          */
         "strokeBytesLimitReached": ParameterizedString<"n">;
         /**
-         * この部屋の全員の線のデータ量が上限(256MB)に達したため、線を描けませんでした
+         * この部屋の全員の線のデータ量が上限({n}MB)に達したため、線を描けませんでした
          */
-        "roomBytesLimitReached": string;
+        "roomBytesLimitReached": ParameterizedString<"n">;
         /**
          * 横のパネルを表示
          */

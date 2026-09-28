@@ -175,6 +175,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@wheel.prevent="onWheel"
 				@contextmenu.prevent
 			>
+				<!-- JUICE: 注意書き(CW)・センシティブ(NSFW)の部屋は、開くと決めるまで絵を隠す -->
+				<div v-if="contentGated && room != null" :class="$style.contentGate" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop>
+					<i class="ti ti-eye-exclamation" :class="$style.contentGateIcon"></i>
+					<div v-if="room.isSensitive" :class="$style.contentGateBadge">{{ i18n.ts._drawRoom.roomSensitiveBadge }}</div>
+					<div v-if="room.cw != null" :class="$style.contentGateCw">{{ room.cw }}</div>
+					<div v-else :class="$style.contentGateText">{{ i18n.ts._drawRoom.roomSensitiveGate }}</div>
+					<MkButton primary rounded @click="acceptContent"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.openRoomContent }}</MkButton>
+				</div>
 				<!-- JUICE: 線の読み込み中(線が多い部屋では時間がかかる)は、キャンバスの上に進み具合を出す -->
 				<div v-if="canvasLoading != null" :class="$style.canvasLoading" role="status">
 					<MkLoading/>
@@ -289,7 +297,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<!-- JUICE: 全体マップ。今表示している範囲を枠で示し、押した・なぞった位置へ表示を移す -->
 				<div :class="$style.minimap" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop.prevent>
 					<div
-						v-show="showMinimap"
+						v-show="showMinimap && !contentGated"
 						:class="$style.minimapBody"
 						:style="{ width: `${minimapSize.width}px`, height: `${minimapSize.height}px` }"
 						role="img"
@@ -578,6 +586,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </PageWithHeader>
 </template>
 
+<script lang="ts">
+// JUICE: 注意書き(CW)・センシティブ(NSFW)の部屋で「開く」を選んだ部屋(このタブを開いている間だけ覚える)
+const acceptedRoomIds = new Set<string>();
+</script>
+
 <script lang="ts" setup>
 import { computed, defineAsyncComponent, markRaw, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
@@ -677,16 +690,25 @@ const usesBrushSize = computed(() => tool.value === 'pen' || tool.value === 'era
 const usesOpacity = computed(() => usesBrushSize.value || tool.value === 'bucket');
 // 太さの上限。キャンバスの大きさに合わせて決める
 const sizeMax = ref(60);
+// JUICE: 太さを、覚えている値(またはキャンバスに合った値)で決めたか
+let brushSizeInitialized = false;
+
 // JUICE: 太さは、1%を1px・100%をそのキャンバスで一番太い筆とした割合で選ぶ。細い筆を細かく選べるよう、割合の2乗で太さにする
 // (太さは小数のまま持ち、割合との行き来でつまみが戻らないようにする)
+function sizeToPercent(value: number, max: number): number {
+	const t = max > 1 ? Math.max(0, value - 1) / (max - 1) : 1;
+	return Math.max(1, Math.min(100, Math.round(1 + Math.sqrt(t) * 99)));
+}
+
+function percentToSize(percent: number, max: number): number {
+	const t = ((Math.max(1, Math.min(100, percent)) - 1) / 99) ** 2;
+	return Math.round((1 + t * (max - 1)) * 100) / 100;
+}
+
 const sizePercent = computed({
-	get: () => {
-		const t = sizeMax.value > 1 ? Math.max(0, size.value - 1) / (sizeMax.value - 1) : 1;
-		return Math.max(1, Math.min(100, Math.round(1 + Math.sqrt(t) * 99)));
-	},
+	get: () => sizeToPercent(size.value, sizeMax.value),
 	set: (percent: number) => {
-		const t = ((Math.max(1, Math.min(100, percent)) - 1) / 99) ** 2;
-		size.value = Math.round((1 + t * (sizeMax.value - 1)) * 100) / 100;
+		size.value = percentToSize(percent, sizeMax.value);
 	},
 });
 // JUICE: 筆の種類(ペン・消しゴム共通)と、線の中だけ塗る(はみ出し防止)
@@ -712,8 +734,23 @@ const pixelGridPath = computed(() => {
 	return parts.join('');
 });
 // 線の不透明度(%)。ペンなら濃さ、消しゴムなら消す強さになる
-const opacity = ref(100);
+// JUICE: 濃さは前に使った値から始める(プロファイルに覚える)
+const opacity = ref(Math.max(5, Math.min(100, prefer.s.drawRoomOpacity)));
 const myLayerOnTop = ref(true);
+
+// JUICE: ペン・消しゴムの太さ(割合)と濃さを覚える。スライダーを動かしている間は何度も書き込まないよう、止まってから覚える
+let saveBrushTimer: number | null = null;
+watch([penSize, eraserSize, opacity], () => {
+	if (saveBrushTimer != null) window.clearTimeout(saveBrushTimer);
+	saveBrushTimer = window.setTimeout(() => {
+		saveBrushTimer = null;
+		const pen = sizeToPercent(penSize.value, sizeMax.value);
+		const eraser = sizeToPercent(eraserSize.value, sizeMax.value);
+		if (prefer.s.drawRoomPenSizePercent !== pen) prefer.commit('drawRoomPenSizePercent', pen);
+		if (prefer.s.drawRoomEraserSizePercent !== eraser) prefer.commit('drawRoomEraserSizePercent', eraser);
+		if (prefer.s.drawRoomOpacity !== opacity.value) prefer.commit('drawRoomOpacity', opacity.value);
+	}, 500);
+});
 const hiddenLayers = ref(new Set<string>());
 
 // JUICE: 1人が複数のレイヤーを持てる。ユーザーごとのレイヤーの一覧(重なり順は下から)。
@@ -1010,6 +1047,24 @@ const CURSOR_TIMEOUT_MS = 8000;
 const CURSOR_SEND_INTERVAL_MS = 60;
 
 const isOwner = computed(() => room.value?.ownerId === $i.id);
+
+// JUICE: 注意書き(CW)・センシティブ(NSFW)の部屋は、開くと決めるまで絵を隠す(部屋主と、センシティブを隠さない設定の人は、
+// 注意書きが無ければそのまま)。開くと決めた部屋は、このタブを開いている間は聞き直さない
+const contentAccepted = ref(acceptedRoomIds.has(props.roomId));
+watch(() => props.roomId, (roomId) => {
+	contentAccepted.value = acceptedRoomIds.has(roomId);
+});
+const contentGated = computed(() => {
+	const r = room.value;
+	if (r == null || isOwner.value || contentAccepted.value) return false;
+	return r.cw != null || (r.isSensitive && prefer.s.nsfw !== 'ignore');
+});
+
+function acceptContent(): void {
+	acceptedRoomIds.add(props.roomId);
+	contentAccepted.value = true;
+}
+
 // 観戦に回った部屋主は、満員でも描く人に戻れる
 const isFull = computed(() => room.value != null && room.value.members.length >= room.value.maxMembers && !isOwner.value);
 const canDraw = computed(() => room.value != null && !room.value.isEnded && room.value.isMember);
@@ -1076,12 +1131,16 @@ async function init(): Promise<void> {
 
 		const e = markRaw(new DrawCanvasEngine(r.canvasWidth, r.canvasHeight));
 		const brush = brushSizeRange(r.canvasWidth, r.canvasHeight);
-		// 別の大きさの部屋から移ってきたときは、その部屋に合った太さから始める
-		if (brush.max !== sizeMax.value) {
+		// 最初に開いたときと、別の大きさの部屋から移ってきたときは、太さを決め直す
+		if (!brushSizeInitialized || brush.max !== sizeMax.value) {
+			brushSizeInitialized = true;
 			sizeMax.value = brush.max;
-			penSize.value = brush.initial;
+			// JUICE: 前に使った太さ(割合)があればそこから、無ければその部屋に合った太さから始める
+			const savedPen = prefer.s.drawRoomPenSizePercent;
+			const savedEraser = prefer.s.drawRoomEraserSizePercent;
+			penSize.value = savedPen != null ? percentToSize(savedPen, brush.max) : brush.initial;
 			// 消しゴムは少し太めから始める
-			eraserSize.value = Math.min(brush.max, brush.initial * 3);
+			eraserSize.value = savedEraser != null ? percentToSize(savedEraser, brush.max) : Math.min(brush.max, brush.initial * 3);
 		}
 		e.myUserId = $i.id;
 		e.activeKey = activeKey.value;
@@ -1320,10 +1379,10 @@ function connect(): void {
 		if (Date.now() - lastLimitToastAt < 5000) return;
 		lastLimitToastAt = Date.now();
 		os.toast(payload.kind === 'strokes'
-			? i18n.tsx._drawRoom.strokeLimitReached({ n: strokeLimits.value.strokes })
+			? i18n.tsx._drawRoom.strokeLimitReached({ n: payload.limit })
 			: payload.kind === 'bytes'
-				? i18n.tsx._drawRoom.strokeBytesLimitReached({ n: strokeLimits.value.megabytes })
-				: i18n.ts._drawRoom.roomBytesLimitReached);
+				? i18n.tsx._drawRoom.strokeBytesLimitReached({ n: payload.limit })
+				: i18n.tsx._drawRoom.roomBytesLimitReached({ n: payload.limit }));
 	});
 	// JUICE: 自分の線の移動・削除・置き換えがサーバーで断られた(レイヤーの上限を超えた等)。
 	// 自分の画面では先に反映しているので、線を取り直してサーバーの状態に戻す
@@ -2928,6 +2987,20 @@ async function openRoomSettings(): Promise<void> {
 			description: i18n.ts._drawRoom.keepAfterEndCaption,
 			default: room.value.keepAfterEnd,
 		},
+		// JUICE: 注意書き(CW)とセンシティブ(NSFW)
+		cw: {
+			type: 'string',
+			label: i18n.ts._drawRoom.roomCw,
+			description: i18n.ts._drawRoom.roomCwCaption,
+			required: false,
+			default: room.value.cw ?? '',
+		},
+		isSensitive: {
+			type: 'boolean',
+			label: i18n.ts._drawRoom.roomSensitive,
+			description: i18n.ts._drawRoom.roomSensitiveCaption,
+			default: room.value.isSensitive,
+		},
 		canvasWidth: {
 			type: 'number',
 			label: i18n.ts._drawRoom.canvasWidth,
@@ -2957,6 +3030,8 @@ async function openRoomSettings(): Promise<void> {
 		title: result.title,
 		maxMembers: clampMaxMembers(result.maxMembers, room.value.maxMembers),
 		keepAfterEnd: result.keepAfterEnd,
+		cw: result.cw?.trim() ? result.cw.trim().slice(0, 128) : null,
+		isSensitive: result.isSensitive,
 		...(canvasWidth !== room.value.canvasWidth ? { canvasWidth } : {}),
 		...(canvasHeight !== room.value.canvasHeight ? { canvasHeight } : {}),
 	});
@@ -3092,7 +3167,8 @@ function imageFileName(ext: string): string {
 async function uploadImage(area?: ImageArea | null): Promise<Misskey.entities.DriveFile | null> {
 	const image = await exportImage(area);
 	if (image == null) return null;
-	return await uploadFile(image.blob, { name: imageFileName(image.ext) }).filePromise;
+	// JUICE: センシティブ(NSFW)の部屋の絵は、センシティブなファイルとして上げる
+	return await uploadFile(image.blob, { name: imageFileName(image.ext), isSensitive: room.value?.isSensitive === true }).filePromise;
 }
 
 async function saveImageToDrive(area?: ImageArea | null): Promise<void> {
@@ -3119,7 +3195,8 @@ async function postImage(area?: ImageArea | null): Promise<void> {
 	const file = await os.promiseDialog(uploadImage(area));
 	if (file == null) return;
 	cancelSelecting();
-	os.post({ initialFiles: [file], initialText: roomShareText() });
+	// JUICE: 注意書き(CW)のある部屋の絵は、同じ注意書きを付けて投稿する
+	os.post({ initialFiles: [file], initialText: roomShareText(), ...(room.value?.cw != null ? { initialCw: room.value.cw } : {}) });
 }
 
 // JUICE: 部屋を共有する(部屋の名前とURLをノートに書く・URLをコピーする・端末の共有)
@@ -3127,7 +3204,7 @@ function openShareMenu(ev: MouseEvent): void {
 	os.popupMenu([{
 		text: i18n.ts.shareWithNote,
 		icon: 'ti ti-pencil',
-		action: () => os.post({ initialText: roomShareText() }),
+		action: () => os.post({ initialText: roomShareText(), ...(room.value?.cw != null ? { initialCw: room.value.cw } : {}) }),
 	}, {
 		text: i18n.ts.copyLink,
 		icon: 'ti ti-link',
@@ -3685,6 +3762,45 @@ definePage(() => ({
 .sizeValue {
 	min-width: 2em;
 	font-variant-numeric: tabular-nums;
+	opacity: 0.8;
+}
+
+.contentGate {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 16px;
+	background: var(--MI_THEME-panel);
+	text-align: center;
+}
+
+.contentGateIcon {
+	font-size: 2em;
+	opacity: 0.7;
+}
+
+.contentGateBadge {
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--MI_THEME-warn);
+	color: var(--MI_THEME-fgOnAccent);
+	font-size: 0.8em;
+	font-weight: bold;
+}
+
+.contentGateCw {
+	max-width: 480px;
+	font-weight: bold;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.contentGateText {
 	opacity: 0.8;
 }
 

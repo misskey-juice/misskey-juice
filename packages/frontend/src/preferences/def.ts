@@ -230,6 +230,16 @@ export const PREF_DEF = definePreferences({
 	drawRoomDotView: {
 		default: false,
 	},
+	// ペン・消しゴムの太さ(そのキャンバスで一番太い筆を100%とした割合。nullならキャンバスに合った太さから始める)と、濃さ(%)
+	drawRoomPenSizePercent: {
+		default: null as number | null,
+	},
+	drawRoomEraserSizePercent: {
+		default: null as number | null,
+	},
+	drawRoomOpacity: {
+		default: 100,
+	},
 	// カラーパレットに保存した色と、最近使った色
 	drawRoomSavedColors: {
 		default: [] as string[],

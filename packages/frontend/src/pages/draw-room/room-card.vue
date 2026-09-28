@@ -9,6 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar :class="$style.avatar" :user="room.owner"/>
 	<div :class="$style.body">
 		<div :class="$style.title">{{ room.title }}</div>
+		<!-- JUICE: 注意書き(CW)・センシティブ(NSFW) -->
+		<div v-if="room.cw != null || room.isSensitive" :class="$style.warning">
+			<span v-if="room.isSensitive" :class="$style.sensitive">{{ i18n.ts._drawRoom.roomSensitiveBadge }}</span>
+			<span v-if="room.cw != null" :class="$style.cw"><i class="ti ti-eye-exclamation"></i> {{ room.cw }}</span>
+		</div>
 		<div :class="$style.meta">
 			<MkUserName :user="room.owner"/>
 			<span><i :class="room.visibility === 'local' ? 'ti ti-world' : 'ti ti-lock'"></i> {{ room.visibility === 'local' ? i18n.ts._drawRoom.visibilityLocal : i18n.ts._drawRoom.visibilityFollowers }}</span>
@@ -48,6 +53,29 @@ const remainingMinutes = computed(() => (props.room.deletesAt == null ? 0 : Math
 		text-decoration: none;
 		background: var(--MI_THEME-panelHighlight);
 	}
+}
+
+.warning {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	font-size: 0.85em;
+}
+
+.sensitive {
+	flex-shrink: 0;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--MI_THEME-warn);
+	color: var(--MI_THEME-fgOnAccent);
+	font-weight: bold;
+}
+
+.cw {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .deletes {

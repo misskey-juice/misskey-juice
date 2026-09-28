@@ -156,6 +156,20 @@ async function createRoom(): Promise<void> {
 			description: i18n.ts._drawRoom.keepAfterEndCaption,
 			default: false,
 		},
+		// JUICE: 注意書き(CW)とセンシティブ(NSFW)
+		cw: {
+			type: 'string',
+			label: i18n.ts._drawRoom.roomCw,
+			description: i18n.ts._drawRoom.roomCwCaption,
+			required: false,
+			default: '',
+		},
+		isSensitive: {
+			type: 'boolean',
+			label: i18n.ts._drawRoom.roomSensitive,
+			description: i18n.ts._drawRoom.roomSensitiveCaption,
+			default: false,
+		},
 	});
 	if (canceled || !result.title) return;
 
@@ -175,6 +189,8 @@ async function createRoom(): Promise<void> {
 		maxMembers: clampMaxMembers(result.maxMembers, 4),
 		...canvas,
 		keepAfterEnd: result.keepAfterEnd,
+		cw: result.cw?.trim() ? result.cw.trim().slice(0, 128) : null,
+		isSensitive: result.isSensitive,
 	});
 	router.push('/draw/:roomId', { params: { roomId: room.id } });
 }

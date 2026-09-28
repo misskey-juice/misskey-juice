@@ -6638,6 +6638,8 @@ export type components = {
             canvasWidth: number;
             canvasHeight: number;
             keepAfterEnd: boolean;
+            cw: string | null;
+            isSensitive: boolean;
             isEnded: boolean;
             /** Format: date-time */
             endedAt: string | null;
@@ -11595,6 +11597,7 @@ export interface operations {
                         microsoftOauthClientId: string | null;
                         microsoftOauthClientSecret: string | null;
                         midiPlayerMaxSize: number;
+                        drawRoomMaxRoomMegabytes: number;
                         drawRoomEnabled: boolean;
                     };
                 };
@@ -11800,6 +11803,7 @@ export interface operations {
                     microsoftOauthClientSecret?: string | null;
                     midiPlayerMaxSize?: number;
                     drawRoomEnabled?: boolean;
+                    drawRoomMaxRoomMegabytes?: number;
                 };
             };
         };
@@ -22639,6 +22643,9 @@ export interface operations {
                     canvasHeight?: number;
                     /** @default false */
                     keepAfterEnd?: boolean;
+                    cw?: string | null;
+                    /** @default false */
+                    isSensitive?: boolean;
                 };
             };
         };
@@ -23315,6 +23322,8 @@ export interface operations {
                     title?: string;
                     maxMembers?: number;
                     keepAfterEnd?: boolean;
+                    cw?: string | null;
+                    isSensitive?: boolean;
                     canvasWidth?: number;
                     canvasHeight?: number;
                 };
