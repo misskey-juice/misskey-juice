@@ -2737,6 +2737,7 @@ _widgets:
   chat: "채팅하기"
   favorites: "즐겨찾기"
   earthquake: "지진 정보"
+  bpm: "BPM 측정"
 _widgetOptions:
   showHeader: "해더를 표시"
   transparent: "배경을 투명하게 설정"
@@ -4519,6 +4520,10 @@ _juice:
   autoLocalOnlyForFnMfm: "MFM 고유 장식이 포함된 게시물을 자동으로 로컬 전용으로 설정"
   autoLocalOnlyForFnMfmCaption: "본문 또는 CW(주의 환기) 필드에 center, small, 검색, 수식, $[] 함수 구문 등 표준 Markdown에는 없는 MFM 고유의 장식이 포함된 게시물을, 공개 범위와 관계없이 자동으로 연합하지 않도록(로컬 전용) 합니다. 다이렉트 메시지(지정 사용자만)나 원격 사용자에 대한 답글(자동 적용 시 상대방에게 전달되지 않아 스레드가 끊어지므로)에는 적용되지 않습니다."
   misskeyJuiceUpdated: "Misskey Juice가 업데이트되었습니다!"
+  bpmTap: "탭"
+  bpmReset: "초기화"
+  bpmTaps: "{n}회"
+  bpmHint: "리듬에 맞춰 탭·클릭(2초 동안 없으면 다시 측정합니다)"
 _juiceApprovals:
   approve: "승인"
   approveConfirm: "@{username}의 가입을 승인할까요?"

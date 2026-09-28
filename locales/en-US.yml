@@ -2737,6 +2737,7 @@ _widgets:
   chat: "Chat with user"
   favorites: "Favorites"
   earthquake: "Earthquake info"
+  bpm: "BPM counter"
 _widgetOptions:
   showHeader: "Show header"
   transparent: "Make background transparent"
@@ -4519,6 +4520,10 @@ _juice:
   autoLocalOnlyForFnMfm: "Automatically make notes with MFM-only decoration local-only"
   autoLocalOnlyForFnMfmCaption: "Automatically prevents federation (makes the note local-only) for any note whose body or CW (content warning) field contains decoration that's specific to MFM and has no standard Markdown equivalent — center, small, search, math, and $[] function syntax — regardless of its visibility. This does not apply to direct messages (specified visibility) or to replies to remote users, since forcing those local-only would silently fail to deliver the reply and break the thread."
   misskeyJuiceUpdated: "Misskey Juice has been updated!"
+  bpmTap: "Tap"
+  bpmReset: "Reset"
+  bpmTaps: "{n} taps"
+  bpmHint: "Tap or click along with the beat (resets after a 2-second pause)"
 _juiceApprovals:
   approve: "Approve"
   approveConfirm: "Approve the registration of @{username}?"

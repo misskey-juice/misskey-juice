@@ -3137,6 +3137,7 @@ _widgets:
   favorites: "お気に入り"
   earthquake: "地震情報"
 
+  bpm: "BPM計測"
 _widgetOptions:
   showHeader: "ヘッダーを表示"
   transparent: "背景を透明にする"
@@ -4467,6 +4468,10 @@ _juice:
   midiPlayerExitFullscreen: "全画面表示を終了"
   misskeyJuiceUpdated: "Misskey Juiceが更新されました！"
 
+  bpmTap: "タップ"
+  bpmReset: "リセット"
+  bpmTaps: "{n}回"
+  bpmHint: "リズムに合わせてタップ・クリック(2秒空くと測り直します)"
 _juiceApprovals:
   title: "承認待ちユーザー"
   noPendingSignups: "承認待ちのユーザーはいません。"

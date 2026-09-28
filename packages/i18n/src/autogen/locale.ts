@@ -11951,6 +11951,10 @@ export interface Locale extends ILocale {
          * 地震情報
          */
         "earthquake": string;
+        /**
+         * BPM計測
+         */
+        "bpm": string;
     };
     "_widgetOptions": {
         /**
@@ -16820,6 +16824,22 @@ export interface Locale extends ILocale {
          * Misskey Juiceが更新されました！
          */
         "misskeyJuiceUpdated": string;
+        /**
+         * タップ
+         */
+        "bpmTap": string;
+        /**
+         * リセット
+         */
+        "bpmReset": string;
+        /**
+         * {n}回
+         */
+        "bpmTaps": ParameterizedString<"n">;
+        /**
+         * リズムに合わせてタップ・クリック(2秒空くと測り直します)
+         */
+        "bpmHint": string;
     };
     "_juiceApprovals": {
         /**

@@ -2737,6 +2737,7 @@ _widgets:
   chat: "私信"
   favorites: "收藏"
   earthquake: "地震信息"
+  bpm: "BPM 测量"
 _widgetOptions:
   showHeader: "显示标题"
   transparent: "使背景透明"
@@ -4519,6 +4520,10 @@ _juice:
   autoLocalOnlyForFnMfm: "自动将包含MFM独有装饰的帖子设为仅限本站"
   autoLocalOnlyForFnMfmCaption: "正文或CW(内容警告)栏中包含center、small、搜索、数学公式、$[]函数语法等标准Markdown中没有的MFM独有装饰的帖子,无论公开范围如何,都会自动不进行联合(仅限本站)。私信(指定用户)以及对远程用户的回复(自动应用会导致对方收不到回复、话题串断裂)不受此设置影响。"
   misskeyJuiceUpdated: "Misskey Juice已更新！"
+  bpmTap: "点击"
+  bpmReset: "重置"
+  bpmTaps: "{n}次"
+  bpmHint: "跟着节奏点击(停顿2秒后重新测量)"
 _juiceApprovals:
   approve: "批准"
   approveConfirm: "要批准@{username}的注册吗？"
