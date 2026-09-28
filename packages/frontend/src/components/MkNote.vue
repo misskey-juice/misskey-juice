@@ -72,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="inMediaTimeline && appearNote.files && appearNote.files.length > 0" :class="$style.mediaBlock">
 						<!-- JUICE: 複数枚のときはPixelFed風のスワイプカルーセル、1枚のときは通常のグリッド表示 -->
 						<MkMediaCarousel v-if="appearNote.files.length > 1" ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
-						<MkMediaList v-else ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :inlinePlayableVideo="true" :inlinePlayableAudio="true"/>
+						<MkMediaList v-else ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :inlinePlayableVideo="true" :inlinePlayableAudio="true" :novelNoteId="$appearNote.isNovel ? appearNote.id : null"/>
 					</div>
 					<div :class="$style.text">
 						<span v-if="appearNote.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div v-if="!inMediaTimeline && appearNote.files && appearNote.files.length > 0" style="margin-top: 8px;">
-						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
+						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :novelNoteId="$appearNote.isNovel ? appearNote.id : null"/>
 					</div>
 					<MkPoll
 						v-if="appearNote.poll"
