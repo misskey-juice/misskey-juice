@@ -39,6 +39,12 @@ type ReversiUpdateSettings<K extends ReversiUpdateKey> = {
 	value: ReversiGameDetailed[K];
 };
 
+// JUICE: 絵チャの取り消し・やり直しで行う手順
+export type DrawStrokesPatchStep =
+	| { t: 'del'; ids: string[]; }
+	| { t: 'mv'; ids: string[] | null; dx: number; dy: number; }
+	| { t: 'ins'; items: { before: string | null; stroke: DrawStroke; }[]; };
+
 export type Channels = {
 	main: {
 		params: null;
@@ -297,19 +303,24 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; }) => void;
-			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; }[]; }) => void;
+			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; }) => void;
+			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; pet?: boolean; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
-			stroke: (payload: { userId: User['id']; stroke: DrawStroke; }) => void;
-			undo: (payload: { userId: User['id']; strokeId: string; }) => void;
-			clearLayer: (payload: { userId: User['id']; layer?: string; }) => void;
+			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;
+			// JUICE: 取り消し・やり直しで、その人の線を変えた(手順を順に行う。insは同じレイヤーのbeforeの線の前、nullなら最後に入れる)
+			strokesPatched: (payload: { userId: User['id']; steps: DrawStrokesPatchStep[]; privateLayers?: string[]; }) => void;
+			clearLayer: (payload: { userId: User['id']; layer?: string; private?: boolean; }) => void;
 			// JUICE: その人のレイヤーの一覧が変わった(一覧から消えたレイヤーの線も消えている)
 			layersUpdated: (payload: { userId: User['id']; layers: DrawLayer[]; }) => void;
 			strokesMoved: (payload: { userId: User['id']; strokeIds: string[] | null; dx: number; dy: number; }) => void;
 			strokesDeleted: (payload: { userId: User['id']; strokeIds: string[]; }) => void;
-			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; }) => void;
+			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; privateLayers?: string[]; }) => void;
+			// JUICE: 下描きのレイヤーを皆に見せるようにした(そのレイヤーの今の線)
+			layerPublished: (payload: { userId: User['id']; layer: string; strokes: DrawStroke[]; }) => void;
 			// JUICE: 自分が送った線の移動・削除・置き換えが断られた(本人にだけ届く。線を取り直してサーバーの状態に合わせる)
 			operationRejected: (payload: Record<string, never>) => void;
+			// JUICE: 線の本数・データ量の上限に達して、送った線を受け付けなかった(本人にだけ届く)
+			strokeLimitReached: (payload: { kind: 'strokes' | 'bytes' | 'room'; limit: number; }) => void;
 			chat: (payload: { message: DrawRoomChatMessage; user: UserLite; }) => void;
 			memberJoined: (payload: { user: UserLite; }) => void;
 			memberLeft: (payload: { userId: User['id']; kicked: boolean; }) => void;
@@ -319,12 +330,13 @@ export type Channels = {
 			ended: (payload: { room: DrawRoom; }) => void;
 		};
 		receives: {
-			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; points: string; };
-			cursor: { x: number | null; y: number | null; };
+			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; };
+			cursor: { x: number | null; y: number | null; pet?: boolean; };
 			visibility: { visible: boolean; };
 			strokeCancel: { strokeId: string; };
 			stroke: DrawStroke;
 			undo: null | Record<string, never>;
+			redo: null | Record<string, never>;
 			clearLayer: null | Record<string, never> | { layer: string; };
 			// JUICE: 自分のレイヤーの一覧を置き換える
 			setLayers: { layers: DrawLayer[]; };
@@ -423,6 +435,12 @@ export type NoteUpdatedEvent = { id: Note['id'] } & ({
 	type: 'novelChanged';
 	body: {
 		isNovel: boolean;
+	};
+} | {
+	// JUICE: リモートで編集された投稿を反映した。内容はnotes/showで取り直す
+	type: 'edited';
+	body: {
+		updatedAt: string;
 	};
 });
 

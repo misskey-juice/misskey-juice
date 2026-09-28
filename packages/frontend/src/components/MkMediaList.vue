@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:class="$style.midiPlayer"
 		@mediaClick="onMediaClick(media)"
 	/>
-	<XBanner v-for="media in medias.nonPreviewable" :key="media.id" :media="media"/>
+	<XBanner v-for="media in medias.nonPreviewable" :key="media.id" :media="media" :novelNoteId="novelNoteId"/>
 	<div v-if="count > 0" :class="$style.container">
 		<div
 			ref="gallery"
@@ -91,6 +91,8 @@ const props = withDefaults(defineProps<{
 	inlinePlayableVideo?: boolean;
 	// JUICE: メディアタイムラインでは音声も動画と同様に拡大せずその場で再生できるようにする
 	inlinePlayableAudio?: boolean;
+	// JUICE: 小説の投稿なら、その投稿のid(添付のテキストファイルを、保存ではなく小説ビューワーで開けるようにする)
+	novelNoteId?: string | null;
 }>(), {
 	inlinePlayableVideo: false,
 	inlinePlayableAudio: false,

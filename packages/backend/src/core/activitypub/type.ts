@@ -38,6 +38,8 @@ export interface IObject {
 	// これが有効な値ならcontentMapより優先して採用する
 	_juice_lang?: string | null;
 	published?: string;
+	// JUICE: 最後に編集された日時(Mastodon等が、投稿を編集したときのUpdateに付ける)
+	updated?: string;
 	cc?: ApObject;
 	to?: ApObject;
 	attributedTo?: ApObject;

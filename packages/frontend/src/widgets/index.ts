@@ -38,6 +38,7 @@ export default function(app: App) {
 	app.component('WidgetChat', defineAsyncComponent(() => import('./WidgetChat.vue')));
 	app.component('WidgetFavorites', defineAsyncComponent(() => import('./WidgetFavorites.vue')));
 	app.component('WidgetEarthquake', defineAsyncComponent(() => import('./WidgetEarthquake.vue')));
+	app.component('WidgetBpm', defineAsyncComponent(() => import('./WidgetBpm.vue')));
 }
 
 // 連合関連のウィジェット（連合無効時に隠す）
@@ -76,6 +77,7 @@ export const widgets = [
 	'chat',
 	'favorites',
 	'earthquake',
+	'bpm',
 
 	...federationWidgets,
 ] as const;

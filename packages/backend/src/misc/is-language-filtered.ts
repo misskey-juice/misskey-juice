@@ -54,8 +54,8 @@ export function canonicalizeLanguageTagForFederation(lang: string): string {
 }
 
 // JUICE: ユーザーが設定した表示言語の絞り込み(filteredLanguages)。空なら絞り込み無し。
-// ノート自身に言語が指定されていない場合は、絞り込みが有効(1つ以上選択済み)なときは
-// 絞り込み対象(=非表示)にする。絞り込みが無効(空)なときのみ表示する。
+// ノートに言語が指定されていない場合は、言語が分からないので絞り込まずに表示する(Mastodonと同じ。
+// 以前は非表示にしていたが、言語を指定せずに書いたローカルの投稿がまとめて消えてしまっていた)。
 // 突き合わせは完全一致ではなく主言語サブタグ単位(languageTagsMatch参照)で行う
 // (Mastodon/Pleroma/Akkoma等、リージョン無しの言語タグとの互換のため)。
 // 純粋なリノート(自身のテキストを持たない)は、リノート元ノートの言語で判定する。
@@ -63,7 +63,7 @@ export function isLanguageFiltered(note: Packed<'Note'> | MiNote, filteredLangua
 	if (filteredLanguages.size === 0) return false;
 
 	const lang = note.lang ?? note.renote?.lang ?? null;
-	if (lang == null) return true;
+	if (lang == null) return false;
 
 	for (const filtered of filteredLanguages) {
 		if (languageTagsMatch(lang, filtered)) return false;

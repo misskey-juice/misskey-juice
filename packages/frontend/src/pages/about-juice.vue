@@ -136,11 +136,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 							misskey-tempura
 							<template #suffix>GitHub</template>
 						</FormLink>
+						<FormLink to="https://github.com/harumaki2000/misskey-springroll" external>
+							<template #icon><i class="ti ti-bulb"></i></template>
+							misskey-springroll
+							<template #suffix>GitHub</template>
+						</FormLink>
 						<FormLink to="https://github.com/pixelfed/pixelfed" external>
 							<template #icon><i class="ti ti-bulb"></i></template>
 							PixelFed
 							<template #suffix>GitHub</template>
 						</FormLink>
+						<!-- JUICE: 投稿の編集(ActivityPubのUpdate)の受け取りは、この2つの形式・振る舞いに合わせたので横に並べる -->
+						<div :class="$style.inspiredPair">
+							<FormLink to="https://github.com/mastodon/mastodon" external>
+								<template #icon><i class="ti ti-bulb"></i></template>
+								Mastodon
+								<template #suffix>GitHub</template>
+							</FormLink>
+							<FormLink to="https://github.com/fedibird/mastodon" external>
+								<template #icon><i class="ti ti-bulb"></i></template>
+								Fedibird
+								<template #suffix>GitHub</template>
+							</FormLink>
+						</div>
 					</div>
 				</FormSection>
 
@@ -216,6 +234,8 @@ const features = [
 	{ icon: 'ti ti-ai', text: i18n.ts._aboutJuice._features.aiGenerated },
 	{ icon: 'ti ti-mood-plus', text: i18n.ts._aboutJuice._features.emojiRequest },
 	{ icon: 'ti ti-frame', text: i18n.ts._aboutJuice._features.avatarDecorationRequest },
+	{ icon: 'ti ti-world', text: i18n.ts._aboutJuice._features.remoteAvatarDecorations },
+	{ icon: 'ti ti-pencil', text: i18n.ts._aboutJuice._features.remoteNoteEdit },
 	{ icon: 'ti ti-replace', text: i18n.ts._aboutJuice._features.requestReplacement },
 	{ icon: 'ti ti-shield-check', text: i18n.ts._aboutJuice._features.roleApprovalDelegation },
 	{ icon: 'ti ti-arrows-join', text: i18n.ts._aboutJuice._features.reactionPiggyback },
@@ -298,6 +318,13 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.inspiredPair {
+	display: grid;
+	// 狭い画面では1列に戻す
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 8px;
+}
+
 // JUICEブランドカラー(テーマの--MI_THEME-accent等はユーザー設定で変わるため、雨の色は固定にする)
 $juice-rain-color: #f2841f;
 

@@ -25,11 +25,13 @@ import { unisonReload } from '@/utility/unison-reload.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { miLocalStorage } from '@/local-storage.js';
+import { setBootPreference } from '@/utility/juice-boot-preferences.js';
 
 const localCustomCss = ref(miLocalStorage.getItem('customCss') ?? '');
 
 async function apply() {
-	miLocalStorage.setItem('customCss', localCustomCss.value);
+	// JUICE: 起動時に使うlocalStorageと、バックアップに入るプロファイルの両方に書く
+	setBootPreference('juiceCustomCss', localCustomCss.value);
 
 	const { canceled } = await os.confirm({
 		type: 'info',

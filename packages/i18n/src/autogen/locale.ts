@@ -477,6 +477,10 @@ export interface Locale extends ILocale {
      */
     "unrenote": string;
     /**
+     * リノート解除して再リノート
+     */
+    "unrenoteAndRenote": string;
+    /**
      * リノートしました。
      */
     "renoted": string;
@@ -8520,6 +8524,22 @@ export interface Locale extends ILocale {
              */
             "drawRoomMaxCanvasSizeCaption": string;
             /**
+             * 絵チャで1人が描ける線の本数の上限
+             */
+            "drawRoomMaxStrokes": string;
+            /**
+             * 1つの部屋で、1人が持つ全てのレイヤーの線の合計です(1〜200000)。ペンを下ろしてから離すまで・塗りつぶし・消しゴムがそれぞれ1本です
+             */
+            "drawRoomMaxStrokesCaption": string;
+            /**
+             * 絵チャで1人が描ける線のデータ量の上限
+             */
+            "drawRoomMaxStrokeMegabytes": string;
+            /**
+             * 1つの部屋で、1人が持つ全てのレイヤーの線のデータ量の合計です(1〜128MB)。大きくすると、サーバーのRedisのメモリと、保存する部屋のデータが増えます
+             */
+            "drawRoomMaxStrokeMegabytesCaption": string;
+            /**
              * 絵文字申請の承認・却下
              */
             "canApproveEmojiRequests": string;
@@ -9357,6 +9377,14 @@ export interface Locale extends ILocale {
              */
             "avatarDecorationRequest": string;
             /**
+             * リモートのユーザーのアバターデコレーションを表示(Misskey系のサーバーのユーザー。このサーバーには登録しない)
+             */
+            "remoteAvatarDecorations": string;
+            /**
+             * ほかのサーバーで編集された投稿を受け取って反映(ActivityPubのUpdate。編集済みの表示付き)
+             */
+            "remoteNoteEdit": string;
+            /**
              * 絵文字・アバターデコレーション申請の「差し替え申請」(既存の画像だけを差し替え可能)
              */
             "requestReplacement": string;
@@ -9502,6 +9530,14 @@ export interface Locale extends ILocale {
          */
         "enabledCaption": string;
         /**
+         * 1つの部屋の線のデータ量の上限
+         */
+        "maxRoomMegabytes": string;
+        /**
+         * 1つの部屋の全員の線のデータ量の合計の上限です(16〜512MB)。部屋を開くときや終了後に見るとき、全員の線をまとめて読み込むので、大きくするとサーバーと見る人の端末の負担が増えます。1人あたりの上限はロールで決めます
+         */
+        "maxRoomMegabytesCaption": string;
+        /**
          * 部屋主
          */
         "owner": string;
@@ -9602,6 +9638,34 @@ export interface Locale extends ILocale {
          */
         "keepAfterEndCaption": string;
         /**
+         * 注意書き(CW)
+         */
+        "roomCw": string;
+        /**
+         * グロテスクな表現など、見る前に知らせたいことがあれば書きます。部屋を開いたとき、絵の代わりにこの注意書きが出て、開くと決めた人だけが見られます(128文字まで)
+         */
+        "roomCwCaption": string;
+        /**
+         * センシティブ(NSFW)な絵の部屋
+         */
+        "roomSensitive": string;
+        /**
+         * センシティブなメディアを隠す設定の人には、開くと決めるまで絵を隠します。この部屋の絵をノートに投稿するときは、センシティブなファイルとして上げます
+         */
+        "roomSensitiveCaption": string;
+        /**
+         * NSFW
+         */
+        "roomSensitiveBadge": string;
+        /**
+         * この部屋にはセンシティブな絵が含まれます
+         */
+        "roomSensitiveGate": string;
+        /**
+         * 開く
+         */
+        "openRoomContent": string;
+        /**
          * 開催中の部屋はありません
          */
         "noRooms": string;
@@ -9613,6 +9677,10 @@ export interface Locale extends ILocale {
          * 保存した絵チャ
          */
         "savedRooms": string;
+        /**
+         * みんなの保存した絵チャ
+         */
+        "everyoneSavedRooms": string;
         /**
          * {n}/{max}人
          */
@@ -9674,7 +9742,7 @@ export interface Locale extends ILocale {
          */
         "eyedropper": string;
         /**
-         * スポイト(I / Altを押しながらクリックでも色を拾えます)
+         * スポイト(I / Altを押しながらクリック / 指で長押しでも色を拾えます)
          */
         "eyedropperHint": string;
         /**
@@ -9701,6 +9769,14 @@ export interface Locale extends ILocale {
          * 手のひら(線は動かさずに表示を動かす)(H)
          */
         "handToolHint": string;
+        /**
+         * なでる
+         */
+        "petTool": string;
+        /**
+         * なでる(ドラッグで絵をなでられます。絵は変わらず、なでているところがみんなに見えます)
+         */
+        "petToolHint": string;
         /**
          * 範囲
          */
@@ -9758,6 +9834,70 @@ export interface Locale extends ILocale {
          */
         "cursorOpacity": string;
         /**
+         * デバッグ情報を表示
+         */
+        "showDebugInfo": string;
+        /**
+         * 表示の設定
+         */
+        "viewSettings": string;
+        /**
+         * 自分の線
+         */
+        "debugMyStrokes": string;
+        /**
+         * 自分の線のデータ量
+         */
+        "debugMyBytes": string;
+        /**
+         * 部屋の線(全員)
+         */
+        "debugRoomStrokes": string;
+        /**
+         * レイヤー
+         */
+        "debugLayers": string;
+        /**
+         * 描いている途中の線
+         */
+        "debugPending": string;
+        /**
+         * キャンバス
+         */
+        "debugCanvas": string;
+        /**
+         * 最後の描き直し
+         */
+        "debugRedraw": string;
+        /**
+         * 全体
+         */
+        "debugRedrawFull": string;
+        /**
+         * 一部
+         */
+        "debugRedrawRegion": string;
+        /**
+         * 最後の表示の更新
+         */
+        "debugRender": string;
+        /**
+         * 部屋を開いている人
+         */
+        "debugOnline": string;
+        /**
+         * 描ける線の本数の上限({n}本)に達したため、線を描けませんでした。いらない線を消すと、また描けます
+         */
+        "strokeLimitReached": ParameterizedString<"n">;
+        /**
+         * 描ける線のデータ量の上限({n}MB)に達したため、線を描けませんでした。いらない線を消すと、また描けます
+         */
+        "strokeBytesLimitReached": ParameterizedString<"n">;
+        /**
+         * この部屋の全員の線のデータ量が上限({n}MB)に達したため、線を描けませんでした
+         */
+        "roomBytesLimitReached": ParameterizedString<"n">;
+        /**
          * 横のパネルを表示
          */
         "showSidePanel": string;
@@ -9802,9 +9942,141 @@ export interface Locale extends ILocale {
          */
         "deleteLayerConfirm": ParameterizedString<"name">;
         /**
+         * ドラッグして並べ替え
+         */
+        "reorderLayer": string;
+        /**
+         * レイヤーを全て削除
+         */
+        "deleteAllMyLayers": string;
+        /**
+         * 自分のレイヤーと、そこに描いた線を全て削除しますか？(元に戻せません)
+         */
+        "deleteAllMyLayersConfirm": string;
+        /**
+         * 下描き{n}
+         */
+        "draftLayerN": ParameterizedString<"n">;
+        /**
+         * 下描きを追加
+         */
+        "addDraftLayer": string;
+        /**
+         * 下描き(自分だけに見えます。保存する画像には入りません)
+         */
+        "draftLayerHint": string;
+        /**
+         * 下描きにする(自分だけに見える)
+         */
+        "makeLayerDraft": string;
+        /**
+         * みんなに見せる
+         */
+        "publishLayer": string;
+        /**
+         * 「{name}」をみんなに見せますか？今描いてある線も見えるようになります
+         */
+        "publishLayerConfirm": ParameterizedString<"name">;
+        /**
          * 濃さ
          */
         "layerOpacity": string;
+        /**
+         * 合成モード
+         */
+        "blendMode": string;
+        /**
+         * 通常
+         */
+        "blendNormal": string;
+        /**
+         * 乗算
+         */
+        "blendMultiply": string;
+        /**
+         * スクリーン
+         */
+        "blendScreen": string;
+        /**
+         * オーバーレイ
+         */
+        "blendOverlay": string;
+        /**
+         * 比較(暗)
+         */
+        "blendDarken": string;
+        /**
+         * 比較(明)
+         */
+        "blendLighten": string;
+        /**
+         * 覆い焼きカラー
+         */
+        "blendColorDodge": string;
+        /**
+         * 焼き込みカラー
+         */
+        "blendColorBurn": string;
+        /**
+         * ハードライト
+         */
+        "blendHardLight": string;
+        /**
+         * ソフトライト
+         */
+        "blendSoftLight": string;
+        /**
+         * 差の絶対値
+         */
+        "blendDifference": string;
+        /**
+         * 除外
+         */
+        "blendExclusion": string;
+        /**
+         * 色相
+         */
+        "blendHue": string;
+        /**
+         * 彩度
+         */
+        "blendSaturation": string;
+        /**
+         * カラー
+         */
+        "blendColor": string;
+        /**
+         * 輝度
+         */
+        "blendLuminosity": string;
+        /**
+         * 加算
+         */
+        "blendLighter": string;
+        /**
+         * 透明度ロック
+         */
+        "alphaLock": string;
+        /**
+         * 透明度ロック(レイヤーの描いてある所にだけ描けます。はみ出さずに色を塗り替えたいときに)
+         */
+        "alphaLockHint": string;
+        /**
+         * 筆圧で太さを変える
+         */
+        "pressureSize": string;
+        /**
+         * 筆圧で太さを変える(オフにすると、ペンの押し具合によらず同じ太さで描きます)
+         */
+        "pressureSizeHint": string;
+        /**
+         * 筆圧で濃さを変える
+         */
+        "pressureOpacity": string;
+        /**
+         * 筆圧で濃さを変える(弱く押すと薄く、強く押すと濃く描きます。ドットの筆には使えません)
+         */
+        "pressureOpacityHint": string;
         /**
          * 上へ
          */
@@ -9898,6 +10170,30 @@ export interface Locale extends ILocale {
          */
         "clipToLinesHint": string;
         /**
+         * 隙間閉じ
+         */
+        "gapClose": string;
+        /**
+         * 隙間閉じ(線に小さな隙間があっても、閉じているものとして塗ります)
+         */
+        "gapCloseHint": string;
+        /**
+         * オフ
+         */
+        "gapCloseOff": string;
+        /**
+         * 小
+         */
+        "gapCloseSmall": string;
+        /**
+         * 中
+         */
+        "gapCloseMedium": string;
+        /**
+         * 大
+         */
+        "gapCloseLarge": string;
+        /**
          * 左に回転
          */
         "rotateLeft": string;
@@ -9918,6 +10214,66 @@ export interface Locale extends ILocale {
          */
         "color": string;
         /**
+         * カラーパレット
+         */
+        "colorPalette": string;
+        /**
+         * 色相
+         */
+        "hue": string;
+        /**
+         * 鮮やかさ
+         */
+        "saturation": string;
+        /**
+         * 明るさ
+         */
+        "brightness": string;
+        /**
+         * 赤
+         */
+        "colorRed": string;
+        /**
+         * 緑
+         */
+        "colorGreen": string;
+        /**
+         * 青
+         */
+        "colorBlue": string;
+        /**
+         * 鮮やかさ・明るさ
+         */
+        "saturationValue": string;
+        /**
+         * カラーコード
+         */
+        "colorCode": string;
+        /**
+         * 保存した色
+         */
+        "savedColors": string;
+        /**
+         * 今の色を保存
+         */
+        "saveColor": string;
+        /**
+         * 保存した色を整理
+         */
+        "editSavedColors": string;
+        /**
+         * 保存した色から外す
+         */
+        "removeSavedColor": string;
+        /**
+         * ＋で今の色を保存できます
+         */
+        "noSavedColors": string;
+        /**
+         * 最近使った色
+         */
+        "recentColors": string;
+        /**
          * 太さ
          */
         "size": string;
@@ -9925,6 +10281,14 @@ export interface Locale extends ILocale {
          * 元に戻す
          */
         "undo": string;
+        /**
+         * やり直す
+         */
+        "redo": string;
+        /**
+         * やり直し
+         */
+        "shortRedo": string;
         /**
          * 描いているレイヤーを消去
          */
@@ -9977,6 +10341,30 @@ export interface Locale extends ILocale {
          * この絵チャは終了しました。1時間後に削除されるので、残したい場合は画像を保存・投稿してください
          */
         "endedNotKept": string;
+        /**
+         * まもなく削除される部屋
+         */
+        "endingRooms": string;
+        /**
+         * あと{n}分で削除
+         */
+        "deletesInMinutes": ParameterizedString<"n">;
+        /**
+         * まもなく削除
+         */
+        "deletesSoon": string;
+        /**
+         * この絵チャは終了しました。あと{n}分で削除されるので、残したい場合は画像を保存・投稿してください
+         */
+        "endedNotKeptRemaining": ParameterizedString<"n">;
+        /**
+         * この絵チャは終了しました。まもなく削除されるので、残したい場合は画像を保存・投稿してください
+         */
+        "endedNotKeptSoon": string;
+        /**
+         * この部屋を今すぐ削除しますか？(削除される時間を待たずに消えます。絵とチャットは元に戻せません)
+         */
+        "deleteRoomNowConfirm": string;
         /**
          * 描く人から外す
          */
@@ -11563,6 +11951,10 @@ export interface Locale extends ILocale {
          * 地震情報
          */
         "earthquake": string;
+        /**
+         * BPM計測
+         */
+        "bpm": string;
     };
     "_widgetOptions": {
         /**
@@ -11660,6 +12052,20 @@ export interface Locale extends ILocale {
              * ラベルを表示
              */
             "showLabel": string;
+        };
+        "_bpm": {
+            /**
+             * 測るもの
+             */
+            "source": string;
+            /**
+             * メトロノームを鳴らす
+             */
+            "metronome": string;
+            /**
+             * 鳴らす音
+             */
+            "metronomeSound": string;
         };
         "_jobQueue": {
             /**
@@ -15469,6 +15875,18 @@ export interface Locale extends ILocale {
          */
         "avatarDecorationRequestRequireDescription": string;
         /**
+         * リモートのアバターデコレーション
+         */
+        "remoteAvatarDecorations": string;
+        /**
+         * リモートのアバターデコレーションを表示する
+         */
+        "remoteAvatarDecorationsEnabled": string;
+        /**
+         * Misskey系のサーバー(Misskey・CherryPick・Sharkey)のユーザーが付けているアバターデコレーションを、相手のサーバーから取ってきて表示します。このサーバーのデコレーションとしては登録されず、画像はメディアプロキシ経由で表示されます
+         */
+        "remoteAvatarDecorationsEnabledCaption": string;
+        /**
          * ユーザーランキング
          */
         "ranking": string;
@@ -16205,6 +16623,34 @@ export interface Locale extends ILocale {
          */
         "searchWithEngine": ParameterizedString<"engine">;
         /**
+         * ノートの画面にお気に入りのボタンを置く
+         */
+        "showFavoriteButtonInNoteFooter": string;
+        /**
+         * 「+」(リアクション)の右に、お気に入りに登録・解除するボタンを置きます。
+         */
+        "showFavoriteButtonInNoteFooterCaption": string;
+        /**
+         * ノートの画面に決めたリアクションのボタンを置く
+         */
+        "showQuickReactionButton": string;
+        /**
+         * 「+」(リアクション)の左に、下で選んだリアクションを1回で付けるボタンを置きます。まだリアクションしていないノートにだけ出ます。
+         */
+        "showQuickReactionButtonCaption": string;
+        /**
+         * 付けるリアクション
+         */
+        "quickReaction": string;
+        /**
+         * リアクションを選ぶ
+         */
+        "quickReactionChange": string;
+        /**
+         * {emoji}でリアクション
+         */
+        "quickReactWith": ParameterizedString<"emoji">;
+        /**
          * MFMの検索で使う検索エンジン
          */
         "mfmSearchEngine": string;
@@ -16345,7 +16791,7 @@ export interface Locale extends ILocale {
          */
         "filteredLanguages": string;
         /**
-         * チェックした言語の投稿だけをホーム・ローカル・グローバルタイムラインに表示します。1つもチェックしない場合は、すべての言語の投稿を表示します。言語が指定されていない投稿は、1つもチェックしていない場合のみ表示されます。
+         * チェックした言語の投稿だけをホーム・ローカル・グローバルタイムラインに表示します。1つもチェックしない場合は、すべての言語の投稿を表示します。言語が指定されていない投稿は、いつも表示されます。
          */
         "filteredLanguagesCaption": string;
         /**
@@ -16420,6 +16866,38 @@ export interface Locale extends ILocale {
          * Misskey Juiceが更新されました！
          */
         "misskeyJuiceUpdated": string;
+        /**
+         * タップ
+         */
+        "bpmTap": string;
+        /**
+         * リセット
+         */
+        "bpmReset": string;
+        /**
+         * {n}回
+         */
+        "bpmTaps": ParameterizedString<"n">;
+        /**
+         * タップ
+         */
+        "bpmSourceTap": string;
+        /**
+         * 直近1分で{n}件
+         */
+        "bpmEvents": ParameterizedString<"n">;
+        /**
+         * 流れてくる速さを、1分あたりの数にします
+         */
+        "bpmStreamHint": string;
+        /**
+         * メトロノーム
+         */
+        "bpmMetronome": string;
+        /**
+         * リズムに合わせてタップ・クリック(2秒空くと測り直します)
+         */
+        "bpmHint": string;
     };
     "_juiceApprovals": {
         /**

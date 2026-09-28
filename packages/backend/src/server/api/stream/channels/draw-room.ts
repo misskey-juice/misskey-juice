@@ -10,7 +10,6 @@ import { bindThis } from '@/decorators.js';
 import {
 	DRAW_CHAT_MAX_LENGTH,
 	DRAW_ROOM_PRESENCE_HEARTBEAT_MS,
-	DRAW_LAYER_MAX_BYTES,
 	DRAW_LAYER_MAX_STROKES,
 	DRAW_USER_MAX_LAYERS,
 	DRAW_STROKE_MAX_POINTS,
@@ -20,7 +19,7 @@ import {
 	decodeDrawPoints,
 } from '@/core/DrawRoomService.js';
 import type { MiDrawRoom } from '@/models/DrawRoom.js';
-import type { DrawLayerMeta, DrawStroke } from '@/models/DrawRoomLayer.js';
+import { DRAW_LAYER_BLENDS, type DrawLayerBlend, type DrawLayerMeta, type DrawStroke } from '@/models/DrawRoomLayer.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { isJsonObject } from '@/misc/json-value.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
@@ -106,7 +105,54 @@ export class DrawRoomChannel extends Channel {
 			// 大きさが変わったら、線の座標の確認もその大きさで行う
 			this.room = { ...this.room, title, maxMembers, canvasWidth, canvasHeight };
 		}
+		// JUICE: ほかの人の下描き(本人だけに見える)のレイヤーの線と、レイヤーそのものは流さない
+		if ('userId' in data.body && data.body.userId !== this.user.id) {
+			if (data.type === 'strokePart' || data.type === 'stroke') {
+				const strokeId = data.type === 'stroke' ? data.body.stroke.id : data.body.strokeId;
+				if (data.body.private) {
+					// 描いている途中で下描きに変わった線は、途中まで届いていた分をこの人の画面から消してもらう
+					if (this.forwardedPartIds.delete(strokeId)) this.send('strokeCancel', { userId: data.body.userId, strokeId });
+					return;
+				}
+				if (data.type === 'strokePart') this.rememberForwardedPart(strokeId);
+				else this.forwardedPartIds.delete(strokeId);
+			}
+			if (data.type === 'clearLayer' && data.body.private) return;
+			if (data.type === 'strokesPatched' && data.body.privateLayers != null) {
+				// 戻す線のうち、下描きのレイヤーの線だけを除く(消す・ずらす線のidは、持っていなければ何も起きないのでそのまま)
+				const hidden = new Set(data.body.privateLayers);
+				const steps = data.body.steps
+					.map(step => (step.t === 'ins' ? { ...step, items: step.items.filter(item => !hidden.has(item.stroke.layer ?? '0')) } : step))
+					.filter(step => step.t !== 'ins' || step.items.length > 0);
+				if (steps.length > 0) this.send({ type: 'strokesPatched', body: { userId: data.body.userId, steps } });
+				return;
+			}
+			if (data.type === 'layersUpdated' && data.body.layers.some(layer => layer.private)) {
+				this.send({ type: 'layersUpdated', body: { ...data.body, layers: data.body.layers.filter(layer => !layer.private) } });
+				return;
+			}
+			if (data.type === 'strokesSplit' && data.body.privateLayers != null) {
+				// 線ごとに、下描きのレイヤーの線だけを除く(元の線のidは残し、この人の画面からも元の線を取り除いてもらう)
+				const hidden = new Set(data.body.privateLayers);
+				const splits = data.body.splits.map(split => ({ id: split.id, pieces: split.pieces.filter(piece => !hidden.has(piece.layer ?? '0')) }));
+				this.send({ type: 'strokesSplit', body: { userId: data.body.userId, splits } });
+				return;
+			}
+		}
 		this.send(data);
+	}
+
+	// JUICE: この接続に途中まで流した、ほかの人の描いている途中の線のid(下描きに変わったときに取り消してもらうため)。
+	// 取り消し・確定が届かなかった分で増え続けないよう、古いものから捨てる
+	private forwardedPartIds = new Set<string>();
+
+	private rememberForwardedPart(strokeId: string): void {
+		if (this.forwardedPartIds.has(strokeId)) return;
+		this.forwardedPartIds.add(strokeId);
+		if (this.forwardedPartIds.size > 500) {
+			const oldest = this.forwardedPartIds.values().next().value;
+			if (oldest != null) this.forwardedPartIds.delete(oldest);
+		}
 	}
 
 	// JUICE: 書き込み系の操作はwrite:draw-roomsの権限が必要(サードパーティーのトークンがread権限だけの場合)
@@ -146,7 +192,7 @@ export class DrawRoomChannel extends Channel {
 	@bindThis
 	private parseStrokeBody(body: JsonObject, maxPoints: number, margin: number = DRAW_STROKE_MAX_SIZE): Omit<DrawStroke, 'id'> | null {
 		if (this.room == null) return null;
-		const { tool, color, size, opacity, points, brush, clip, layer } = body;
+		const { tool, color, size, opacity, points, brush, clip, layer, lock, pressure } = body;
 		// JUICE: どのレイヤーの線か(省略したら最初のレイヤー)
 		if (layer !== undefined && !this.isValidLayerId(layer)) return null;
 		if (tool !== 'pen' && tool !== 'eraser' && tool !== 'fill') return null;
@@ -159,6 +205,10 @@ export class DrawRoomChannel extends Channel {
 		// JUICE: 囲った範囲を消すのは消しゴムだけ(ペンで囲って塗るのはtool: 'fill')
 		if (brush === 'area' && tool !== 'eraser') return null;
 		if (clip !== undefined && (typeof clip !== 'string' || decodeDrawPoints(clip, DRAW_STROKE_MAX_POINTS) == null)) return null;
+		// JUICE: 透明度ロックは省略できる(消しゴムには付けない)
+		if (lock !== undefined && typeof lock !== 'boolean') return null;
+		// JUICE: 筆圧で何を変えるか(省略すると太さだけ)
+		if (pressure !== undefined && pressure !== 'none' && pressure !== 'opacity' && pressure !== 'both') return null;
 		if (typeof points !== 'string') return null;
 		const decoded = decodeDrawPoints(points, maxPoints);
 		if (decoded == null) return null;
@@ -175,6 +225,8 @@ export class DrawRoomChannel extends Channel {
 			...(brush !== undefined ? { brush } : {}),
 			...(clip !== undefined ? { clip } : {}),
 			...(layer !== undefined && layer !== '0' ? { layer } : {}),
+			...(lock === true && tool !== 'eraser' ? { lock: true } : {}),
+			...(pressure !== undefined ? { pressure } : {}),
 			points,
 		};
 	}
@@ -196,12 +248,23 @@ export class DrawRoomChannel extends Channel {
 			if (!isJsonObject(item) || !this.isValidLayerId(item.id) || ids.has(item.id)) return null;
 			const { visible, opacity } = item;
 			if (typeof item.name !== 'string' || typeof visible !== 'boolean') return null;
+			if (item.private !== undefined && typeof item.private !== 'boolean') return null;
+			// JUICE: 合成モード(省略・'normal'なら通常)
+			const blend = item.blend;
+			if (blend !== undefined && blend !== 'normal' && !(typeof blend === 'string' && (DRAW_LAYER_BLENDS as readonly string[]).includes(blend))) return null;
 			// 名前は改行などの制御文字を除き、前後の空白を取ってから長さを確かめる
 			const name = item.name.replace(/\p{Cc}/gu, '').trim();
 			if (name.length > 32) return null;
 			if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1) return null;
 			ids.add(item.id);
-			layers.push({ id: item.id, name, visible, opacity: Math.round(opacity * 100) / 100 });
+			layers.push({
+				id: item.id,
+				name,
+				visible,
+				opacity: Math.round(opacity * 100) / 100,
+				...(item.private === true ? { private: true } : {}),
+				...(typeof blend === 'string' && blend !== 'normal' ? { blend: blend as DrawLayerBlend } : {}),
+			});
 		}
 		return layers;
 	}
@@ -211,8 +274,9 @@ export class DrawRoomChannel extends Channel {
 	 * 移動ツールで動かした線はキャンバスの外寄りにあることもあるので、座標の範囲は広めに許す。不正ならundefined
 	 */
 	@bindThis
-	private parseSplits(value: JsonValue | undefined): { id: string; pieces: DrawStroke[] }[] | undefined {
-		if (this.room == null || !Array.isArray(value) || value.length > DRAW_LAYER_MAX_STROKES) return undefined;
+	private parseSplits(value: JsonValue | undefined, limits: { strokes: number; bytes: number }): { id: string; pieces: DrawStroke[] }[] | undefined {
+		// JUICE: 1回の操作で置き換える線の本数・大きさも、その人が描ける上限までにする
+		if (this.room == null || !Array.isArray(value) || value.length > limits.strokes) return undefined;
 		const margin = Math.max(this.room.canvasWidth, this.room.canvasHeight);
 		const splits: { id: string; pieces: DrawStroke[] }[] = [];
 		let total = 0;
@@ -228,14 +292,15 @@ export class DrawRoomChannel extends Channel {
 			for (const piece of split.pieces) {
 				if (!isJsonObject(piece) || !this.isValidStrokeId(piece.id) || pieceIds.has(piece.id)) return undefined;
 				bytes += (typeof piece.points === 'string' ? piece.points.length : 0) + (typeof piece.clip === 'string' ? piece.clip.length : 0);
-				if (bytes > DRAW_LAYER_MAX_BYTES) return undefined;
+				if (bytes > limits.bytes) return undefined;
 				pieceIds.add(piece.id);
 				const parsed = this.parseStrokeBody(piece, DRAW_STROKE_MAX_POINTS, margin);
 				if (parsed == null) return undefined;
-				pieces.push({ ...parsed, id: piece.id });
+				// idを先頭にする(Redisの処理で、大きな点の列をたどらずにidを取り出せるように)
+				pieces.push({ id: piece.id, ...parsed });
 			}
 			total += pieces.length;
-			if (total > DRAW_LAYER_MAX_STROKES) return undefined;
+			if (total > limits.strokes) return undefined;
 			splits.push({ id: split.id, pieces });
 		}
 		return splits;
@@ -267,6 +332,18 @@ export class DrawRoomChannel extends Channel {
 
 	@bindThis
 	public async onMessage(type: string, body: JsonValue) {
+		// JUICE: カーソル以外の操作は、届いた順に1つずつ処理する(描いた直後の取り消しが、線より先に処理されて
+		// 1つ前の操作を戻してしまわないように)。カーソルは順番が関係なく頻繁なので、待たせない
+		if (type === 'cursor') return await this.handleMessage(type, body);
+		const run = this.messageQueue.then(() => this.handleMessage(type, body));
+		this.messageQueue = run.catch(() => {});
+		return await run;
+	}
+
+	private messageQueue: Promise<void> = Promise.resolve();
+
+	@bindThis
+	private async handleMessage(type: string, body: JsonValue) {
 		if (this.room == null || this.user == null) return;
 		if (!this.hasWritePermission()) return;
 		if (!await this.stillAllowed()) return;
@@ -295,7 +372,7 @@ export class DrawRoomChannel extends Channel {
 			case 'cursor': {
 				// JUICE: カーソルは見学者も含め、部屋を見ている全員が送れる(誰がどこを見ているか分かるように)
 				if (room.isEnded || !isJsonObject(body)) return;
-				const { x, y } = body;
+				const { x, y, pet } = body;
 				if (x === null && y === null) {
 					if (!await rate('cursor')) return;
 					this.drawRoomService.publishCursor(room.id, user.id, null, null);
@@ -303,15 +380,17 @@ export class DrawRoomChannel extends Channel {
 				}
 				if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
 				if (x < -DRAW_STROKE_MAX_SIZE || x > room.canvasWidth + DRAW_STROKE_MAX_SIZE || y < -DRAW_STROKE_MAX_SIZE || y > room.canvasHeight + DRAW_STROKE_MAX_SIZE) return;
+				if (pet !== undefined && typeof pet !== 'boolean') return;
 				if (!await rate('cursor')) return;
-				this.drawRoomService.publishCursor(room.id, user.id, Math.round(x), Math.round(y));
+				// JUICE: なでるツール(見学者もなでられる。絵は変わらない)
+				this.drawRoomService.publishCursor(room.id, user.id, Math.round(x), Math.round(y), pet === true);
 				break;
 			}
 			case 'strokePart': {
 				if (!this.canDraw() || !isJsonObject(body) || !this.isValidStrokeId(body.strokeId)) return;
 				const part = this.parseStrokeBody(body, DRAW_STROKE_PART_MAX_POINTS);
 				if (part == null || !await rate('strokePart')) return;
-				this.drawRoomService.publishStrokePart(room.id, user.id, { ...part, strokeId: body.strokeId });
+				await this.drawRoomService.publishStrokePart(room.id, user.id, { ...part, strokeId: body.strokeId });
 				break;
 			}
 			case 'strokeCancel': {
@@ -328,13 +407,25 @@ export class DrawRoomChannel extends Channel {
 					this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
 					return;
 				}
-				const added = await this.drawRoomService.addStroke(room.id, user.id, { ...stroke, id: body.id });
-				if (!added) this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
+				// idを先頭にする(Redisの処理で、大きな点の列をたどらずにidを取り出せるように)
+				const result = await this.drawRoomService.addStroke(room.id, user.id, { id: body.id, ...stroke });
+				if (result === 'added') break;
+				this.drawRoomService.publishStrokeCancel(room.id, user.id, body.id);
+				// JUICE: 上限に達して描けなかったことを、描いた本人に知らせる(黙って線が消えないように)
+				// 上限の値(本数、またはMB)も一緒に送る
+				if (result === 'strokes' || result === 'bytes') {
+					const limits = await this.drawRoomService.strokeLimits(user.id);
+					this.send('strokeLimitReached', { kind: result, limit: result === 'strokes' ? limits.strokes : Math.round(limits.bytes / 1024 / 1024) });
+				} else if (result === 'room') {
+					this.send('strokeLimitReached', { kind: result, limit: Math.round(await this.drawRoomService.maxRoomBytes() / 1024 / 1024) });
+				}
 				break;
 			}
-			case 'undo': {
+			case 'undo':
+			case 'redo': {
+				// JUICE: 自分の最後の操作を取り消す・やり直す。上限を超えて戻せなければ本人に知らせる
 				if (!this.canDraw() || !await rate('other')) return;
-				this.drawRoomService.undo(room.id, user.id);
+				if (!await this.drawRoomService.undoRedo(room.id, user.id, type)) this.rejectOperation();
 				break;
 			}
 			case 'clearLayer': {
@@ -360,36 +451,48 @@ export class DrawRoomChannel extends Channel {
 				const limit = Math.max(room.canvasWidth, room.canvasHeight) * 2;
 				if (typeof dx !== 'number' || typeof dy !== 'number' || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
 				if (Math.abs(dx) > limit || Math.abs(dy) > limit) return;
+				// JUICE: 大きなメッセージを読み解く前に、回数制限を確かめる
+				if (!await rate('other')) return;
 				const ids = strokeIds === null ? null : this.parseStrokeIds(strokeIds);
 				// 選択範囲の境目で切った線があれば、先に置き換えてから動かす(同じ操作の中で順に行う)
-				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits);
-				if (!await rate('other')) return;
+				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits, await this.drawRoomService.strokeLimits(user.id));
 				// 送った本人の画面では既に動かしているので、断るときは知らせて線を取り直してもらう
 				if (ids === undefined || splits === undefined) return this.rejectOperation();
-				if (splits.length > 0 && !await this.drawRoomService.splitStrokes(room.id, user.id, splits)) return this.rejectOperation();
+				// 境目で切ってから動かしたときは、取り消しで1回に戻せるよう、履歴を1件にまとめる
+				let splitRecorded = false;
+				if (splits.length > 0) {
+					const split = await this.drawRoomService.splitStrokes(room.id, user.id, splits);
+					if (!split.ok) return this.rejectOperation();
+					splitRecorded = split.recorded;
+				}
 				// 送る形式と同じ細かさ(1/8px)にそろえる
 				const mx = Math.round(dx * 8) / 8;
 				const my = Math.round(dy * 8) / 8;
-				if ((mx !== 0 || my !== 0) && !await this.drawRoomService.moveStrokes(room.id, user.id, ids, mx, my)) return this.rejectOperation();
+				if ((mx !== 0 || my !== 0) && !await this.drawRoomService.moveStrokes(room.id, user.id, ids, mx, my, splitRecorded)) return this.rejectOperation();
 				break;
 			}
 			case 'replaceStrokes': {
 				// JUICE: 選んだ線を回転するなど、線を別の線(の並び)に置き換える
 				if (!this.canDraw() || !isJsonObject(body)) return;
-				const replacements = this.parseSplits(body.replacements);
 				if (!await rate('other')) return;
+				const replacements = this.parseSplits(body.replacements, await this.drawRoomService.strokeLimits(user.id));
 				if (replacements == null || replacements.length === 0) return this.rejectOperation();
-				if (!await this.drawRoomService.splitStrokes(room.id, user.id, replacements)) return this.rejectOperation();
+				if (!(await this.drawRoomService.splitStrokes(room.id, user.id, replacements)).ok) return this.rejectOperation();
 				break;
 			}
 			case 'deleteStrokes': {
 				if (!this.canDraw() || !isJsonObject(body)) return;
-				const ids = this.parseStrokeIds(body.strokeIds);
-				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits);
 				if (!await rate('other')) return;
+				const ids = this.parseStrokeIds(body.strokeIds);
+				const splits = body.splits === undefined ? [] : this.parseSplits(body.splits, await this.drawRoomService.strokeLimits(user.id));
 				if (ids == null || splits === undefined) return this.rejectOperation();
-				if (splits.length > 0 && !await this.drawRoomService.splitStrokes(room.id, user.id, splits)) return this.rejectOperation();
-				await this.drawRoomService.deleteStrokes(room.id, user.id, ids);
+				let splitRecorded = false;
+				if (splits.length > 0) {
+					const split = await this.drawRoomService.splitStrokes(room.id, user.id, splits);
+					if (!split.ok) return this.rejectOperation();
+					splitRecorded = split.recorded;
+				}
+				await this.drawRoomService.deleteStrokes(room.id, user.id, ids, splitRecorded);
 				break;
 			}
 			case 'clearLayerOf': {

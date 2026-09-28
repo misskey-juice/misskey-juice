@@ -123,6 +123,13 @@ export class MiNote {
 	})
 	public isNovel: boolean;
 
+	// JUICE: リモートで編集された投稿(ActivityPubのUpdate)を反映したとき、最後に編集された日時。編集されていなければnull
+	@Column('timestamp with time zone', {
+		nullable: true,
+		comment: 'The last edited date of the Note (JUICE).',
+	})
+	public updatedAt: Date | null;
+
 	@Column('varchar', {
 		length: 64, nullable: true,
 	})

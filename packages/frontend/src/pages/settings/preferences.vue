@@ -891,6 +891,7 @@ import { instance } from '@/instance.js';
 import { ensureSignin } from '@/i.js';
 import { genId } from '@/utility/id.js';
 import { suggestReload } from '@/utility/reload-suggest.js';
+import { setBootPreference } from '@/utility/juice-boot-preferences.js';
 
 const $i = ensureSignin();
 
@@ -961,24 +962,17 @@ const makeEveryTextElementsSelectable = prefer.model('makeEveryTextElementsSelec
 const fontSize = ref(miLocalStorage.getItem('fontSize') as '1' | '2' | '3' | null);
 const useSystemFont = ref(miLocalStorage.getItem('useSystemFont') != null);
 
+// JUICE: 言語・文字の大きさ・システムフォントは、起動時に使うlocalStorageと、バックアップに入るプロファイルの両方に書く
 watch(lang, () => {
-	miLocalStorage.setItem('lang', lang.value as string);
+	setBootPreference('juiceLang', lang.value ?? '');
 });
 
 watch(fontSize, () => {
-	if (fontSize.value == null) {
-		miLocalStorage.removeItem('fontSize');
-	} else {
-		miLocalStorage.setItem('fontSize', fontSize.value);
-	}
+	setBootPreference('juiceFontSize', fontSize.value ?? '');
 });
 
 watch(useSystemFont, () => {
-	if (useSystemFont.value) {
-		miLocalStorage.setItem('useSystemFont', 't');
-	} else {
-		miLocalStorage.removeItem('useSystemFont');
-	}
+	setBootPreference('juiceUseSystemFont', useSystemFont.value);
 });
 
 watch([

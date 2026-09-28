@@ -87,6 +87,7 @@ function generateDummyNote(override?: Partial<MiNote>): MiNote {
 		isAIGenerated: false,
 		hideFromMediaTimeline: false,
 		isNovel: false,
+		updatedAt: null,
 		reactionAcceptance: 'likeOnly',
 		renoteCount: 10,
 		repliesCount: 5,

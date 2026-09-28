@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="$style.item"
 						>
 							<button class="_button" :class="$style.itemHandle" tabindex="-1" @pointerdown.stop="dragStart"><i class="ti ti-menu"></i></button>
-							<i class="ti-fw" :class="[$style.itemIcon, navbarItemDef[item.type]?.icon]"></i><span :class="$style.itemText">{{ navbarItemDef[item.type]?.title ?? i18n.ts.divider }}</span>
+							<i class="ti-fw" :class="[$style.itemIcon, navbarItemDef[item.type]?.icon]"></i><span :class="$style.itemText">{{ navbarItemDef[item.type]?.title ?? i18n.ts.divider }}<span v-if="navbarItemDef[item.type]?.juice" class="_juice">JUICE</span></span>
 							<button class="_button" :class="$style.itemRemove" @click="removeItem(item.id)"><i class="ti ti-x"></i></button>
 						</div>
 					</template>
@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkContainer>
 		</FormSlot>
 		<div class="_buttons">
-			<MkButton @click="addItem"><i class="ti ti-plus"></i> {{ i18n.ts.addItem }}</MkButton>
+			<MkButton @click="addItem($event)"><i class="ti ti-plus"></i> {{ i18n.ts.addItem }}</MkButton>
 			<MkButton danger @click="reset"><i class="ti ti-reload"></i> {{ i18n.ts.default }}</MkButton>
 			<MkButton primary class="save" @click="save"><i class="ti ti-device-floppy"></i> {{ i18n.ts.save }}</MkButton>
 		</div>
@@ -81,21 +81,25 @@ const itemTypeValues = computed(() => items.value.map(x => x.type));
 const menuDisplay = store.model('menuDisplay');
 const showNavbarSubButtons = prefer.model('showNavbarSubButtons');
 
-async function addItem() {
+// JUICE: 追加する項目は、JUICE独自の項目にバッジを出せるようメニューで選ぶ
+function addItem(ev: MouseEvent) {
 	const menu = Object.keys(navbarItemDef).filter(k => !itemTypeValues.value.includes(k));
-	const { canceled, result: item } = await os.select({
-		title: i18n.ts.addItem,
-		items: [...menu.map(k => ({
-			value: k, label: navbarItemDef[k].title,
-		})), {
-			value: '-', label: i18n.ts.divider,
-		}],
-	});
-	if (canceled || item == null) return;
-	items.value = [...items.value, {
-		id: genId(),
-		type: item,
-	}];
+	const add = (type: string) => {
+		items.value = [...items.value, {
+			id: genId(),
+			type,
+		}];
+	};
+	os.popupMenu([...menu.map(k => ({
+		text: navbarItemDef[k].title,
+		icon: navbarItemDef[k].icon,
+		badge: navbarItemDef[k].juice === true,
+		action: () => add(k),
+	})), { type: 'divider' as const }, {
+		text: i18n.ts.divider,
+		icon: 'ti ti-separator',
+		action: () => add('-'),
+	}], (ev.currentTarget ?? ev.target) as HTMLElement);
 }
 
 function removeItem(itemId: string) {

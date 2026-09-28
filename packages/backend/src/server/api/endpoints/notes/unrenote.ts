@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteDeleteService } from '@/core/NoteDeleteService.js';
 import { DI } from '@/di-symbols.js';
 import { GetterService } from '@/server/api/GetterService.js';
+import { isQuote, isRenote } from '@/misc/is-renote.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -38,6 +39,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		noteId: { type: 'string', format: 'misskey:id' },
+		// JUICE: trueなら、本文などの無い普通のリノートだけを消す(引用は消さない)
+		onlyPureRenotes: { type: 'boolean', default: false },
 	},
 	required: ['noteId'],
 } as const;
@@ -66,6 +69,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			for (const note of renotes) {
+				if (ps.onlyPureRenotes && !(isRenote(note) && !isQuote(note))) continue;
 				this.noteDeleteService.delete(await this.usersRepository.findOneByOrFail({ id: me.id }), note);
 			}
 		});

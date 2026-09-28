@@ -69,6 +69,8 @@ export const store = markRaw(new Pizzax('base', {
 		where: 'device',
 		default: false,
 	},
+	// JUICE: 小説ビューワーの表示の設定は、プロファイル(prefer)へ移した。以下の8つは、前の値を1回だけ
+	// 取り込むために残している(utility/juice-boot-preferences.tsのmigrateJuiceLocalPreferences)。新しく使わないこと
 	// JUICE: 小説ビューワーの書字方向
 	novelViewerWritingMode: {
 		where: 'device',

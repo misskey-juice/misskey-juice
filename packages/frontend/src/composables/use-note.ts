@@ -54,6 +54,7 @@ export interface UseNoteElements {
 	renoteTime?: Ref<HTMLElement | null>;
 	reactButton?: Ref<HTMLElement | null>;
 	clipButton?: Ref<HTMLElement | null>;
+	quickReactButton?: Ref<HTMLElement | null>;
 }
 
 export interface UseNoteOptions {
@@ -188,10 +189,14 @@ export function useNote(
 	// 導出値
 	// rawNote / appearNote / $i.id / prefer.s は変化しないので一度だけ計算する
 	const isMyRenote = $i != null && ($i.id === rawNote.userId);
-	const parsed = appearNote.text ? mfm.parse(appearNote.text) : null;
-	const urls = parsed ? extractUrlFromMfm(parsed).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null;
-	const isLong = shouldCollapsed(appearNote, urls ?? []);
-	const collapsed = ref(appearNote.cw == null && isLong);
+	// JUICE: 本文はリモートで編集されると差し替わるので、編集日時が変わったら作り直す
+	const parsed = computed(() => {
+		void $appearNote.updatedAt;
+		return appearNote.text ? mfm.parse(appearNote.text) : null;
+	});
+	const urls = computed(() => parsed.value ? extractUrlFromMfm(parsed.value).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null);
+	const isLong = computed(() => shouldCollapsed(appearNote, urls.value ?? []));
+	const collapsed = ref(appearNote.cw == null && isLong.value);
 	const canRenote = ['public', 'home'].includes(appearNote.visibility) || (appearNote.visibility === 'followers' && appearNote.userId === $i?.id);
 	const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.user.instance);
 	const renoteCollapsed = ref(prefer.s.collapseRenotes && isRenote && (($i && ($i.id === rawNote.userId || $i.id === appearNote.userId)) || ($appearNote.myReaction != null)));
@@ -346,6 +351,40 @@ export function useNote(
 		});
 	}
 
+	// JUICE: 「+」の左の、決めたリアクションを1回で付けるボタン(misskey-tempuraを参考)。まだリアクションしていないノートにだけ出し、外すのは「+」(−)で行う
+	async function quickReact(): Promise<void> {
+		if (props.mock) return;
+		if ($appearNote.myReaction != null) return;
+		const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext });
+		if (!isLoggedIn) return;
+		showMovedDialog();
+
+		const reaction = prefer.s.quickReaction;
+		if (prefer.s.confirmOnReact) {
+			const { canceled } = await os.confirm({ type: 'question', text: i18n.tsx.reactAreYouSure({ emoji: reaction.replace('@.', '') }) });
+			if (canceled) return;
+		}
+
+		sound.playMisskeySfx('reaction');
+		const button = els.quickReactButton?.value;
+		if (button != null && prefer.s.animation) {
+			const rect = button.getBoundingClientRect();
+			const { dispose } = os.popup(MkRippleEffect, {
+				x: rect.left + (button.offsetWidth / 2),
+				y: rect.top + (button.offsetHeight / 2),
+			}, {
+				end: () => dispose(),
+			});
+		}
+
+		misskeyApi('notes/reactions/create', { noteId: appearNote.id, reaction }).then(() => {
+			noteEvents.emit(`reacted:${appearNote.id}`, { userId: $i!.id, reaction });
+		});
+		if (appearNote.text && appearNote.text.length > 100 && (Date.now() - new Date(appearNote.createdAt).getTime() < 1000 * 3)) {
+			claimAchievement('reactWithoutRead');
+		}
+	}
+
 	function undoReact(): void {
 		const oldReaction = $appearNote.myReaction;
 		if (!oldReaction) return;
@@ -405,6 +444,49 @@ export function useNote(
 			note: rawNote,
 			currentClip: currentClip?.value,
 		}), els.clipButton?.value).then(focus);
+	}
+
+	// JUICE: ノートの画面のお気に入りボタン。お気に入りかどうかは、押したときに初めて調べる(ノートごとに問い合わせない)
+	const isFavorited = ref<boolean | null>(null);
+	const favoriting = ref(false);
+	useGlobalEvent('noteFavorited', (noteId) => {
+		if (noteId === appearNote.id) isFavorited.value = true;
+	});
+	useGlobalEvent('noteUnfavorited', (noteId) => {
+		if (noteId === appearNote.id) isFavorited.value = false;
+	});
+
+	async function toggleFavorite(): Promise<void> {
+		if (props.mock || favoriting.value) return;
+		const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext });
+		if (!isLoggedIn) return;
+
+		favoriting.value = true;
+		try {
+			if (isFavorited.value == null) {
+				const state = await misskeyApi('notes/state', { noteId: appearNote.id }).catch(() => null);
+				if (state == null) {
+					os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+					return;
+				}
+				isFavorited.value = state.isFavorited;
+				// 見えていなかった状態で解除してしまわないよう、登録済みだったら知らせるだけにする
+				if (state.isFavorited) {
+					os.toast(i18n.ts.alreadyFavorited);
+					return;
+				}
+			}
+
+			const favorite = !isFavorited.value;
+			if (favorite) claimAchievement('noteFavorited1');
+			// 失敗はapiWithDialogが知らせる
+			const ok = await os.apiWithDialog(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', { noteId: appearNote.id }).then(() => true, () => false);
+			if (!ok) return;
+			isFavorited.value = favorite;
+			globalEvents.emit(favorite ? 'noteFavorited' : 'noteUnfavorited', appearNote.id);
+		} finally {
+			favoriting.value = false;
+		}
 	}
 
 	async function showRenoteMenu() {
@@ -491,6 +573,9 @@ export function useNote(
 		onContextmenu,
 		showMenu,
 		clip,
+		isFavorited,
+		toggleFavorite,
+		quickReact,
 		showRenoteMenu,
 		focus,
 		blur,

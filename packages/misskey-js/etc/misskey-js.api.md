@@ -1087,13 +1087,17 @@ export type Channels = {
                 brush?: DrawStroke['brush'];
                 clip?: string;
                 layer?: string;
+                lock?: boolean;
+                pressure?: DrawStroke['pressure'];
                 points: string;
+                private?: boolean;
             }) => void;
             cursors: (payload: {
                 cursors: {
                     userId: User['id'];
                     x: number | null;
                     y: number | null;
+                    pet?: boolean;
                 }[];
             }) => void;
             strokeCancel: (payload: {
@@ -1103,14 +1107,17 @@ export type Channels = {
             stroke: (payload: {
                 userId: User['id'];
                 stroke: DrawStroke;
+                private?: boolean;
             }) => void;
-            undo: (payload: {
+            strokesPatched: (payload: {
                 userId: User['id'];
-                strokeId: string;
+                steps: DrawStrokesPatchStep[];
+                privateLayers?: string[];
             }) => void;
             clearLayer: (payload: {
                 userId: User['id'];
                 layer?: string;
+                private?: boolean;
             }) => void;
             layersUpdated: (payload: {
                 userId: User['id'];
@@ -1132,8 +1139,18 @@ export type Channels = {
                     id: string;
                     pieces: DrawStroke[];
                 }[];
+                privateLayers?: string[];
+            }) => void;
+            layerPublished: (payload: {
+                userId: User['id'];
+                layer: string;
+                strokes: DrawStroke[];
             }) => void;
             operationRejected: (payload: Record<string, never>) => void;
+            strokeLimitReached: (payload: {
+                kind: 'strokes' | 'bytes' | 'room';
+                limit: number;
+            }) => void;
             chat: (payload: {
                 message: DrawRoomChatMessage;
                 user: UserLite;
@@ -1168,11 +1185,14 @@ export type Channels = {
                 brush?: DrawStroke['brush'];
                 clip?: string;
                 layer?: string;
+                lock?: boolean;
+                pressure?: DrawStroke['pressure'];
                 points: string;
             };
             cursor: {
                 x: number | null;
                 y: number | null;
+                pet?: boolean;
             };
             visibility: {
                 visible: boolean;
@@ -1182,6 +1202,7 @@ export type Channels = {
             };
             stroke: DrawStroke;
             undo: null | Record<string, never>;
+            redo: null | Record<string, never>;
             clearLayer: null | Record<string, never> | {
                 layer: string;
             };
@@ -3967,7 +3988,7 @@ type RoleLite = components['schemas']['RoleLite'];
 type RolePolicies = components['schemas']['RolePolicies'];
 
 // @public (undocumented)
-export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxCanvasSize", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
+export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxCanvasSize", "drawRoomMaxStrokes", "drawRoomMaxStrokeMegabytes", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
 
 // @public (undocumented)
 type RolesListResponse = operations['roles___list']['responses']['200']['content']['application/json'];
@@ -4405,8 +4426,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:275:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:290:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:281:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:296:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:311:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

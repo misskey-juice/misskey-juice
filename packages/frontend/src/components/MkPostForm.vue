@@ -121,7 +121,7 @@ import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import insertTextAtCursor from 'insert-text-at-cursor';
 import { toASCII } from 'punycode.js';
-import { host, url, langs } from '@@/js/config.js';
+import { host, url, langs, lang as uiLang } from '@@/js/config.js';
 import MkUploaderItems from './MkUploaderItems.vue';
 import type { ShallowRef } from 'vue';
 import type { PostFormProps } from '@/types/post-form.js';
@@ -230,7 +230,8 @@ if (props.initialVisibleUsers) {
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
 // JUICE: nullなら投稿時にサーバー側でユーザーの表示言語設定が既定値として使われる
-const lang = ref<string | null>(null);
+// JUICE: 投稿の言語は、アカウントの言語設定(無ければ表示言語)から始める
+const lang = ref<string | null>($i.lang ?? uiLang);
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);
@@ -1103,7 +1104,8 @@ async function post(ev?: PointerEvent) {
 		visibility: visibility.value,
 		visibleUserIds: visibility.value === 'specified' ? visibleUsers.value.map(u => u.id) : undefined,
 		reactionAcceptance: reactionAcceptance.value,
-		lang: lang.value, // JUICE
+		// JUICE: 「自動」は表示言語で投稿する(言語の無い投稿にしない)
+		lang: lang.value ?? uiLang,
 	};
 
 	if (withHashtags.value && hashtags.value && hashtags.value.trim() !== '') {

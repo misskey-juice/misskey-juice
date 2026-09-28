@@ -357,6 +357,14 @@ export const packedRolePoliciesSchema = {
 			type: 'integer',
 			optional: false, nullable: false,
 		},
+		drawRoomMaxStrokes: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
+		drawRoomMaxStrokeMegabytes: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 		canApproveEmojiRequests: {
 			type: 'boolean',
 			optional: false, nullable: false,

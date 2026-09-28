@@ -206,6 +206,9 @@ export function createSourceNode(buffer: AudioBuffer, opts: {
 		panNode: StereoPannerNode;
 		gainNode: GainNode;
 	} {
+	// JUICE: ウィジェット等が画面を操作する前に音を読み込むと、AudioContextが止まった(suspended)まま作られ、
+	// そのままでは何を鳴らしても聞こえない。鳴らすときに止まっていれば動かし直す(操作の後なら再開できる)
+	if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 	const panNode = ctx.createStereoPanner();
 	panNode.pan.value = opts.pan ?? 0;
 

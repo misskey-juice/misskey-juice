@@ -28,8 +28,16 @@ export type DrawStroke = {
 	dy?: number;
 	// JUICE: 描いた人のどのレイヤーの線か(DrawLayerMetaのid)。無ければ最初のレイヤー('0')
 	layer?: string;
+	// JUICE: 透明度ロック(その時点でレイヤーに描いてある所にだけ描く)。消しゴムには使わない
+	lock?: boolean;
+	// JUICE: 筆圧で何を変えるか。無ければ太さだけ(以前に描かれた線)。noneは変えない、opacityは濃さだけ、bothは太さと濃さ
+	pressure?: 'none' | 'opacity' | 'both';
 	points: string;
 };
+
+// JUICE: レイヤーの合成モード(CanvasのglobalCompositeOperationの名前)。無ければ通常
+export const DRAW_LAYER_BLENDS = ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'] as const;
+export type DrawLayerBlend = typeof DRAW_LAYER_BLENDS[number];
 
 // JUICE: 1人が持つレイヤー(1人で複数持てる)。表示・濃さ・重なり順は、ほかの人の画面にも反映される
 export type DrawLayerMeta = {
@@ -37,6 +45,10 @@ export type DrawLayerMeta = {
 	name: string;
 	visible: boolean;
 	opacity: number;
+	// JUICE: 下描き(描いた本人の画面にだけ見える)。線もレイヤー自体も、ほかの人には配らない。保存する画像にも入らない
+	private?: boolean;
+	// JUICE: 合成モード(乗算・焼き込みカラーなど)。無ければ通常
+	blend?: DrawLayerBlend;
 };
 
 // レイヤーの一覧を持っていない人(以前に描かれた部屋を含む)は、最初のレイヤー1枚だけ

@@ -202,6 +202,8 @@ export class QueryService {
 		q.andWhere(new Brackets(qb => {
 			qb
 				.where(`(${filteredLanguagesQuery.getQuery()})::jsonb = '[]'::jsonb`)
+				// JUICE: 言語が指定されていない投稿は、絞り込まずに表示する(isLanguageFilteredと同じ)
+				.orWhere('COALESCE(note.lang, renote.lang) IS NULL')
 				.orWhere(`EXISTS (
 					SELECT 1 FROM jsonb_array_elements_text((${filteredLanguagesQuery.getQuery()})::jsonb) AS filtered_lang
 					WHERE split_part(lower(filtered_lang), '-', 1) = split_part(lower(COALESCE(note.lang, renote.lang)), '-', 1)

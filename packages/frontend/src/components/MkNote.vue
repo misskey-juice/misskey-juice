@@ -52,9 +52,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<!-- JUICE: メディアタイムラインではPixelFed風に、アバターをヘッダー行に含めてサイドバー分の余白を無くす -->
 			<div v-if="inMediaTimeline" :class="$style.pixelfedHeaderRow">
 				<MkAvatar :class="$style.pixelfedHeaderAvatar" :user="appearNote.user" :link="!mock" :preview="!mock"/>
-				<MkNoteHeader :class="$style.pixelfedHeaderName" :note="appearNote" :isAIGenerated="$appearNote.isAIGenerated" :isNovel="$appearNote.isNovel" :mini="true"/>
+				<MkNoteHeader :class="$style.pixelfedHeaderName" :note="appearNote" :isAIGenerated="$appearNote.isAIGenerated" :isNovel="$appearNote.isNovel" :updatedAt="$appearNote.updatedAt" :mini="true"/>
 			</div>
-			<MkNoteHeader v-else :note="appearNote" :isAIGenerated="$appearNote.isAIGenerated" :isNovel="$appearNote.isNovel" :mini="true"/>
+			<MkNoteHeader v-else :note="appearNote" :isAIGenerated="$appearNote.isAIGenerated" :isNovel="$appearNote.isNovel" :updatedAt="$appearNote.updatedAt" :mini="true"/>
 			<MkInstanceTicker v-if="showTicker" :host="appearNote.user.host" :instance="appearNote.user.instance"/>
 			<div style="container-type: inline-size;">
 				<p v-if="appearNote.cw != null" :class="$style.cw">
@@ -72,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="inMediaTimeline && appearNote.files && appearNote.files.length > 0" :class="$style.mediaBlock">
 						<!-- JUICE: 複数枚のときはPixelFed風のスワイプカルーセル、1枚のときは通常のグリッド表示 -->
 						<MkMediaCarousel v-if="appearNote.files.length > 1" ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
-						<MkMediaList v-else ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :inlinePlayableVideo="true" :inlinePlayableAudio="true"/>
+						<MkMediaList v-else ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :inlinePlayableVideo="true" :inlinePlayableAudio="true" :novelNoteId="$appearNote.isNovel ? appearNote.id : null"/>
 					</div>
 					<div :class="$style.text">
 						<span v-if="appearNote.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div v-if="!inMediaTimeline && appearNote.files && appearNote.files.length > 0" style="margin-top: 8px;">
-						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
+						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :novelNoteId="$appearNote.isNovel ? appearNote.id : null"/>
 					</div>
 					<MkPoll
 						v-if="appearNote.poll"
@@ -164,12 +164,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" disabled>
 					<i class="ti ti-ban"></i>
 				</button>
+				<button v-if="prefer.r.showQuickReactionButton.value && appearNote.reactionAcceptance !== 'likeOnly' && $appearNote.myReaction == null" ref="quickReactButton" v-tooltip="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton, $style.quickReactButton]" class="_button" :aria-label="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" @click="quickReact()">
+					<MkReactionIcon :class="$style.quickReactionIcon" :reaction="prefer.r.quickReaction.value"/>
+				</button>
 				<button ref="reactButton" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" @click="handleToggleReact()">
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="$appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
 					<i v-else-if="appearNote.reactionAcceptance === 'likeOnly'" class="ti ti-heart"></i>
 					<i v-else class="ti ti-plus"></i>
 					<p v-if="(appearNote.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && $appearNote.reactionCount > 0" :class="$style.footerButtonCount">{{ number($appearNote.reactionCount) }}</p>
+				</button>
+				<button v-if="prefer.r.showFavoriteButtonInNoteFooter.value" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" :aria-label="isFavorited ? i18n.ts.unfavorite : i18n.ts.favorite" :aria-pressed="isFavorited === true" @click="toggleFavorite()">
+					<i v-if="isFavorited" class="ti ti-star-filled" style="color: var(--MI_THEME-accent);"></i>
+					<i v-else class="ti ti-star"></i>
 				</button>
 				<button v-if="prefer.s.showClipButtonInNoteFooter" ref="clipButton" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" @mousedown.prevent="clip()">
 					<i class="ti ti-paperclip"></i>
@@ -240,6 +247,7 @@ import type { Keymap } from '@/utility/hotkey.js';
 
 // コンポーネント外部の依存関係
 import MkNoteSub from '@/components/MkNoteSub.vue';
+import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkNoteHeader from '@/components/MkNoteHeader.vue';
 import MkNoteSimple from '@/components/MkNoteSimple.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
@@ -281,6 +289,7 @@ const menuButton = useTemplateRef('menuButton');
 const renoteButton = useTemplateRef('renoteButton');
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = useTemplateRef('reactButton');
+const quickReactButton = useTemplateRef('quickReactButton');
 const clipButton = useTemplateRef('clipButton');
 const galleryEl = useTemplateRef('galleryEl');
 
@@ -312,6 +321,9 @@ const {
 	onContextmenu,
 	showMenu,
 	clip,
+	isFavorited,
+	toggleFavorite,
+	quickReact,
 	showRenoteMenu,
 	blur,
 } = useNote(props, {
@@ -321,6 +333,7 @@ const {
 	renoteTime,
 	reactButton,
 	clipButton,
+	quickReactButton,
 }, {
 	inTimeline,
 	tl_withSensitive,
@@ -399,7 +412,7 @@ const keymap = {
 			renoteCollapsed.value = false;
 		} else if (appearNote.cw != null) {
 			showContent.value = !showContent.value;
-		} else if (isLong) {
+		} else if (isLong.value) {
 			collapsed.value = !collapsed.value;
 		}
 	},
@@ -781,6 +794,15 @@ const keymap = {
 	&:hover {
 		color: var(--MI_THEME-fgHighlighted);
 	}
+}
+
+// JUICE: 決めたリアクションを付けるボタンの絵文字は、ほかのボタンになじむよう少しだけ薄くし、乗せたり選んだりしたら明るくする
+.quickReactionIcon {
+	opacity: 0.8;
+}
+
+.quickReactButton:is(:hover, :focus-visible) .quickReactionIcon {
+	opacity: 1;
 }
 
 .footerButtonCount {

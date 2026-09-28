@@ -7,48 +7,146 @@
 // その輪郭を多角形(穴があれば複数の輪郭)にして、塗りつぶしの線(tool: 'fill')として描く
 
 /**
- * 画像の(sx, sy)と似た色で、上下左右につながっている範囲を求める。範囲の画素は1、それ以外は0
+ * 画像の(sx, sy)と似た色で、上下左右につながっている範囲を求める。範囲の画素は1、それ以外は0。
+ * JUICE: gapが1以上なら、それより狭い線の隙間は閉じているものとして塗る(隙間閉じ)
  */
-export function floodFillMask(image: ImageData, sx: number, sy: number, tolerance: number): Uint8Array | null {
+export function floodFillMask(image: ImageData, sx: number, sy: number, tolerance: number, gap = 0): Uint8Array | null {
 	const { width, height, data } = image;
 	if (sx < 0 || sy < 0 || sx >= width || sy >= height) return null;
-	const mask = new Uint8Array(width * height);
 	const seed = (sy * width + sx) * 4;
 	const [r0, g0, b0, a0] = [data[seed], data[seed + 1], data[seed + 2], data[seed + 3]];
 	const similar = (i: number) => {
 		const o = i * 4;
 		return Math.max(Math.abs(data[o] - r0), Math.abs(data[o + 1] - g0), Math.abs(data[o + 2] - b0), Math.abs(data[o + 3] - a0)) <= tolerance;
 	};
+	if (gap <= 0) return floodFillBy(width, height, sx, sy, similar);
+	return floodFillClosingGaps(width, height, sx, sy, similar, gap);
+}
+
+/**
+ * (sx, sy)から、ok(画素の番号)が真の画素を上下左右にたどった範囲
+ */
+function floodFillBy(width: number, height: number, sx: number, sy: number, ok: (i: number) => boolean): Uint8Array {
+	const mask = new Uint8Array(width * height);
 	// 横に1行ずつ広げていく塗りつぶし(再帰しないので大きな範囲でも止まらない)
 	const stack: number[] = [sx, sy];
 	while (stack.length > 0) {
 		const y = stack.pop()!;
 		let x = stack.pop()!;
 		let i = y * width + x;
-		if (mask[i] === 1 || !similar(i)) continue;
-		while (x > 0 && mask[i - 1] === 0 && similar(i - 1)) {
+		if (mask[i] === 1 || !ok(i)) continue;
+		while (x > 0 && mask[i - 1] === 0 && ok(i - 1)) {
 			x--;
 			i--;
 		}
 		let spanUp = false;
 		let spanDown = false;
-		while (x < width && mask[i] === 0 && similar(i)) {
+		while (x < width && mask[i] === 0 && ok(i)) {
 			mask[i] = 1;
 			if (y > 0) {
 				const up = i - width;
-				const fillable = mask[up] === 0 && similar(up);
+				const fillable = mask[up] === 0 && ok(up);
 				if (fillable && !spanUp) stack.push(x, y - 1);
 				spanUp = fillable;
 			}
 			if (y < height - 1) {
 				const down = i + width;
-				const fillable = mask[down] === 0 && similar(down);
+				const fillable = mask[down] === 0 && ok(down);
 				if (fillable && !spanDown) stack.push(x, y + 1);
 				spanDown = fillable;
 			}
 			x++;
 			i++;
 		}
+	}
+	return mask;
+}
+
+/**
+ * JUICE: 隙間閉じ付きの塗りつぶし。
+ * 1. 塗れない画素(線)からの距離を求め、線からgapより離れた画素だけで塗る範囲を求める(幅2×gapより狭い隙間は通れない)
+ * 2. その範囲を、元々塗れる画素の中だけでgap+1画素ぶん広げ直す(線の際まで塗る)
+ * 描き始めた所が線に近すぎて1.で塗れないときは、隙間閉じ無しで塗る
+ */
+function floodFillClosingGaps(width: number, height: number, sx: number, sy: number, similar: (i: number) => boolean, gap: number): Uint8Array {
+	const size = width * height;
+	const fillable = new Uint8Array(size);
+	for (let i = 0; i < size; i++) fillable[i] = similar(i) ? 1 : 0;
+	// 線からの距離(縦横3・斜め4で数える近似。3で割ると画素数)。キャンバスの外は線として扱わない
+	const INF = 0xffff;
+	const dist = new Uint16Array(size);
+	for (let i = 0; i < size; i++) dist[i] = fillable[i] === 1 ? INF : 0;
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			const i = y * width + x;
+			if (dist[i] === 0) continue;
+			let d = dist[i];
+			if (x > 0) d = Math.min(d, dist[i - 1] + 3);
+			if (y > 0) {
+				d = Math.min(d, dist[i - width] + 3);
+				if (x > 0) d = Math.min(d, dist[i - width - 1] + 4);
+				if (x < width - 1) d = Math.min(d, dist[i - width + 1] + 4);
+			}
+			dist[i] = d;
+		}
+	}
+	for (let y = height - 1; y >= 0; y--) {
+		for (let x = width - 1; x >= 0; x--) {
+			const i = y * width + x;
+			if (dist[i] === 0) continue;
+			let d = dist[i];
+			if (x < width - 1) d = Math.min(d, dist[i + 1] + 3);
+			if (y < height - 1) {
+				d = Math.min(d, dist[i + width] + 3);
+				if (x < width - 1) d = Math.min(d, dist[i + width + 1] + 4);
+				if (x > 0) d = Math.min(d, dist[i + width - 1] + 4);
+			}
+			dist[i] = d;
+		}
+	}
+	const seed = sy * width + sx;
+	// 描き始めた所が線に近いときは、そこから線までの距離に合わせて閉じる隙間を狭める
+	// (細い所を塗ったときに、隙間閉じが効かずに外へあふれないように)
+	const threshold = Math.min(gap * 3, dist[seed] - 1);
+	if (threshold < 3) return floodFillBy(width, height, sx, sy, i => fillable[i] === 1);
+	const mask = floodFillBy(width, height, sx, sy, i => dist[i] > threshold);
+	// 塗る範囲から、元々塗れる画素の中だけを、削ったのと同じ距離(縦横3・斜め4)で広げ直す(線の際まで塗る。
+	// 斜めの線沿いにも塗り残しが出ないよう、8方向で測る)。距離の表は使い回す
+	const limit = threshold + 3;
+	for (let i = 0; i < size; i++) dist[i] = mask[i] === 1 ? 0 : INF;
+	const relax = (i: number, j: number, w: number) => {
+		const d = dist[j] + w;
+		if (d < dist[i]) dist[i] = d;
+	};
+	// 線を回り込む所もたどれるよう、前から・後ろからの2回を2周する
+	for (let round = 0; round < 2; round++) {
+		for (let y = 0; y < height; y++) {
+			for (let x = 0; x < width; x++) {
+				const i = y * width + x;
+				if (fillable[i] === 0 || dist[i] === 0) continue;
+				if (x > 0) relax(i, i - 1, 3);
+				if (y > 0) {
+					relax(i, i - width, 3);
+					if (x > 0) relax(i, i - width - 1, 4);
+					if (x < width - 1) relax(i, i - width + 1, 4);
+				}
+			}
+		}
+		for (let y = height - 1; y >= 0; y--) {
+			for (let x = width - 1; x >= 0; x--) {
+				const i = y * width + x;
+				if (fillable[i] === 0 || dist[i] === 0) continue;
+				if (x < width - 1) relax(i, i + 1, 3);
+				if (y < height - 1) {
+					relax(i, i + width, 3);
+					if (x < width - 1) relax(i, i + width + 1, 4);
+					if (x > 0) relax(i, i + width - 1, 4);
+				}
+			}
+		}
+	}
+	for (let i = 0; i < size; i++) {
+		if (fillable[i] === 1 && dist[i] <= limit) mask[i] = 1;
 	}
 	return mask;
 }

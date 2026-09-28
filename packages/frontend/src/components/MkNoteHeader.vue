@@ -31,6 +31,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkA v-else :to="notePage(note)">
 			<MkTime :time="note.createdAt" colored/>
 		</MkA>
+		<!-- JUICE: リモートで編集された投稿 -->
+		<span v-if="editedAt != null" v-tooltip="`${i18n.ts.edited}: ${dateString(editedAt)}`" style="margin-left: 0.5em;" :aria-label="`${i18n.ts.edited}: ${dateString(editedAt)}`" role="img"><i class="ti ti-pencil"></i></span>
 		<span v-if="note.visibility !== 'public'" style="margin-left: 0.5em;" :title="i18n.ts._visibility[note.visibility]">
 			<i v-if="note.visibility === 'home'" class="ti ti-home"></i>
 			<i v-else-if="note.visibility === 'followers'" class="ti ti-lock"></i>
@@ -48,6 +50,7 @@ import * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
+import { dateString } from '@/filters/date.js';
 import { DI } from '@/di.js';
 
 const props = defineProps<{
@@ -55,12 +58,15 @@ const props = defineProps<{
 	// JUICE: リアクション等と同様、ストリーム経由でリアクティブに上書きしたい場合に渡す(未指定ならnoteの値をそのまま使う)
 	isAIGenerated?: boolean;
 	isNovel?: boolean;
+	// JUICE: 最後に編集された日時(ストリームで編集を受け取ったときに差し替えるため、親から渡す)
+	updatedAt?: string | null;
 }>();
 
 const mock = inject(DI.mock, false);
 
 const isAIGenerated = computed(() => props.isAIGenerated ?? props.note.isAIGenerated);
 const isNovel = computed(() => props.isNovel ?? props.note.isNovel);
+const editedAt = computed(() => props.updatedAt ?? props.note.updatedAt ?? null);
 </script>
 
 <style lang="scss" module>

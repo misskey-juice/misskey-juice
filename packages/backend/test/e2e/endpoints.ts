@@ -1658,6 +1658,7 @@ describe('Endpoints', () => {
 				avatarDecorationRequestEnabled: false,
 				avatarDecorationRequestRequireCategory: false,
 				avatarDecorationRequestRequireDescription: false,
+				remoteAvatarDecorationsEnabled: true,
 				rankingAggregationPeriodHours: 12,
 				rankingDisplayCount: 3,
 				relayTimelineEnabled: false,
@@ -1710,6 +1711,7 @@ describe('Endpoints', () => {
 				microsoftOauthClientSecret: null,
 				midiPlayerMaxSize: 500 * 1024,
 				drawRoomEnabled: true,
+				drawRoomMaxRoomMegabytes: 256,
 			});
 		});
 

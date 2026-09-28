@@ -137,6 +137,21 @@ export const PREF_DEF = definePreferences({
 		default: 256,
 	},
 
+	// JUICE: ノートの画面の「+」(リアクション)の右に、お気に入りのボタンを置く
+	showFavoriteButtonInNoteFooter: {
+		default: false,
+	},
+
+	// JUICE: ノートの画面の「+」の左に、決めたリアクションを1回で付けるボタンを置く
+	showQuickReactionButton: {
+		default: false,
+	},
+
+	// JUICE: 上のボタンで付けるリアクション(絵文字、またはカスタム絵文字の:name:)
+	quickReaction: {
+		default: '🧡',
+	},
+
 	// JUICE: MFMの「○○ 検索」(検索窓)で使う検索エンジン(utility/juice-search-engines.tsのid、または'custom')
 	mfmSearchEngine: {
 		default: 'google' as import('@/utility/juice-search-engines.js').SearchEngineId,
@@ -145,6 +160,130 @@ export const PREF_DEF = definePreferences({
 	// JUICE: 検索エンジンを'custom'にしたときの検索URL。検索語を入れる場所に{query}を書く
 	mfmSearchEngineCustomUrl: {
 		default: '',
+	},
+
+	// JUICE: 起動の最初(アプリより前)に当てるため、ブラウザのlocalStorageにも置く設定。
+	// バックアップ・復元で戻るよう、プロファイルにも同じ値を持つ(起動時にlocalStorageと合わせる。utility/juice-boot-preferences.ts)。
+	// 'unset' はまだプロファイルに無い(今のlocalStorageの値を取り込む)
+	juiceLang: {
+		default: 'unset' as 'unset' | string,
+	},
+	// 文字の大きさ(''は標準)
+	juiceFontSize: {
+		default: 'unset' as 'unset' | '' | '1' | '2' | '3',
+	},
+	juiceUseSystemFont: {
+		default: 'unset' as 'unset' | boolean,
+	},
+	juiceCustomCss: {
+		default: 'unset' as 'unset' | string,
+	},
+
+	// JUICE: 前の保存先(端末ごとのstore・localStorage)にあった表示の好みを、このプロファイルへ取り込んだか。
+	// プロファイルの中に持つので、古い版のタブがプロファイルを上書きして取り込んだ値が消えたときは、もう一度取り込む
+	juiceLocalPreferencesMigrated: {
+		default: false,
+	},
+	// JUICE: 小説エディター・絵チャを、前からのナビゲーションバーにも1回だけ足したか(外した人には戻さない)
+	juiceNavbarItemsAdded: {
+		default: false,
+	},
+
+	// JUICE: 小説ビューワーの表示(以前は端末ごとのstoreにあった。バックアップ・復元で戻るようプロファイルへ移した)
+	novelViewerWritingMode: {
+		default: 'vertical' as 'vertical' | 'horizontal',
+	},
+	// 文字サイズ(em単位の倍率)
+	novelViewerFontSize: {
+		default: 1.1,
+	},
+	novelViewerTheme: {
+		default: 'auto' as 'auto' | 'light' | 'sepia' | 'dark' | 'custom',
+	},
+	// 段落字下げ(行頭に全角スペースが無ければ自動で補う)
+	novelViewerParagraphIndent: {
+		default: true,
+	},
+	// 青空文庫記法変換(｜漢字《かんじ》のルビ、［＃ここからN字下げ］等)
+	novelViewerAozoraNotation: {
+		default: true,
+	},
+	novelViewerFontFamily: {
+		default: 'default' as 'default' | 'mincho' | 'gothic',
+	},
+	// カスタムテーマ(novelViewerTheme: 'custom' のときに使う文字色・背景色)
+	novelViewerCustomTextColor: {
+		default: '#1a1a1a',
+	},
+	novelViewerCustomBgColor: {
+		default: '#ffffff',
+	},
+
+	// JUICE: 小説エディターの表示・入力の設定(下書きの作品はこのブラウザだけに置き、ここには入れない)
+	novelEditorSettings: {
+		default: null as import('@/utility/novel-draft.js').NovelEditorSettings | null,
+	},
+
+	// JUICE: 絵チャの表示の好み
+	drawRoomShowCursors: {
+		default: true,
+	},
+	drawRoomCursorOpacity: {
+		default: 1,
+	},
+	// レイヤーとチャットを右へしまっているか、その幅と、レイヤーとチャットの高さの割合
+	drawRoomSideHidden: {
+		default: false,
+	},
+	drawRoomSideWidth: {
+		default: 340,
+	},
+	drawRoomLayersRatio: {
+		default: 0.55,
+	},
+	// ホイールだけで拡大縮小するか(オフならホイールは移動、拡大縮小はCtrl+ホイール)
+	drawRoomWheelZoom: {
+		default: true,
+	},
+	// ピクセルアート拡大モード
+	drawRoomDotView: {
+		default: false,
+	},
+	// ペン・消しゴムの太さ(そのキャンバスで一番太い筆を100%とした割合。nullならキャンバスに合った太さから始める)と、濃さ(%)
+	drawRoomPenSizePercent: {
+		default: null as number | null,
+	},
+	drawRoomEraserSizePercent: {
+		default: null as number | null,
+	},
+	drawRoomOpacity: {
+		default: 100,
+	},
+	// 筆圧で太さを変えるか・濃さを変えるか(ペン・消しゴム)
+	drawRoomPressureSize: {
+		default: true,
+	},
+	drawRoomPressureOpacity: {
+		default: false,
+	},
+	// カラーパレットに保存した色と、最近使った色
+	drawRoomSavedColors: {
+		default: [] as string[],
+	},
+	drawRoomRecentColors: {
+		default: [] as string[],
+	},
+	// 塗りつぶし・線の中だけ塗るの隙間閉じ(この幅より狭い線の隙間は閉じているものとして塗る)
+	drawRoomGapClose: {
+		default: 'off' as 'off' | 'small' | 'medium' | 'large',
+	},
+	// 線の本数・データ量・描き直しの時間などのデバッグ情報を、キャンバスの上に出す
+	drawRoomShowDebugInfo: {
+		default: false,
+	},
+	// 画像を保存する形式
+	drawRoomImageFormat: {
+		default: 'png' as 'png' | 'webp' | 'jpeg',
 	},
 
 	// JUICE: タイムラインページのタブバーから、閲覧者側の好みで個別に非表示にしたベーシックタイムライン
@@ -259,6 +398,10 @@ export const PREF_DEF = definePreferences({
 			'announcements',
 			'channels',
 			'search',
+			'-',
+			// JUICE: 小説エディターと絵チャ
+			'novelEditor',
+			'drawRoom',
 			'-',
 			'ui',
 		],

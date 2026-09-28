@@ -50,11 +50,27 @@ export const packedDrawRoomSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		// JUICE: 部屋を開く前に出す注意書き(CW)。無ければnull
+		cw: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		// JUICE: センシティブ(NSFW)な絵の部屋か
+		isSensitive: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		isEnded: {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
 		endedAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: false, nullable: true,
+		},
+		// JUICE: 保存しないで終了した部屋が自動で削除される日時(それ以外はnull)。部屋主はそれより前にも削除できる
+		deletesAt: {
 			type: 'string',
 			format: 'date-time',
 			optional: false, nullable: true,
@@ -130,6 +146,17 @@ export const packedDrawStrokeSchema = {
 			type: 'string',
 			optional: true, nullable: false,
 		},
+		// JUICE: 透明度ロック(その時点でレイヤーに描いてある所にだけ描く)
+		lock: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		// JUICE: 筆圧で何を変えるか。無ければ太さだけ。noneは変えない、opacityは濃さだけ、bothは太さと濃さ
+		pressure: {
+			type: 'string',
+			optional: true, nullable: false,
+			enum: ['none', 'opacity', 'both'],
+		},
 		// 1点5バイト(x・yは1/8px単位のint16、筆圧は0〜255のuint8、リトルエンディアン)を並べてbase64にしたもの
 		points: {
 			type: 'string',
@@ -180,6 +207,17 @@ export const packedDrawLayerSchema = {
 		opacity: {
 			type: 'number',
 			optional: false, nullable: false,
+		},
+		// JUICE: 下描き(描いた本人にだけ見える)。ほかの人には、下描きのレイヤーは返らない
+		private: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		// JUICE: 合成モード(乗算・焼き込みカラーなど)。無ければ通常
+		blend: {
+			type: 'string',
+			optional: true, nullable: false,
+			enum: ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'],
 		},
 	},
 } as const;

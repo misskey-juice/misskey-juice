@@ -114,7 +114,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div v-if="appearNote.files && appearNote.files.length > 0">
-						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user"/>
+						<MkMediaList ref="galleryEl" :mediaList="appearNote.files" :user="appearNote.user" :novelNoteId="$appearNote.isNovel ? appearNote.id : null"/>
 					</div>
 					<MkPoll
 						v-if="appearNote.poll"
@@ -138,6 +138,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkA :to="notePage(appearNote)">
 						<MkTime :time="appearNote.createdAt" mode="detail" colored/>
 					</MkA>
+					<!-- JUICE: リモートで編集された投稿は、最後に編集された日時を出す -->
+					<span v-if="$appearNote.updatedAt" style="margin-left: 0.5em;"><i class="ti ti-pencil"></i> {{ i18n.ts.edited }}: <MkTime :time="$appearNote.updatedAt" mode="detail"/></span>
 					<span style="margin-left: 0.5em;">
 						<span style="border: 1px solid var(--MI_THEME-divider); margin-right: 0.5em;"></span>
 						<i v-if="appearNote.visibility === 'public'" class="ti ti-world"></i>
@@ -173,12 +175,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else class="_button" :class="$style.noteFooterButton" disabled>
 					<i class="ti ti-ban"></i>
 				</button>
+				<button v-if="prefer.r.showQuickReactionButton.value && appearNote.reactionAcceptance !== 'likeOnly' && $appearNote.myReaction == null" ref="quickReactButton" v-tooltip="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" :class="[$style.noteFooterButton, $style.quickReactButton]" class="_button" :aria-label="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" @click="quickReact()">
+					<MkReactionIcon :class="$style.quickReactionIcon" :reaction="prefer.r.quickReaction.value"/>
+				</button>
 				<button ref="reactButton" :class="$style.noteFooterButton" class="_button" @click="toggleReact()">
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="$appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
 					<i v-else-if="appearNote.reactionAcceptance === 'likeOnly'" class="ti ti-heart"></i>
 					<i v-else class="ti ti-plus"></i>
 					<p v-if="(appearNote.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && $appearNote.reactionCount > 0" :class="$style.noteFooterButtonCount">{{ number($appearNote.reactionCount) }}</p>
+				</button>
+				<button v-if="prefer.r.showFavoriteButtonInNoteFooter.value" class="_button" :class="$style.noteFooterButton" :aria-label="isFavorited ? i18n.ts.unfavorite : i18n.ts.favorite" :aria-pressed="isFavorited === true" @click="toggleFavorite()">
+					<i v-if="isFavorited" class="ti ti-star-filled" style="color: var(--MI_THEME-accent);"></i>
+					<i v-else class="ti ti-star"></i>
 				</button>
 				<button v-if="prefer.s.showClipButtonInNoteFooter" ref="clipButton" class="_button" :class="$style.noteFooterButton" @mousedown.prevent="clip()">
 					<i class="ti ti-paperclip"></i>
@@ -287,6 +296,7 @@ const menuButton = useTemplateRef('menuButton');
 const renoteButton = useTemplateRef('renoteButton');
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = useTemplateRef('reactButton');
+const quickReactButton = useTemplateRef('quickReactButton');
 const clipButton = useTemplateRef('clipButton');
 const galleryEl = useTemplateRef('galleryEl');
 
@@ -317,6 +327,9 @@ const {
 	onContextmenu,
 	showMenu,
 	clip,
+	isFavorited,
+	toggleFavorite,
+	quickReact,
 	showRenoteMenu,
 	blur,
 } = useNote(props, {
@@ -326,6 +339,7 @@ const {
 	renoteTime,
 	reactButton,
 	clipButton,
+	quickReactButton,
 }, {
 	inChannel,
 });
@@ -648,6 +662,15 @@ const keymap = {
 	&:hover {
 		color: var(--MI_THEME-fgHighlighted);
 	}
+}
+
+// JUICE: 決めたリアクションを付けるボタンの絵文字は、ほかのボタンになじむよう少しだけ薄くし、乗せたり選んだりしたら明るくする
+.quickReactionIcon {
+	opacity: 0.8;
+}
+
+.quickReactButton:is(:hover, :focus-visible) .quickReactionIcon {
+	opacity: 1;
 }
 
 .noteFooterButtonCount {

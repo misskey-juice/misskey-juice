@@ -10,13 +10,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template v-for="item in items" :key="item.text">
 				<button v-if="item.action != null" v-click-anime class="_button item" @click="$event => { item.action!($event); close(); }">
 					<i class="icon" :class="item.icon"></i>
-					<div class="text">{{ item.text }}</div>
+					<div class="text">{{ item.text }}<span v-if="item.juice" class="_juice">JUICE</span></div>
 					<span v-if="item.indicate && item.indicateValue" class="_indicateCounter indicatorWithValue">{{ item.indicateValue }}</span>
 					<span v-else-if="item.indicate" class="indicator _blink"><i class="_indicatorCircle"></i></span>
 				</button>
 				<MkA v-else-if="item.to != null" v-click-anime :to="item.to" class="item" @click.passive="close()">
 					<i class="icon" :class="item.icon"></i>
-					<div class="text">{{ item.text }}</div>
+					<div class="text">{{ item.text }}<span v-if="item.juice" class="_juice">JUICE</span></div>
 					<span v-if="item.indicate && item.indicateValue" class="_indicateCounter indicatorWithValue">{{ item.indicateValue }}</span>
 					<span v-else-if="item.indicate" class="indicator _blink"><i class="_indicatorCircle"></i></span>
 				</MkA>
@@ -61,6 +61,8 @@ const items = Object.keys(navbarItemDef).filter(k => !menu.includes(k)).map(k =>
 	action: def.action,
 	indicate: def.indicated,
 	indicateValue: def.indicateValue,
+	// JUICE: JUICE独自の項目にはバッジを出す
+	juice: def.juice === true,
 }));
 
 function close() {

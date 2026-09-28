@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -70,6 +70,11 @@ export const meta = {
 				optional: false, nullable: false,
 			},
 			avatarDecorationRequestRequireDescription: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			// JUICE: リモートのユーザーのアイコンのデコレーションを表示するか
+			remoteAvatarDecorationsEnabled: {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
@@ -236,6 +241,11 @@ export const meta = {
 				type: 'number',
 				optional: false, nullable: false,
 			},
+			// JUICE: 絵チャの1つの部屋の全員の線のデータ量の合計の上限(MB)
+			drawRoomMaxRoomMegabytes: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
 			drawRoomEnabled: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -277,6 +287,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveOauthLoginSettings(settings),
 				...resolveMidiPlayerSettings(settings),
 				...resolveDrawRoomSettings(settings),
+				...resolveRemoteAvatarDecorationSettings(settings),
+				...resolveDrawRoomLimitSettings(settings),
 			};
 		});
 	}

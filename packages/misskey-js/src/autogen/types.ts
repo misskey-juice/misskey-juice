@@ -5200,6 +5200,8 @@ export type components = {
             isAIGenerated: boolean;
             hideFromMediaTimeline: boolean;
             isNovel: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
             /**
              * Format: id
              * @example xxxxxxxxxx
@@ -6286,6 +6288,8 @@ export type components = {
             announcementReactionTypeLimit: number;
             canCreateDrawRoom: boolean;
             drawRoomMaxCanvasSize: number;
+            drawRoomMaxStrokes: number;
+            drawRoomMaxStrokeMegabytes: number;
             canApproveEmojiRequests: boolean;
             canApproveAvatarDecorationRequests: boolean;
             canApproveSignups: boolean;
@@ -6634,9 +6638,13 @@ export type components = {
             canvasWidth: number;
             canvasHeight: number;
             keepAfterEnd: boolean;
+            cw: string | null;
+            isSensitive: boolean;
             isEnded: boolean;
             /** Format: date-time */
             endedAt: string | null;
+            /** Format: date-time */
+            deletesAt: string | null;
             members: components['schemas']['UserLite'][];
             isMember: boolean;
             viewOnly: boolean;
@@ -6654,6 +6662,9 @@ export type components = {
             dx?: number;
             dy?: number;
             layer?: string;
+            lock?: boolean;
+            /** @enum {string} */
+            pressure?: 'none' | 'opacity' | 'both';
             points: string;
         };
         DrawLayer: {
@@ -6661,6 +6672,9 @@ export type components = {
             name: string;
             visible: boolean;
             opacity: number;
+            private?: boolean;
+            /** @enum {string} */
+            blend?: 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity' | 'lighter';
         };
         DrawRoomChatMessage: {
             id: string;
@@ -11537,6 +11551,7 @@ export interface operations {
                         avatarDecorationRequestEnabled: boolean;
                         avatarDecorationRequestRequireCategory: boolean;
                         avatarDecorationRequestRequireDescription: boolean;
+                        remoteAvatarDecorationsEnabled: boolean;
                         rankingAggregationPeriodHours: number;
                         rankingDisplayCount: number;
                         relayTimelineEnabled: boolean;
@@ -11584,6 +11599,7 @@ export interface operations {
                         microsoftOauthClientId: string | null;
                         microsoftOauthClientSecret: string | null;
                         midiPlayerMaxSize: number;
+                        drawRoomMaxRoomMegabytes: number;
                         drawRoomEnabled: boolean;
                     };
                 };
@@ -11740,6 +11756,7 @@ export interface operations {
                     avatarDecorationRequestEnabled?: boolean;
                     avatarDecorationRequestRequireCategory?: boolean;
                     avatarDecorationRequestRequireDescription?: boolean;
+                    remoteAvatarDecorationsEnabled?: boolean;
                     rankingAggregationPeriodHours?: number;
                     rankingDisplayCount?: number;
                     relayTimelineEnabled?: boolean;
@@ -11788,6 +11805,7 @@ export interface operations {
                     microsoftOauthClientSecret?: string | null;
                     midiPlayerMaxSize?: number;
                     drawRoomEnabled?: boolean;
+                    drawRoomMaxRoomMegabytes?: number;
                 };
             };
         };
@@ -22627,6 +22645,9 @@ export interface operations {
                     canvasHeight?: number;
                     /** @default false */
                     keepAfterEnd?: boolean;
+                    cw?: string | null;
+                    /** @default false */
+                    isSensitive?: boolean;
                 };
             };
         };
@@ -23067,6 +23088,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     userId?: string;
+                    /** @default false */
+                    saved?: boolean;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */
@@ -23303,6 +23326,8 @@ export interface operations {
                     title?: string;
                     maxMembers?: number;
                     keepAfterEnd?: boolean;
+                    cw?: string | null;
+                    isSensitive?: boolean;
                     canvasWidth?: number;
                     canvasHeight?: number;
                 };
@@ -37179,6 +37204,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
+                    /** @default false */
+                    onlyPureRenotes?: boolean;
                 };
             };
         };

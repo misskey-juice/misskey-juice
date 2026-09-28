@@ -150,6 +150,8 @@ export interface NoteEventTypes {
 	novelChanged: {
 		isNovel: boolean;
 	};
+	// JUICE: 編集日時だけ配る(内容は見る人ごとに見られるかを確かめるため、受け取った側がnotes/showで取り直す)
+	edited: { updatedAt: string };
 }
 type NoteStreamEventTypes = {
 	[key in keyof NoteEventTypes]: {
@@ -270,6 +272,8 @@ export interface DrawRoomEventTypes {
 		clip?: string;
 		layer?: string;
 		points: string;
+		// JUICE: 下描き(本人だけに見える)のレイヤーの線。ほかの人のストリームには流さない
+		private?: boolean;
 	};
 	// カーソルの位置(保存しない)。一定間隔でまとめて配る。x・yがnullならキャンバスの外に出た
 	cursors: {
@@ -277,6 +281,8 @@ export interface DrawRoomEventTypes {
 			userId: MiUser['id'];
 			x: number | null;
 			y: number | null;
+			// JUICE: なでるツールで絵をなでている
+			pet?: boolean;
 		}[];
 	};
 	// 描いている途中の線を取りやめた(途中まで表示していた分を消す)
@@ -288,15 +294,20 @@ export interface DrawRoomEventTypes {
 	stroke: {
 		userId: MiUser['id'];
 		stroke: Packed<'DrawStroke'>;
+		private?: boolean;
 	};
-	undo: {
+	// JUICE: 取り消し・やり直しで、その人の線を変えた(手順を順に行う。insは同じレイヤーのbeforeの線の前、nullなら最後に入れる)
+	strokesPatched: {
 		userId: MiUser['id'];
-		strokeId: string;
+		steps: ({ t: 'del'; ids: string[] } | { t: 'mv'; ids: string[] | null; dx: number; dy: number } | { t: 'ins'; items: { before: string | null; stroke: DrawStroke }[] })[];
+		// 下描きのレイヤーのid(ほかの人のストリームでは、これらのレイヤーの線を除いて流す)
+		privateLayers?: string[];
 	};
 	// layerがあればその人のそのレイヤーだけ、無ければその人の全てのレイヤーを消去した
 	clearLayer: {
 		userId: MiUser['id'];
 		layer?: string;
+		private?: boolean;
 	};
 	// JUICE: その人のレイヤーの一覧(追加・削除・名前・並び・表示・濃さ)が変わった。
 	// 一覧から消えたレイヤーの線は、そのレイヤーごと消えている
@@ -315,6 +326,14 @@ export interface DrawRoomEventTypes {
 	strokesSplit: {
 		userId: MiUser['id'];
 		splits: { id: string; pieces: DrawStroke[] }[];
+		// JUICE: 下描きのレイヤーのid(ほかの人のストリームでは、これらのレイヤーの線を除いて流す)
+		privateLayers?: string[];
+	};
+	// JUICE: 下描きのレイヤーを皆に見せるようにした(そのレイヤーの今の線)
+	layerPublished: {
+		userId: MiUser['id'];
+		layer: string;
+		strokes: DrawStroke[];
 	};
 	// 選んだ線を消した
 	strokesDeleted: {

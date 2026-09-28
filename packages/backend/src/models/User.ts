@@ -151,6 +151,8 @@ export class MiUser {
 		flipH?: boolean;
 		offsetX?: number;
 		offsetY?: number;
+		// JUICE: リモートのユーザーのデコレーションの画像のURL(相手のサーバーのもの。このサーバーのデコレーションとしては登録しない)
+		url?: string;
 	}[];
 
 	@Index()
