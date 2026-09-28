@@ -4447,7 +4447,7 @@ _juice:
   oauthScopeInfoGitlab: "GitLab の User Settings → Applications(インスタンス管理者はAdmin Area → Applications)でアプリケーションを作成し、Redirect URIに上記を登録したうえでScopesの read_user にチェックを入れてください。"
   oauthScopeInfoMicrosoft: "Microsoft Entra 管理センター(旧Azure AD)でアプリの登録を行い、プラットフォームに「Web」を追加して上記をリダイレクトURIとして登録してください。API のアクセス許可に Microsoft Graph の User.Read(委任済み)が必要です。テナントによっては管理者の同意が必要になる場合があります。"
   filteredLanguages: "タイムラインに表示する言語"
-  filteredLanguagesCaption: "チェックした言語の投稿だけをホーム・ローカル・グローバルタイムラインに表示します。1つもチェックしない場合は、すべての言語の投稿を表示します。言語が指定されていない投稿は、1つもチェックしていない場合のみ表示されます。"
+  filteredLanguagesCaption: "チェックした言語の投稿だけをホーム・ローカル・グローバルタイムラインに表示します。1つもチェックしない場合は、すべての言語の投稿を表示します。言語が指定されていない投稿は、いつも表示されます。"
   excludeOwnNotesFromLanguageFilter: "自分の投稿は言語の絞り込み対象外にする"
   excludeOwnNotesFromLanguageFilterCaption: "オンにすると、上記の言語フィルターが有効な場合でも自分自身の投稿は常に表示されます。オフにすると、自分の投稿も他のユーザーの投稿と同様に言語で絞り込まれます。グローバルタイムラインには反映されません(常に他のユーザーと同じ条件で絞り込まれます)。"
   enablePoll: "投票を追加"

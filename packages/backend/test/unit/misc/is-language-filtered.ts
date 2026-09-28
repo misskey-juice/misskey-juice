@@ -60,9 +60,10 @@ describe('misc:is-language-filtered', () => {
 		expect(isLanguageFiltered(note, new Set())).toBe(false);
 	});
 
-	test('note with unspecified language should be filtered when a filter is active', () => {
+	// JUICE: 言語が分からない投稿は、絞り込みが有効でも表示する(Mastodonと同じ)
+	test('note with unspecified language should not be filtered even when a filter is active', () => {
 		const note: MiNote = { ...base, lang: null };
-		expect(isLanguageFiltered(note, new Set(['ja-JP']))).toBe(true);
+		expect(isLanguageFiltered(note, new Set(['ja-JP']))).toBe(false);
 	});
 
 	test('note with unspecified language should not be filtered when no filter is active', () => {
