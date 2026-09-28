@@ -2764,6 +2764,10 @@ _widgetOptions:
     timezone: "시간대"
     showMs: "밀리초 표시"
     showLabel: "레이블 표시"
+  _bpm:
+    source: "측정 대상"
+    metronome: "메트로놈 울리기"
+    metronomeSound: "울릴 소리"
   _jobQueue:
     soundEnabled: "소리 재생"
     sound: "재생할 소리"
@@ -4530,6 +4534,10 @@ _juice:
   bpmTap: "탭"
   bpmReset: "초기화"
   bpmTaps: "{n}회"
+  bpmSourceTap: "탭"
+  bpmEvents: "최근 1분 동안 {n}건"
+  bpmStreamHint: "들어오는 속도를 1분당 개수로 나타냅니다"
+  bpmMetronome: "메트로놈"
   bpmHint: "리듬에 맞춰 탭·클릭(2초 동안 없으면 다시 측정합니다)"
 _juiceApprovals:
   approve: "승인"

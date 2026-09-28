@@ -2764,6 +2764,10 @@ _widgetOptions:
     timezone: "时区"
     showMs: "显示毫秒"
     showLabel: "显示标签"
+  _bpm:
+    source: "测量对象"
+    metronome: "播放节拍器"
+    metronomeSound: "节拍器声音"
   _jobQueue:
     soundEnabled: "播放音效"
     sound: "音效"
@@ -4530,6 +4534,10 @@ _juice:
   bpmTap: "点击"
   bpmReset: "重置"
   bpmTaps: "{n}次"
+  bpmSourceTap: "点击"
+  bpmEvents: "最近1分钟 {n} 条"
+  bpmStreamHint: "以每分钟的数量表示到达的速度"
+  bpmMetronome: "节拍器"
   bpmHint: "跟着节奏点击(停顿2秒后重新测量)"
 _juiceApprovals:
   approve: "批准"

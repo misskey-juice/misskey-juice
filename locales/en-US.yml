@@ -2764,6 +2764,10 @@ _widgetOptions:
     timezone: "Timezone"
     showMs: "Show Miliseconds"
     showLabel: "Show Label"
+  _bpm:
+    source: "Measure"
+    metronome: "Play metronome"
+    metronomeSound: "Metronome sound"
   _jobQueue:
     soundEnabled: "Play sound"
     sound: "Sound"
@@ -4530,6 +4534,10 @@ _juice:
   bpmTap: "Tap"
   bpmReset: "Reset"
   bpmTaps: "{n} taps"
+  bpmSourceTap: "Tap"
+  bpmEvents: "{n} in the last minute"
+  bpmStreamHint: "Shows how many arrive per minute"
+  bpmMetronome: "Metronome"
   bpmHint: "Tap or click along with the beat (resets after a 2-second pause)"
 _juiceApprovals:
   approve: "Approve"

@@ -3164,6 +3164,10 @@ _widgetOptions:
     timezone: "タイムゾーン"
     showMs: "ミリ秒を表示"
     showLabel: "ラベルを表示"
+  _bpm:
+    source: "測るもの"
+    metronome: "メトロノームを鳴らす"
+    metronomeSound: "鳴らす音"
   _jobQueue:
     soundEnabled: "音を鳴らす"
     sound: "鳴らす音"
@@ -4478,6 +4482,10 @@ _juice:
   bpmTap: "タップ"
   bpmReset: "リセット"
   bpmTaps: "{n}回"
+  bpmSourceTap: "タップ"
+  bpmEvents: "直近1分で{n}件"
+  bpmStreamHint: "流れてくる速さを、1分あたりの数にします"
+  bpmMetronome: "メトロノーム"
   bpmHint: "リズムに合わせてタップ・クリック(2秒空くと測り直します)"
 _juiceApprovals:
   title: "承認待ちユーザー"

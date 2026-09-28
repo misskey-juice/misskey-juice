@@ -12053,6 +12053,20 @@ export interface Locale extends ILocale {
              */
             "showLabel": string;
         };
+        "_bpm": {
+            /**
+             * 測るもの
+             */
+            "source": string;
+            /**
+             * メトロノームを鳴らす
+             */
+            "metronome": string;
+            /**
+             * 鳴らす音
+             */
+            "metronomeSound": string;
+        };
         "_jobQueue": {
             /**
              * 音を鳴らす
@@ -16864,6 +16878,22 @@ export interface Locale extends ILocale {
          * {n}回
          */
         "bpmTaps": ParameterizedString<"n">;
+        /**
+         * タップ
+         */
+        "bpmSourceTap": string;
+        /**
+         * 直近1分で{n}件
+         */
+        "bpmEvents": ParameterizedString<"n">;
+        /**
+         * 流れてくる速さを、1分あたりの数にします
+         */
+        "bpmStreamHint": string;
+        /**
+         * メトロノーム
+         */
+        "bpmMetronome": string;
         /**
          * リズムに合わせてタップ・クリック(2秒空くと測り直します)
          */
