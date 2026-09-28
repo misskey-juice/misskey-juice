@@ -11,7 +11,7 @@ import type { SignupSuccessResponse } from 'misskey-js/entities.js';
 import type WebSocket from 'ws';
 import { api, connectStream, role, signup } from '../utils.js';
 
-type DrawRoom = { id: string; ownerId: string; members: { id: string }[]; isMember: boolean; isEnded: boolean; maxMembers: number; keepAfterEnd: boolean };
+type DrawRoom = { id: string; ownerId: string; members: { id: string }[]; isMember: boolean; isEnded: boolean; maxMembers: number; keepAfterEnd: boolean; endedAt: string | null; deletesAt: string | null };
 
 async function createRoom(user: SignupSuccessResponse, params: Partial<{ title: string; visibility: 'followers' | 'local'; maxMembers: number; canvasPreset: 'landscape' | 'portrait' | 'square' | 'square2048' | 'square3840'; keepAfterEnd: boolean }> = {}): Promise<DrawRoom> {
 	const res = await api('draw-rooms/create', {
@@ -884,7 +884,7 @@ describe('絵チャ', () => {
 		const room = await createRoom(alice, { keepAfterEnd: true });
 		type Stroke = { id: string; layer?: string };
 		type Layer = { id: string; private?: boolean };
-		const received: { type: string; body: any }[] = [];
+		const received: Record<string, any>[] = [];
 		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
 		const view = async (viewer: typeof alice) => (await layersOf(room, viewer)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: Layer[] } | undefined;
@@ -936,7 +936,7 @@ describe('絵チャ', () => {
 
 	test('描いている途中で下描きに変えた線は、ほかの人の画面から取り消される。線を切ったときは下描きの線だけを除いて届く', async () => {
 		const room = await createRoom(alice);
-		const received: { type: string; body: any }[] = [];
+		const received: Record<string, any>[] = [];
 		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
 		const publicLayers = [{ id: '0', name: '', visible: true, opacity: 1 }, { id: 'd', name: '', visible: true, opacity: 1 }];
