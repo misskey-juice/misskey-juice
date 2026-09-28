@@ -175,6 +175,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else class="_button" :class="$style.noteFooterButton" disabled>
 					<i class="ti ti-ban"></i>
 				</button>
+				<button v-if="prefer.r.showQuickReactionButton.value && appearNote.reactionAcceptance !== 'likeOnly' && $appearNote.myReaction == null" ref="quickReactButton" v-tooltip="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" :class="[$style.noteFooterButton, $style.quickReactButton]" class="_button" :aria-label="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" @click="quickReact()">
+					<MkReactionIcon :class="$style.quickReactionIcon" :reaction="prefer.r.quickReaction.value"/>
+				</button>
 				<button ref="reactButton" :class="$style.noteFooterButton" class="_button" @click="toggleReact()">
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="$appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
@@ -293,6 +296,7 @@ const menuButton = useTemplateRef('menuButton');
 const renoteButton = useTemplateRef('renoteButton');
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = useTemplateRef('reactButton');
+const quickReactButton = useTemplateRef('quickReactButton');
 const clipButton = useTemplateRef('clipButton');
 const galleryEl = useTemplateRef('galleryEl');
 
@@ -325,6 +329,7 @@ const {
 	clip,
 	isFavorited,
 	toggleFavorite,
+	quickReact,
 	showRenoteMenu,
 	blur,
 } = useNote(props, {
@@ -334,6 +339,7 @@ const {
 	renoteTime,
 	reactButton,
 	clipButton,
+	quickReactButton,
 }, {
 	inChannel,
 });
@@ -656,6 +662,15 @@ const keymap = {
 	&:hover {
 		color: var(--MI_THEME-fgHighlighted);
 	}
+}
+
+// JUICE: 決めたリアクションを付けるボタンの絵文字は、ほかのボタンになじむよう少しだけ薄くし、乗せたり選んだりしたら明るくする
+.quickReactionIcon {
+	opacity: 0.8;
+}
+
+.quickReactButton:is(:hover, :focus-visible) .quickReactionIcon {
+	opacity: 1;
 }
 
 .noteFooterButtonCount {

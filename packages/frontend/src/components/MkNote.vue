@@ -164,6 +164,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" disabled>
 					<i class="ti ti-ban"></i>
 				</button>
+				<button v-if="prefer.r.showQuickReactionButton.value && appearNote.reactionAcceptance !== 'likeOnly' && $appearNote.myReaction == null" ref="quickReactButton" v-tooltip="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton, $style.quickReactButton]" class="_button" :aria-label="i18n.tsx._juice.quickReactWith({ emoji: prefer.r.quickReaction.value.replace('@.', '') })" @click="quickReact()">
+					<MkReactionIcon :class="$style.quickReactionIcon" :reaction="prefer.r.quickReaction.value"/>
+				</button>
 				<button ref="reactButton" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" @click="handleToggleReact()">
 					<i v-if="appearNote.reactionAcceptance === 'likeOnly' && $appearNote.myReaction != null" class="ti ti-heart-filled" style="color: var(--MI_THEME-love);"></i>
 					<i v-else-if="$appearNote.myReaction != null" class="ti ti-minus" style="color: var(--MI_THEME-accent);"></i>
@@ -244,6 +247,7 @@ import type { Keymap } from '@/utility/hotkey.js';
 
 // コンポーネント外部の依存関係
 import MkNoteSub from '@/components/MkNoteSub.vue';
+import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkNoteHeader from '@/components/MkNoteHeader.vue';
 import MkNoteSimple from '@/components/MkNoteSimple.vue';
 import MkReactionsViewer from '@/components/MkReactionsViewer.vue';
@@ -285,6 +289,7 @@ const menuButton = useTemplateRef('menuButton');
 const renoteButton = useTemplateRef('renoteButton');
 const renoteTime = useTemplateRef('renoteTime');
 const reactButton = useTemplateRef('reactButton');
+const quickReactButton = useTemplateRef('quickReactButton');
 const clipButton = useTemplateRef('clipButton');
 const galleryEl = useTemplateRef('galleryEl');
 
@@ -318,6 +323,7 @@ const {
 	clip,
 	isFavorited,
 	toggleFavorite,
+	quickReact,
 	showRenoteMenu,
 	blur,
 } = useNote(props, {
@@ -327,6 +333,7 @@ const {
 	renoteTime,
 	reactButton,
 	clipButton,
+	quickReactButton,
 }, {
 	inTimeline,
 	tl_withSensitive,
@@ -787,6 +794,15 @@ const keymap = {
 	&:hover {
 		color: var(--MI_THEME-fgHighlighted);
 	}
+}
+
+// JUICE: 決めたリアクションを付けるボタンの絵文字は、ほかのボタンになじむよう少しだけ薄くし、乗せたり選んだりしたら明るくする
+.quickReactionIcon {
+	opacity: 0.8;
+}
+
+.quickReactButton:is(:hover, :focus-visible) .quickReactionIcon {
+	opacity: 1;
 }
 
 .footerButtonCount {

@@ -54,6 +54,7 @@ export interface UseNoteElements {
 	renoteTime?: Ref<HTMLElement | null>;
 	reactButton?: Ref<HTMLElement | null>;
 	clipButton?: Ref<HTMLElement | null>;
+	quickReactButton?: Ref<HTMLElement | null>;
 }
 
 export interface UseNoteOptions {
@@ -350,6 +351,40 @@ export function useNote(
 		});
 	}
 
+	// JUICE: 「+」の左の、決めたリアクションを1回で付けるボタン(misskey-tempuraを参考)。まだリアクションしていないノートにだけ出し、外すのは「+」(−)で行う
+	async function quickReact(): Promise<void> {
+		if (props.mock) return;
+		if ($appearNote.myReaction != null) return;
+		const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext });
+		if (!isLoggedIn) return;
+		showMovedDialog();
+
+		const reaction = prefer.s.quickReaction;
+		if (prefer.s.confirmOnReact) {
+			const { canceled } = await os.confirm({ type: 'question', text: i18n.tsx.reactAreYouSure({ emoji: reaction.replace('@.', '') }) });
+			if (canceled) return;
+		}
+
+		sound.playMisskeySfx('reaction');
+		const button = els.quickReactButton?.value;
+		if (button != null && prefer.s.animation) {
+			const rect = button.getBoundingClientRect();
+			const { dispose } = os.popup(MkRippleEffect, {
+				x: rect.left + (button.offsetWidth / 2),
+				y: rect.top + (button.offsetHeight / 2),
+			}, {
+				end: () => dispose(),
+			});
+		}
+
+		misskeyApi('notes/reactions/create', { noteId: appearNote.id, reaction }).then(() => {
+			noteEvents.emit(`reacted:${appearNote.id}`, { userId: $i!.id, reaction });
+		});
+		if (appearNote.text && appearNote.text.length > 100 && (Date.now() - new Date(appearNote.createdAt).getTime() < 1000 * 3)) {
+			claimAchievement('reactWithoutRead');
+		}
+	}
+
 	function undoReact(): void {
 		const oldReaction = $appearNote.myReaction;
 		if (!oldReaction) return;
@@ -540,6 +575,7 @@ export function useNote(
 		clip,
 		isFavorited,
 		toggleFavorite,
+		quickReact,
 		showRenoteMenu,
 		focus,
 		blur,

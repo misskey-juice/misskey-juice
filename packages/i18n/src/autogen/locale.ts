@@ -16617,6 +16617,26 @@ export interface Locale extends ILocale {
          */
         "showFavoriteButtonInNoteFooterCaption": string;
         /**
+         * ノートの画面に決めたリアクションのボタンを置く
+         */
+        "showQuickReactionButton": string;
+        /**
+         * 「+」(リアクション)の左に、下で選んだリアクションを1回で付けるボタンを置きます。まだリアクションしていないノートにだけ出ます。
+         */
+        "showQuickReactionButtonCaption": string;
+        /**
+         * 付けるリアクション
+         */
+        "quickReaction": string;
+        /**
+         * リアクションを選ぶ
+         */
+        "quickReactionChange": string;
+        /**
+         * {emoji}でリアクション
+         */
+        "quickReactWith": ParameterizedString<"emoji">;
+        /**
          * MFMの検索で使う検索エンジン
          */
         "mfmSearchEngine": string;

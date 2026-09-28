@@ -60,6 +60,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkPreferenceContainer>
 					</SearchMarker>
 
+					<SearchMarker :keywords="['reaction', 'quick', 'button', 'note', 'footer', 'heart']">
+						<div class="_gaps_s">
+							<MkPreferenceContainer k="showQuickReactionButton">
+								<MkSwitch v-model="showQuickReactionButton">
+									<template #label><SearchLabel>{{ i18n.ts._juice.showQuickReactionButton }}</SearchLabel></template>
+									<template #caption>{{ i18n.ts._juice.showQuickReactionButtonCaption }}</template>
+								</MkSwitch>
+							</MkPreferenceContainer>
+							<MkPreferenceContainer k="quickReaction">
+								<div :class="$style.quickReaction">
+									<span>{{ i18n.ts._juice.quickReaction }}</span>
+									<button class="_button" :class="$style.quickReactionPreview" :aria-label="i18n.ts._juice.quickReactionChange" @click="pickQuickReaction">
+										<MkReactionIcon :reaction="quickReaction"/>
+									</button>
+									<MkButton inline small :disabled="quickReaction === QUICK_REACTION_DEFAULT" @click="quickReaction = QUICK_REACTION_DEFAULT">{{ i18n.ts.default }}</MkButton>
+								</div>
+							</MkPreferenceContainer>
+						</div>
+					</SearchMarker>
+
 					<SearchMarker :keywords="['widget', 'side', 'left', 'right']">
 						<FormSection>
 							<template #label><SearchLabel>{{ i18n.ts._juice.widgetsSide }}</SearchLabel></template>
@@ -272,6 +292,8 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkPreferenceContainer from '@/components/MkPreferenceContainer.vue';
+import MkReactionIcon from '@/components/MkReactionIcon.vue';
+import MkButton from '@/components/MkButton.vue';
 import MkRange from '@/components/MkRange.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -400,6 +422,17 @@ const widgetsSide = prefer.model('widgetsSide');
 // JUICE: ノートの画面にお気に入りのボタンを置くか
 const showFavoriteButtonInNoteFooter = prefer.model('showFavoriteButtonInNoteFooter');
 
+// JUICE: ノートの画面の「+」の左に置く、決めたリアクションを付けるボタン
+const QUICK_REACTION_DEFAULT = '🧡';
+const showQuickReactionButton = prefer.model('showQuickReactionButton');
+const quickReaction = prefer.model('quickReaction');
+
+function pickQuickReaction(ev: PointerEvent) {
+	os.pickEmoji((ev.currentTarget ?? ev.target) as HTMLElement, { showPinned: false }).then((emoji) => {
+		if (emoji) quickReaction.value = emoji;
+	});
+}
+
 // JUICE: 添付MIDIファイル再生時のピアノロール・鍵盤ビジュアライザー表示設定
 const midiVisualizerEnabled = prefer.model('midiVisualizerEnabled');
 const midiRollWindowSeconds = prefer.model('midiRollWindowSeconds');
@@ -464,6 +497,27 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.quickReaction {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.quickReactionPreview {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: var(--MI-radius);
+	font-size: 22px;
+	background: var(--MI_THEME-buttonBg);
+
+	&:hover {
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+}
+
 .tabItem {
 	display: flex;
 	align-items: center;

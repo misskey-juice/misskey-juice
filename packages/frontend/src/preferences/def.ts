@@ -142,6 +142,16 @@ export const PREF_DEF = definePreferences({
 		default: false,
 	},
 
+	// JUICE: ノートの画面の「+」の左に、決めたリアクションを1回で付けるボタンを置く
+	showQuickReactionButton: {
+		default: false,
+	},
+
+	// JUICE: 上のボタンで付けるリアクション(絵文字、またはカスタム絵文字の:name:)
+	quickReaction: {
+		default: '🧡',
+	},
+
 	// JUICE: MFMの「○○ 検索」(検索窓)で使う検索エンジン(utility/juice-search-engines.tsのid、または'custom')
 	mfmSearchEngine: {
 		default: 'google' as import('@/utility/juice-search-engines.js').SearchEngineId,
