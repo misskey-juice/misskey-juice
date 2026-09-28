@@ -740,10 +740,20 @@ function rotateSidewaysGlyphs(root: HTMLElement): void {
 		let last = 0;
 		for (const match of text.matchAll(VERTICAL_ROTATE_CHARS)) {
 			if (match.index > last) fragment.append(text.slice(last, match.index));
-			const span = window.document.createElement('span');
-			span.dataset.novelSideways = '';
-			span.textContent = match[0];
-			fragment.append(span);
+			// JUICE: 三点リーダー・二点リーダーは、回転させると点が行の片側(左)に寄ってしまう(横書きの字形は点が下にあるため)。
+			// 縦書き用の字形(︙・︰。点が行の真ん中に縦に並ぶ)に置き換え、正立のまま置く。それ以外は回転させる
+			for (const part of match[0].split(/([…‥]+)/)) {
+				if (part === '') continue;
+				const span = window.document.createElement('span');
+				if (/^[…‥]+$/.test(part)) {
+					span.dataset.novelEllipsis = '';
+					span.textContent = part.replace(/…/g, '\uFE19').replace(/‥/g, '\uFE30');
+				} else {
+					span.textContent = part;
+				}
+				span.dataset.novelSideways = '';
+				fragment.append(span);
+			}
 			last = match.index + match[0].length;
 		}
 		if (last < text.length) fragment.append(text.slice(last));
@@ -1497,6 +1507,11 @@ if (!props.embedded) {
 // スクリプト側で作る要素なので、CSS Modulesのクラスではなくdata属性で指定する(下記の注意を参照)
 [data-novel-sideways] {
 	text-orientation: mixed;
+}
+
+// JUICE: 縦書き用の字形に置き換えた三点リーダー・二点リーダーは、回転させずに正立で置く
+[data-novel-ellipsis] {
+	text-orientation: upright;
 }
 
 .chapterMarker {
