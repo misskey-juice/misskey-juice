@@ -25,6 +25,8 @@ export const navbarItemDef = reactive<{
 		indicateValue?: ComputedRef<string>;
 		to?: string;
 		action?: (ev: PointerEvent) => void;
+		// JUICE: 本家に無いJUICE独自の項目(JUICEバッジを出す)
+		juice?: boolean;
 	};
 }>({
 	notifications: {
@@ -152,6 +154,7 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-writing',
 		show: computed(() => $i != null),
 		to: '/novel-editor',
+		juice: true,
 	},
 	// JUICE: 絵チャ(管理者設定で無効にされていれば出さない)
 	drawRoom: {
@@ -159,6 +162,7 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-palette',
 		show: computed(() => $i != null && (juicePublicSettingsCache.value.value?.drawRoomEnabled ?? true)),
 		to: '/draw',
+		juice: true,
 	},
 	ui: {
 		title: i18n.ts.switchUi,

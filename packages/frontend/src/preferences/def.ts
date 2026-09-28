@@ -169,6 +169,10 @@ export const PREF_DEF = definePreferences({
 	juiceLocalPreferencesMigrated: {
 		default: false,
 	},
+	// JUICE: 小説エディター・絵チャを、前からのナビゲーションバーにも1回だけ足したか(外した人には戻さない)
+	juiceNavbarItemsAdded: {
+		default: false,
+	},
 
 	// JUICE: 小説ビューワーの表示(以前は端末ごとのstoreにあった。バックアップ・復元で戻るようプロファイルへ移した)
 	novelViewerWritingMode: {
@@ -379,6 +383,10 @@ export const PREF_DEF = definePreferences({
 			'announcements',
 			'channels',
 			'search',
+			'-',
+			// JUICE: 小説エディターと絵チャ
+			'novelEditor',
+			'drawRoom',
 			'-',
 			'ui',
 		],

@@ -89,6 +89,24 @@ export function syncBootPreferences(): boolean {
 }
 
 /**
+ * JUICE: 小説エディター・絵チャを、前から使っているナビゲーションバーにも1回だけ足す(既定の並びには入れてある)。
+ * 足した後に外した人には戻さない
+ */
+export function addJuiceNavbarItems(): void {
+	if (prefer.s.juiceNavbarItemsAdded) return;
+	const menu = [...prefer.s.menu];
+	const missing = (['novelEditor', 'drawRoom'] as const).filter(item => !menu.includes(item));
+	if (missing.length > 0) {
+		// 区切りの後の「UIの切り替え」があれば、その区切りの前に入れる(無ければ最後)
+		const uiIndex = menu.indexOf('ui');
+		const insertAt = uiIndex > 0 && menu[uiIndex - 1] === '-' ? uiIndex - 1 : menu.length;
+		menu.splice(insertAt, 0, ...(insertAt > 0 && menu[insertAt - 1] !== '-' ? ['-'] : []), ...missing);
+		prefer.commit('menu', menu);
+	}
+	prefer.commit('juiceNavbarItemsAdded', true);
+}
+
+/**
  * 前の保存先(端末ごとのstore・localStorage)にあった表示の好みを、プロファイルへ1回だけ取り込む。
  * 取り込んだかどうかはプロファイルの中に持つ(前の保存先の値は消さずに残す)。store.readyの後に呼ぶ
  */

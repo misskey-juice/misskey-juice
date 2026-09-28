@@ -33,7 +33,7 @@ import { prefer } from '@/preferences.js';
 import { $i } from '@/i.js';
 import { launchPlugins } from '@/plugin.js';
 import { initTelemetry } from '@/telemetry.js';
-import { migrateJuiceLocalPreferences, syncBootPreferences } from '@/utility/juice-boot-preferences.js';
+import { addJuiceNavbarItems, migrateJuiceLocalPreferences, syncBootPreferences } from '@/utility/juice-boot-preferences.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Misskey v${version}`);
@@ -136,6 +136,8 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	// JUICE: 前の保存先にあった表示の好みをプロファイルへ取り込み、起動時に使う設定(言語・文字の大きさ等)を
 	// プロファイルと合わせる(復元でプロファイルが変わっていれば、読み込み直して当て直す)
 	migrateJuiceLocalPreferences();
+	// JUICE: 小説エディター・絵チャを、前からのナビゲーションバーにも1回だけ足す
+	addJuiceNavbarItems();
 	if (syncBootPreferences()) {
 		// 読み込み直すので、ここから先の起動の処理(画面を作る等)は進めない
 		await new Promise(() => {});
