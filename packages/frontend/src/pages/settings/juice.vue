@@ -51,6 +51,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</FormSection>
 					</SearchMarker>
 
+					<SearchMarker :keywords="['favorite', 'button', 'note', 'footer', 'star']">
+						<MkPreferenceContainer k="showFavoriteButtonInNoteFooter">
+							<MkSwitch v-model="showFavoriteButtonInNoteFooter">
+								<template #label><SearchLabel>{{ i18n.ts._juice.showFavoriteButtonInNoteFooter }}</SearchLabel></template>
+								<template #caption>{{ i18n.ts._juice.showFavoriteButtonInNoteFooterCaption }}</template>
+							</MkSwitch>
+						</MkPreferenceContainer>
+					</SearchMarker>
+
 					<SearchMarker :keywords="['widget', 'side', 'left', 'right']">
 						<FormSection>
 							<template #label><SearchLabel>{{ i18n.ts._juice.widgetsSide }}</SearchLabel></template>
@@ -262,6 +271,7 @@ import FormLink from '@/components/form/link.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
+import MkPreferenceContainer from '@/components/MkPreferenceContainer.vue';
 import MkRange from '@/components/MkRange.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -386,6 +396,9 @@ function onChangeExcludeOwnNotesFromLanguageFilter(v: boolean) {
 
 // JUICE: ウィジェットパネル/ドロワーを画面のどちら側に表示するか
 const widgetsSide = prefer.model('widgetsSide');
+
+// JUICE: ノートの画面にお気に入りのボタンを置くか
+const showFavoriteButtonInNoteFooter = prefer.model('showFavoriteButtonInNoteFooter');
 
 // JUICE: 添付MIDIファイル再生時のピアノロール・鍵盤ビジュアライザー表示設定
 const midiVisualizerEnabled = prefer.model('midiVisualizerEnabled');

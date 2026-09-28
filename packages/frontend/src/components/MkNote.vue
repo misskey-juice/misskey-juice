@@ -171,6 +171,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i v-else class="ti ti-plus"></i>
 					<p v-if="(appearNote.reactionAcceptance === 'likeOnly' || prefer.s.showReactionsCount) && $appearNote.reactionCount > 0" :class="$style.footerButtonCount">{{ number($appearNote.reactionCount) }}</p>
 				</button>
+				<button v-if="prefer.r.showFavoriteButtonInNoteFooter.value" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" :aria-label="isFavorited ? i18n.ts.unfavorite : i18n.ts.favorite" :aria-pressed="isFavorited === true" @click="toggleFavorite()">
+					<i v-if="isFavorited" class="ti ti-star-filled" style="color: var(--MI_THEME-accent);"></i>
+					<i v-else class="ti ti-star"></i>
+				</button>
 				<button v-if="prefer.s.showClipButtonInNoteFooter" ref="clipButton" :class="[$style.footerButton, inMediaTimeline && $style.pixelfedFooterButton]" class="_button" @mousedown.prevent="clip()">
 					<i class="ti ti-paperclip"></i>
 				</button>
@@ -312,6 +316,8 @@ const {
 	onContextmenu,
 	showMenu,
 	clip,
+	isFavorited,
+	toggleFavorite,
 	showRenoteMenu,
 	blur,
 } = useNote(props, {

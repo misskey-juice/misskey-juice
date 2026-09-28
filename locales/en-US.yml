@@ -4508,6 +4508,8 @@ _juice:
   midiMaxPolyphony: "Maximum simultaneous voices"
   midiMaxPolyphonyCaption: "Sets the maximum number of notes the MIDI playback engine (FluidSynth) can sound at the same time. Raising it can help if dense chords sound thin, but setting it too high can cause processing to fall behind and result in silence instead. Changes take effect the next time playback starts."
   searchWithEngine: "Search with {engine}"
+  showFavoriteButtonInNoteFooter: "Show favorite button on notes"
+  showFavoriteButtonInNoteFooterCaption: "Adds a button to favorite / unfavorite a note, to the right of the \"+\" (reaction) button."
   mfmSearchEngine: "Search engine for MFM search"
   mfmSearchEngineCaption: "The search engine opened by the search button in \"... search\" boxes. This only affects your own view."
   mfmSearchEngineCustom: "Custom"

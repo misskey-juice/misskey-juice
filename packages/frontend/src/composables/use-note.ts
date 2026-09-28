@@ -411,6 +411,49 @@ export function useNote(
 		}), els.clipButton?.value).then(focus);
 	}
 
+	// JUICE: ノートの画面のお気に入りボタン。お気に入りかどうかは、押したときに初めて調べる(ノートごとに問い合わせない)
+	const isFavorited = ref<boolean | null>(null);
+	const favoriting = ref(false);
+	useGlobalEvent('noteFavorited', (noteId) => {
+		if (noteId === appearNote.id) isFavorited.value = true;
+	});
+	useGlobalEvent('noteUnfavorited', (noteId) => {
+		if (noteId === appearNote.id) isFavorited.value = false;
+	});
+
+	async function toggleFavorite(): Promise<void> {
+		if (props.mock || favoriting.value) return;
+		const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext });
+		if (!isLoggedIn) return;
+
+		favoriting.value = true;
+		try {
+			if (isFavorited.value == null) {
+				const state = await misskeyApi('notes/state', { noteId: appearNote.id }).catch(() => null);
+				if (state == null) {
+					os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+					return;
+				}
+				isFavorited.value = state.isFavorited;
+				// 見えていなかった状態で解除してしまわないよう、登録済みだったら知らせるだけにする
+				if (state.isFavorited) {
+					os.toast(i18n.ts.alreadyFavorited);
+					return;
+				}
+			}
+
+			const favorite = !isFavorited.value;
+			if (favorite) claimAchievement('noteFavorited1');
+			// 失敗はapiWithDialogが知らせる
+			const ok = await os.apiWithDialog(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', { noteId: appearNote.id }).then(() => true, () => false);
+			if (!ok) return;
+			isFavorited.value = favorite;
+			globalEvents.emit(favorite ? 'noteFavorited' : 'noteUnfavorited', appearNote.id);
+		} finally {
+			favoriting.value = false;
+		}
+	}
+
 	async function showRenoteMenu() {
 		if (props.mock) return;
 		const isLoggedIn = await pleaseLogin({ openOnRemote: pleaseLoginContext });
@@ -495,6 +538,8 @@ export function useNote(
 		onContextmenu,
 		showMenu,
 		clip,
+		isFavorited,
+		toggleFavorite,
 		showRenoteMenu,
 		focus,
 		blur,

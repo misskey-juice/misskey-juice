@@ -16609,6 +16609,14 @@ export interface Locale extends ILocale {
          */
         "searchWithEngine": ParameterizedString<"engine">;
         /**
+         * ノートの画面にお気に入りのボタンを置く
+         */
+        "showFavoriteButtonInNoteFooter": string;
+        /**
+         * 「+」(リアクション)の右に、お気に入りに登録・解除するボタンを置きます。
+         */
+        "showFavoriteButtonInNoteFooterCaption": string;
+        /**
          * MFMの検索で使う検索エンジン
          */
         "mfmSearchEngine": string;

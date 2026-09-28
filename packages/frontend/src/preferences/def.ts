@@ -137,6 +137,11 @@ export const PREF_DEF = definePreferences({
 		default: 256,
 	},
 
+	// JUICE: ノートの画面の「+」(リアクション)の右に、お気に入りのボタンを置く
+	showFavoriteButtonInNoteFooter: {
+		default: false,
+	},
+
 	// JUICE: MFMの「○○ 検索」(検索窓)で使う検索エンジン(utility/juice-search-engines.tsのid、または'custom')
 	mfmSearchEngine: {
 		default: 'google' as import('@/utility/juice-search-engines.js').SearchEngineId,

@@ -4508,6 +4508,8 @@ _juice:
   midiMaxPolyphony: "同时发音数上限"
   midiMaxPolyphonyCaption: "设置MIDI播放引擎(FluidSynth)可同时发出的音符数量上限。和弦密度较高的曲子如果感觉声音单薄，调高该值可能有所改善，但调得过高会导致处理跟不上，反而变成无声。更改将在下次开始播放时生效。"
   searchWithEngine: "使用 {engine} 搜索"
+  showFavoriteButtonInNoteFooter: "在帖子上显示收藏按钮"
+  showFavoriteButtonInNoteFooterCaption: "在\"+\"(回应)按钮右侧显示添加/取消收藏的按钮。"
   mfmSearchEngine: "MFM 搜索使用的搜索引擎"
   mfmSearchEngineCaption: "在「○○ 搜索」搜索框中点击搜索按钮时打开的搜索引擎。此设置只影响自己的界面。"
   mfmSearchEngineCustom: "自定义"

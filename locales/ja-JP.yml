@@ -4413,6 +4413,8 @@ _juice:
   midiMaxPolyphony: "同時発音数の上限"
   midiMaxPolyphonyCaption: "MIDI再生エンジン(FluidSynth)が同時に鳴らせる音の数の上限を設定します。和音密度が高い曲で音が薄く感じる場合は上げると改善することがありますが、上げすぎると処理が追いつかず逆に無音になることがあります。変更は次に再生を開始した時から反映されます。"
   searchWithEngine: "{engine}で検索"
+  showFavoriteButtonInNoteFooter: "ノートの画面にお気に入りのボタンを置く"
+  showFavoriteButtonInNoteFooterCaption: "「+」(リアクション)の右に、お気に入りに登録・解除するボタンを置きます。"
   mfmSearchEngine: "MFMの検索で使う検索エンジン"
   mfmSearchEngineCaption: "「○○ 検索」の検索窓で、検索ボタンを押したときに開く検索エンジンです。この設定は自分の画面だけに反映されます。"
   mfmSearchEngineCustom: "カスタム"
