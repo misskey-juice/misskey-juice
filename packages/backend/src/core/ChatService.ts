@@ -28,6 +28,7 @@ import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { emojiRegex } from '@/misc/emoji-regex.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
 
 const MAX_ROOM_MEMBERS = 50;
 const MAX_REACTIONS_PER_MESSAGE = 100;
@@ -201,6 +202,9 @@ export class ChatService {
 				id: this.idService.gen(),
 				userId: fromUser.id,
 				otherId: toUser.id,
+			}).catch(err => {
+				// JUICE: 続けて送ると同時に許可しようとして重複することがある(許可済みなので無視する)
+				if (!isDuplicateKeyValueError(err)) throw err;
 			});
 		}
 
