@@ -22,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:withSensitive="withSensitive"
 			:onlyFiles="effectiveOnlyFiles"
 			:localOnly="localOnly"
-			:onlyNovel="src === 'media' ? false : onlyNovel"
+			:onlyNovel="onlyNovel"
 			:pixelfedMode="src === 'media'"
 			:sound="true"
 		/>
@@ -368,8 +368,8 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 				});
 			}
 
-			// JUICE: 「小説」フラグが付いた投稿だけに絞り込む
-			if (isBasicTimeline(src.value)) {
+			// JUICE: 「小説」フラグが付いた投稿だけに絞り込む(メディアタイムラインでも)
+			if (isBasicTimeline(src.value) || src.value === 'media') {
 				menuItems.push({
 					type: 'switch',
 					icon: 'ti ti-book',

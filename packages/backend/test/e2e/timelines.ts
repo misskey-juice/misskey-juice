@@ -599,6 +599,41 @@ describe('Timelines', () => {
 				}, waitForPushToTlOptions);
 			}, 1000 * 10);
 
+			// JUICE: 小説の普通のリノートも「小説だけ」に出る(引用・ほかの投稿のリノートは出ない)
+			test('[onlyNovel: true] 小説の普通のリノートも含まれる', async () => {
+				const [alice, bob, carol] = await Promise.all([signup(), signup(), signup()]);
+
+				await api('following/create', { userId: bob.id }, alice);
+				const carolNovel = await post(carol, { text: 'novel', isNovel: true });
+				const carolText = await post(carol, { text: 'hi' });
+				const bobRenoteNovel = await post(bob, { renoteId: carolNovel.id });
+				const bobRenoteText = await post(bob, { renoteId: carolText.id });
+				const bobQuoteNovel = await post(bob, { renoteId: carolNovel.id, text: 'quote' });
+
+				await vi.waitFor(async () => {
+					const res = await api('notes/timeline', { limit: 100, onlyNovel: true }, alice);
+
+					assert.strictEqual(res.body.some(note => note.id === bobRenoteNovel.id), true);
+					assert.strictEqual(res.body.some(note => note.id === bobRenoteText.id), false);
+					assert.strictEqual(res.body.some(note => note.id === bobQuoteNovel.id), false);
+				}, waitForPushToTlOptions);
+			}, 1000 * 10);
+
+			// JUICE: 後から小説フラグを付けた投稿も、小説だけに絞り込んだメディアタイムラインに出る
+			test('[onlyNovel: true, withFiles: true] 後から「小説」フラグを付けたノートも含まれる', async () => {
+				const [alice, bob] = await Promise.all([signup(), signup()]);
+
+				await api('following/create', { userId: bob.id }, alice);
+				const bobNote = await post(bob, { text: 'later novel' });
+				await api('notes/juice/update-novel', { noteId: bobNote.id, isNovel: true }, bob);
+
+				await vi.waitFor(async () => {
+					const res = await api('notes/timeline', { limit: 100, onlyNovel: true, withFiles: true }, alice);
+
+					assert.strictEqual(res.body.some(note => note.id === bobNote.id), true);
+				}, waitForPushToTlOptions);
+			}, 1000 * 10);
+
 			// JUICE: onlyNovel:trueは「小説」フラグが付いたノートだけに絞り込む
 			test('[onlyNovel: true] 「小説」フラグが付いたノートのみ含まれる', async () => {
 				const [alice, bob] = await Promise.all([signup(), signup()]);

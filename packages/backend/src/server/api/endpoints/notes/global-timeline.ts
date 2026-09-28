@@ -13,6 +13,7 @@ import ActiveUsersChart from '@/core/chart/charts/active-users.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '../../error.js';
+import { andWhereOnlyNovel, isNovelOrNovelRenote } from '@/misc/novel-filter.js';
 
 export const meta = {
 	tags: ['notes'],
@@ -119,7 +120,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// JUICE: 「小説」フラグが付いた投稿だけに絞り込む
 			if (ps.onlyNovel) {
-				query.andWhere('note.isNovel = TRUE');
+				andWhereOnlyNovel(query);
 			}
 			//#endregion
 

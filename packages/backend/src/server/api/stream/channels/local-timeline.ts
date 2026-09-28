@@ -15,6 +15,7 @@ import { isLanguageFiltered } from '@/misc/is-language-filtered.js';
 import type { JsonObject } from '@/misc/json-value.js';
 import Channel, { type ChannelRequest } from '../channel.js';
 import { REQUEST } from '@nestjs/core';
+import { isNovelOrNovelRenotePacked } from '@/misc/novel-filter.js';
 
 @Injectable({ scope: Scope.TRANSIENT })
 export class LocalTimelineChannel extends Channel {
@@ -67,7 +68,8 @@ export class LocalTimelineChannel extends Channel {
 		}
 
 		// JUICE: 「小説」フラグが付いた投稿だけに絞り込む
-		if (this.onlyNovel && !note.isNovel) return;
+		// JUICE: 小説の普通のリノートも出す
+		if (this.onlyNovel && !isNovelOrNovelRenotePacked(note)) return;
 
 		if (note.user.host !== null) return;
 		if (note.visibility !== 'public') return;

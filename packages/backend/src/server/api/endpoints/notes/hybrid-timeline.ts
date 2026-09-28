@@ -22,6 +22,7 @@ import { ChannelMutingService } from '@/core/ChannelMutingService.js';
 import { ChannelFollowingService } from '@/core/ChannelFollowingService.js';
 import { isLanguageFiltered } from '@/misc/is-language-filtered.js';
 import { ApiError } from '../../error.js';
+import { andWhereOnlyNovel, isNovelOrNovelRenote } from '@/misc/novel-filter.js';
 
 export const meta = {
 	tags: ['notes'],
@@ -106,7 +107,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.withReplies && ps.withFiles) throw new ApiError(meta.errors.bothWithRepliesAndWithFiles);
 
-			if (!this.serverSettings.enableFanoutTimeline) {
+			// JUICE: 「小説」だけに絞り込むときは、Redisのタイムライン(作ったときに入れた投稿だけ)ではなくDBから引く
+			// (後から小説フラグを付けた投稿も出るように。小説の投稿だけの索引で速く引ける)
+			if (!this.serverSettings.enableFanoutTimeline || ps.onlyNovel) {
 				const timeline = await this.getFromDb({
 					untilId,
 					sinceId,
@@ -177,7 +180,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (isLanguageFiltered(note, filteredLanguages)) return false;
 
 					// JUICE: 「小説」フラグが付いた投稿だけに絞り込む
-					if (ps.onlyNovel && !note.isNovel) return false;
+					if (ps.onlyNovel && !isNovelOrNovelRenote(note)) return false;
 
 					return true;
 				},
@@ -325,7 +328,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		// JUICE: 「小説」フラグが付いた投稿だけに絞り込む
 		if (ps.onlyNovel) {
-			query.andWhere('note.isNovel = TRUE');
+			andWhereOnlyNovel(query);
 		}
 		//#endregion
 
