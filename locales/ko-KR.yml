@@ -3875,6 +3875,7 @@ _drawRoom:
   noRooms: "진행 중인 방이 없습니다"
   openRooms: "진행 중인 방"
   savedRooms: "저장한 그림 채팅"
+  everyoneSavedRooms: "모두가 저장한 그림 채팅"
   membersCount: "{n}/{max}명"
   online: "온라인"
   offline: "오프라인"

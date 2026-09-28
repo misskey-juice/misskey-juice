@@ -372,6 +372,24 @@ describe('絵チャ', () => {
 		await call('draw-rooms/end', { roomId: room.body.id }, alice);
 	});
 
+	test('保存した部屋は、ほかの人も一覧(saved)で見られる。開催中・保存しない部屋・見られない部屋は出ない', async () => {
+		const kept = await createRoom(alice, { keepAfterEnd: true, visibility: 'local' });
+		await call('draw-rooms/end', { roomId: kept.id }, alice);
+		const hidden = await createRoom(alice, { keepAfterEnd: true, visibility: 'followers' });
+		await call('draw-rooms/end', { roomId: hidden.id }, alice);
+		const active = await createRoom(alice, { keepAfterEnd: true, visibility: 'local' });
+
+		const list = (await call('draw-rooms/list', { saved: true, limit: 30 }, carol)).body as DrawRoom[];
+		const ids = list.map(room => room.id);
+		assert.ok(ids.includes(kept.id));
+		// フォロワーのみの部屋は、フォロワーでない人には出ない。開催中の部屋も出ない
+		assert.ok(!ids.includes(hidden.id));
+		assert.ok(!ids.includes(active.id));
+		assert.ok(list.every(room => room.isEnded && room.keepAfterEnd));
+
+		await call('draw-rooms/end', { roomId: active.id }, alice);
+	});
+
 	test('部屋主は自分を外せず、終了した部屋ではメンバーを外せない。幅・高さの片方だけの指定はエラー', async () => {
 		const onlyWidth = await call('draw-rooms/create', { title: 'x', visibility: 'local', maxMembers: 2, canvasWidth: 800 }, alice);
 		assert.strictEqual(onlyWidth.body.error.code, 'INVALID_CANVAS_SIZE');

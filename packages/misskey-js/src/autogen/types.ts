@@ -23088,6 +23088,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     userId?: string;
+                    /** @default false */
+                    saved?: boolean;
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */

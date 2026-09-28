@@ -3875,6 +3875,7 @@ _drawRoom:
   noRooms: "There are no open rooms"
   openRooms: "Open rooms"
   savedRooms: "Saved drawings"
+  everyoneSavedRooms: "Everyone's saved drawing rooms"
   membersCount: "{n}/{max}"
   online: "Online"
   offline: "Offline"

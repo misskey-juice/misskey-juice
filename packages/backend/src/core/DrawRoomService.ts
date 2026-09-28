@@ -1155,7 +1155,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 * 公開範囲で見られない部屋を除いた結果がlimit件に届くまで、続きを読み進める
 	 */
 	@bindThis
-	public async list(me: MiUser, params: { userId?: MiUser['id']; limit: number; untilId?: string }): Promise<MiDrawRoom[]> {
+	public async list(me: MiUser, params: { userId?: MiUser['id']; saved?: boolean; limit: number; untilId?: string }): Promise<MiDrawRoom[]> {
 		await this.ensureEnabled();
 		const visible: MiDrawRoom[] = [];
 		let untilId = params.untilId;
@@ -1164,8 +1164,11 @@ export class DrawRoomService implements OnApplicationShutdown {
 				.orderBy('room.id', 'DESC')
 				.limit(params.limit * 2);
 			if (untilId) query.andWhere('room.id < :untilId', { untilId });
-			if (params.userId) {
-				query.andWhere('room.ownerId = :userId', { userId: params.userId });
+			if (params.userId) query.andWhere('room.ownerId = :userId', { userId: params.userId });
+			if (params.saved) {
+				// JUICE: 保存された終了済みの部屋だけ(userIdが無ければ全員分)
+				query.andWhere('room.isEnded = TRUE AND room.keepAfterEnd = TRUE');
+			} else if (params.userId) {
 				query.andWhere('(room.isEnded = FALSE OR room.keepAfterEnd = TRUE)');
 			} else {
 				query.andWhere('room.isEnded = FALSE');
@@ -1180,7 +1183,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		}
 		// JUICE: 保存しないで終了し、まだ削除されていない部屋(1時間以内に終了したものだけなので少ない)は、最初のページに足す
 		// (開催中の部屋と1つの条件にまとめると、保存した部屋が増えるほど遅くなるため、別に引く)
-		if (params.userId == null && params.untilId == null) {
+		if (params.userId == null && params.untilId == null && !params.saved) {
 			const ending = await this.drawRoomsRepository.createQueryBuilder('room')
 				.where('room.isEnded = TRUE')
 				.andWhere('room.keepAfterEnd = FALSE')

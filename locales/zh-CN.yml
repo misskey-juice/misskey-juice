@@ -3875,6 +3875,7 @@ _drawRoom:
   noRooms: "没有进行中的房间"
   openRooms: "进行中的房间"
   savedRooms: "已保存的绘画聊天"
+  everyoneSavedRooms: "大家保存的画图聊天"
   membersCount: "{n}/{max}人"
   online: "在线"
   offline: "离线"

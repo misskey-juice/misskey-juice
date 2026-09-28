@@ -9678,6 +9678,10 @@ export interface Locale extends ILocale {
          */
         "savedRooms": string;
         /**
+         * みんなの保存した絵チャ
+         */
+        "everyoneSavedRooms": string;
+        /**
          * {n}/{max}人
          */
         "membersCount": ParameterizedString<"n" | "max">;

@@ -37,6 +37,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<XRoomCard v-for="room in myRooms" :key="room.id" :room="room"/>
 				</div>
 			</MkFoldableSection>
+
+			<!-- JUICE: みんなの保存した絵チャ(自分が見られるもの) -->
+			<MkFoldableSection v-if="savedRooms != null && savedRooms.length > 0">
+				<template #header>{{ i18n.ts._drawRoom.everyoneSavedRooms }}</template>
+				<div class="_gaps_s">
+					<XRoomCard v-for="room in savedRooms" :key="room.id" :room="room"/>
+					<MkButton v-if="savedRoomsHasMore" :class="$style.more" :wait="savedRoomsLoading" rounded @click="fetchMoreSavedRooms"><i class="ti ti-chevron-down"></i> {{ i18n.ts.loadMore }}</MkButton>
+				</div>
+			</MkFoldableSection>
 		</div>
 	</div>
 </PageWithHeader>
@@ -65,18 +74,39 @@ const openRooms = ref<Misskey.entities.DrawRoom[] | null>(null);
 const endingRooms = ref<Misskey.entities.DrawRoom[]>([]);
 // JUICE: 自分が部屋主の部屋(開催中+保存した終了済み)。保存した部屋だけを別枠で見せる
 const myRooms = ref<Misskey.entities.DrawRoom[] | null>(null);
+// JUICE: みんなの保存した絵チャ(新しい順に、続きを読み込める)
+const SAVED_ROOMS_PAGE = 20;
+const savedRooms = ref<Misskey.entities.DrawRoom[] | null>(null);
+const savedRoomsHasMore = ref(false);
+const savedRoomsLoading = ref(false);
+
+async function fetchMoreSavedRooms(): Promise<void> {
+	if (savedRooms.value == null || savedRoomsLoading.value) return;
+	savedRoomsLoading.value = true;
+	try {
+		const more = await misskeyApi('draw-rooms/list', { saved: true, limit: SAVED_ROOMS_PAGE, untilId: savedRooms.value.at(-1)?.id });
+		savedRooms.value = [...savedRooms.value, ...more.filter(room => !savedRooms.value!.some(r => r.id === room.id))];
+		savedRoomsHasMore.value = more.length >= SAVED_ROOMS_PAGE;
+	} finally {
+		savedRoomsLoading.value = false;
+	}
+}
+
 const error = ref<unknown>(null);
 
 async function fetchRooms(): Promise<void> {
 	error.value = null;
 	try {
-		const [open, mine] = await Promise.all([
+		const [open, mine, saved] = await Promise.all([
 			misskeyApi('draw-rooms/list', { limit: 30 }),
 			misskeyApi('draw-rooms/list', { userId: $i.id, limit: 30 }),
+			misskeyApi('draw-rooms/list', { saved: true, limit: SAVED_ROOMS_PAGE }),
 		]);
 		openRooms.value = open.filter(room => !room.isEnded);
 		endingRooms.value = open.filter(room => room.isEnded && room.deletesAt != null);
 		myRooms.value = mine.filter(room => room.isEnded);
+		savedRooms.value = saved;
+		savedRoomsHasMore.value = saved.length >= SAVED_ROOMS_PAGE;
 	} catch (err) {
 		error.value = err;
 	}
@@ -213,6 +243,10 @@ definePage(() => ({
 </script>
 
 <style lang="scss" module>
+.more {
+	margin: 0 auto;
+}
+
 .createButton {
 	margin: 0 auto;
 }

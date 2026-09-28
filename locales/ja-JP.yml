@@ -2533,6 +2533,7 @@ _drawRoom:
   noRooms: "開催中の部屋はありません"
   openRooms: "開催中の部屋"
   savedRooms: "保存した絵チャ"
+  everyoneSavedRooms: "みんなの保存した絵チャ"
   membersCount: "{n}/{max}人"
   online: "オンライン"
   offline: "オフライン"
