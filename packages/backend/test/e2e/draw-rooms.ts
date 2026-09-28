@@ -490,7 +490,10 @@ describe('絵チャ', () => {
 			// 透明度ロックはペン・塗りつぶしの線にだけ付く(消しゴムでは外す)
 			sendToChannel(aliceWs, 'stroke', { ...stroke('l1'), lock: true });
 			sendToChannel(aliceWs, 'stroke', { ...stroke('l2'), tool: 'eraser', lock: true });
-			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => [s.id, s.lock ?? false]), [['l1', true], ['l2', false]]), { timeout: 5000, interval: 200 });
+			// 筆圧で何を変えるかも保存される(知らない値の線は受け付けない)
+			sendToChannel(aliceWs, 'stroke', { ...stroke('l3'), pressure: 'both' });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('l4'), pressure: 'color' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await mine())?.strokes.map(s => [s.id, s.lock ?? false, (s as { pressure?: string }).pressure ?? 'size']), [['l1', true, 'size'], ['l2', false, 'size'], ['l3', false, 'both']]), { timeout: 5000, interval: 200 });
 			assert.deepStrictEqual((await mine())?.layers.map(l => l.id), ['0', 'mul']);
 		} finally {
 			aliceWs.close();

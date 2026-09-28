@@ -10058,6 +10058,22 @@ export interface Locale extends ILocale {
          */
         "alphaLockHint": string;
         /**
+         * 筆圧で太さを変える
+         */
+        "pressureSize": string;
+        /**
+         * 筆圧で太さを変える(オフにすると、ペンの押し具合によらず同じ太さで描きます)
+         */
+        "pressureSizeHint": string;
+        /**
+         * 筆圧で濃さを変える
+         */
+        "pressureOpacity": string;
+        /**
+         * 筆圧で濃さを変える(弱く押すと薄く、強く押すと濃く描きます。ドットの筆には使えません)
+         */
+        "pressureOpacityHint": string;
+        /**
          * 上へ
          */
         "moveLayerUp": string;

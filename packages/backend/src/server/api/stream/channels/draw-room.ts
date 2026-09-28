@@ -192,7 +192,7 @@ export class DrawRoomChannel extends Channel {
 	@bindThis
 	private parseStrokeBody(body: JsonObject, maxPoints: number, margin: number = DRAW_STROKE_MAX_SIZE): Omit<DrawStroke, 'id'> | null {
 		if (this.room == null) return null;
-		const { tool, color, size, opacity, points, brush, clip, layer, lock } = body;
+		const { tool, color, size, opacity, points, brush, clip, layer, lock, pressure } = body;
 		// JUICE: どのレイヤーの線か(省略したら最初のレイヤー)
 		if (layer !== undefined && !this.isValidLayerId(layer)) return null;
 		if (tool !== 'pen' && tool !== 'eraser' && tool !== 'fill') return null;
@@ -207,6 +207,8 @@ export class DrawRoomChannel extends Channel {
 		if (clip !== undefined && (typeof clip !== 'string' || decodeDrawPoints(clip, DRAW_STROKE_MAX_POINTS) == null)) return null;
 		// JUICE: 透明度ロックは省略できる(消しゴムには付けない)
 		if (lock !== undefined && typeof lock !== 'boolean') return null;
+		// JUICE: 筆圧で何を変えるか(省略すると太さだけ)
+		if (pressure !== undefined && pressure !== 'none' && pressure !== 'opacity' && pressure !== 'both') return null;
 		if (typeof points !== 'string') return null;
 		const decoded = decodeDrawPoints(points, maxPoints);
 		if (decoded == null) return null;
@@ -224,6 +226,7 @@ export class DrawRoomChannel extends Channel {
 			...(clip !== undefined ? { clip } : {}),
 			...(layer !== undefined && layer !== '0' ? { layer } : {}),
 			...(lock === true && tool !== 'eraser' ? { lock: true } : {}),
+			...(pressure !== undefined ? { pressure } : {}),
 			points,
 		};
 	}

@@ -151,6 +151,12 @@ export const packedDrawStrokeSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		// JUICE: 筆圧で何を変えるか。無ければ太さだけ。noneは変えない、opacityは濃さだけ、bothは太さと濃さ
+		pressure: {
+			type: 'string',
+			optional: true, nullable: false,
+			enum: ['none', 'opacity', 'both'],
+		},
 		// 1点5バイト(x・yは1/8px単位のint16、筆圧は0〜255のuint8、リトルエンディアン)を並べてbase64にしたもの
 		points: {
 			type: 'string',

@@ -1088,6 +1088,7 @@ export type Channels = {
                 clip?: string;
                 layer?: string;
                 lock?: boolean;
+                pressure?: DrawStroke['pressure'];
                 points: string;
                 private?: boolean;
             }) => void;
@@ -1185,6 +1186,7 @@ export type Channels = {
                 clip?: string;
                 layer?: string;
                 lock?: boolean;
+                pressure?: DrawStroke['pressure'];
                 points: string;
             };
             cursor: {

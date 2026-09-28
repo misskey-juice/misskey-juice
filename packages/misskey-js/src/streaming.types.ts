@@ -303,7 +303,7 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; points: string; private?: boolean; }) => void;
+			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; }) => void;
 			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; pet?: boolean; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
 			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;
@@ -330,7 +330,7 @@ export type Channels = {
 			ended: (payload: { room: DrawRoom; }) => void;
 		};
 		receives: {
-			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; points: string; };
+			strokePart: { strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; };
 			cursor: { x: number | null; y: number | null; pet?: boolean; };
 			visibility: { visible: boolean; };
 			strokeCancel: { strokeId: string; };

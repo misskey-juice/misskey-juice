@@ -1336,7 +1336,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 			ADD_STROKE_SCRIPT, 10,
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.drawersKey(roomId), this.lastActivityKey(roomId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
 			JSON.stringify(stroke), userId, Date.now().toString(), limits.strokes.toString(), limits.bytes.toString(), REDIS_KEY_TTL_SEC.toString(), stroke.layer ?? '0', stroke.id,
-			this.bytesKey(roomId, ''), (await this.maxRoomBytes()).toString(),
+			// Luaの中で作るキー名には、ioredisが付けるキーの接頭辞が付かないので、ここで付けておく
+			`${this.redisClient.options.keyPrefix ?? ''}${this.bytesKey(roomId, '')}`, (await this.maxRoomBytes()).toString(),
 		) as number;
 		if (result === -1) return 'strokes';
 		if (result === -3) return 'bytes';

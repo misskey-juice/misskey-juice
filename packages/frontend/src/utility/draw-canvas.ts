@@ -190,8 +190,10 @@ type PendingEntry = PendingStroke & {
 // JUICE: 描いている途中のペンの線は、表示用のキャンバスとは別の重ね描き用キャンバスに、増えた分だけ描き足す。
 // こうすると描いている間に表示用のキャンバス(全レイヤーの合成)を描き直さずに済む。
 // 消しゴムは下の絵を消して見せる必要があるので、これまでどおりレイヤーごと描き直す
-function isOverlayStroke(stroke: { tool: DrawTool; lock?: boolean }): boolean {
-	// JUICE: 透明度ロックの線は、下の絵のある所にだけ描くので、レイヤーに重ねて描く(消しゴムと同じ扱い)
+function isOverlayStroke(stroke: { tool: DrawTool; lock?: boolean; pressure?: StrokeShape['pressure']; brush?: StrokeShape['brush'] }): boolean {
+	// JUICE: 透明度ロックの線は、下の絵のある所にだけ描くので、レイヤーに重ねて描く(消しゴムと同じ扱い)。
+	// 筆圧で濃さを変える普通の筆の線も、線全体を作り直して描くので、レイヤーに重ねて描く
+	if (stroke.brush !== 'soft' && pressureAffectsOpacity(stroke)) return false;
 	return stroke.tool === 'pen' && stroke.lock !== true;
 }
 
@@ -251,7 +253,13 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 	return canvas;
 }
 
-type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip' | 'lock'>;
+type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip' | 'lock' | 'pressure'>;
+
+// JUICE: 筆圧で濃さを変える線か(にじみ筆は筆跡ごとに、普通の筆は線全体で。ドット・塗りつぶしには使わない)
+function pressureAffectsOpacity(stroke: Pick<StrokeShape, 'pressure' | 'brush' | 'tool'>): boolean {
+	if (stroke.pressure !== 'opacity' && stroke.pressure !== 'both') return false;
+	return stroke.tool !== 'fill' && stroke.brush !== 'dot' && stroke.brush !== 'area';
+}
 
 // 半透明の線を一旦不透明で描いておく作業用のキャンバス(使い回す)。
 // 読み込みのときはWorkerの中でも描くので、documentが無ければOffscreenCanvasにする
@@ -284,6 +292,110 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 		return;
 	}
 	drawStrokeUnclipped(ctx, stroke);
+}
+
+// JUICE: 筆圧で濃さを変える普通の筆の線。
+// 1. 線の形は普通の線と同じに描く(輪郭をなめらかに保つ)
+// 2. 区間ごとの濃さ(筆圧)を、灰色の濃淡として「明るい方を残す」重ね方で、線より太く描き、ぼかす
+//    (区間の重なりで濃くならず、区間の境目の丸い形も見えないように)
+// 3. その明るさを不透明度にして、1の線に掛け合わせてから重ねる
+let pressureScratch: HTMLCanvasElement | null = null;
+let pressureField: HTMLCanvasElement | null = null;
+
+function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+	const blur = Math.max(1, stroke.size / 4);
+	const spread = Math.ceil(blur * 3);
+	// ぼかしが範囲の外(何も無い所)を拾って線の縁が薄くならないよう、ぼかす分だけ広く取る
+	const rect = pointsRect(stroke.points, stroke.size + 2 + spread);
+	if (rect == null) return;
+	const x0 = Math.floor(Math.max(0, rect.x0));
+	const y0 = Math.floor(Math.max(0, rect.y0));
+	const x1 = Math.ceil(Math.min(ctx.canvas.width, rect.x1));
+	const y1 = Math.ceil(Math.min(ctx.canvas.height, rect.y1));
+	if (x1 <= x0 || y1 <= y0) return;
+	const w = x1 - x0;
+	const h = y1 - y0;
+	pressureScratch ??= createScratch();
+	pressureField ??= createScratch();
+	for (const c of [pressureScratch, pressureField]) {
+		if (c.width < w) c.width = w;
+		if (c.height < h) c.height = h;
+	}
+	const p = stroke.points;
+	const count = Math.floor(p.length / 3);
+	const gray = (v: number) => {
+		const g = Math.round(Math.min(1, Math.max(0, v)) * 255);
+		return `rgb(${g}, ${g}, ${g})`;
+	};
+
+	// 2. 濃さの場(灰色)
+	const fctx = pressureField.getContext('2d', { willReadFrequently: true })!;
+	fctx.save();
+	fctx.globalAlpha = 1;
+	fctx.globalCompositeOperation = 'source-over';
+	fctx.filter = 'none';
+	fctx.fillStyle = '#000000';
+	fctx.fillRect(0, 0, w, h);
+	fctx.translate(-x0, -y0);
+	fctx.globalCompositeOperation = 'lighten';
+	fctx.lineCap = 'round';
+	fctx.lineJoin = 'round';
+	if (count === 1) {
+		fctx.fillStyle = gray(p[2]);
+		fctx.beginPath();
+		fctx.arc(p[0], p[1], strokeWidthAt(stroke, 0) / 2 + spread, 0, Math.PI * 2);
+		fctx.fill();
+	} else {
+		for (let i = 1; i < count; i++) {
+			const x = p[i * 3];
+			const y = p[i * 3 + 1];
+			const tail = i === count - 1;
+			fctx.beginPath();
+			fctx.lineWidth = (strokeWidthAt(stroke, i - 1) + strokeWidthAt(stroke, i)) / 2 + spread * 2;
+			fctx.strokeStyle = gray((p[(i - 1) * 3 + 2] + p[i * 3 + 2]) / 2);
+			fctx.moveTo(i === 1 ? p[0] : (p[(i - 1) * 3] + x) / 2, i === 1 ? p[1] : (p[(i - 1) * 3 + 1] + y) / 2);
+			fctx.quadraticCurveTo(x, y, tail ? x : (x + p[(i + 1) * 3]) / 2, tail ? y : (y + p[(i + 1) * 3 + 1]) / 2);
+			fctx.stroke();
+		}
+	}
+	fctx.restore();
+	// ぼかしてから、明るさを不透明度にする(ぼかしは、描いた濃淡の上に同じ絵をぼかして描き直して行う)
+	fctx.save();
+	fctx.globalCompositeOperation = 'copy';
+	fctx.filter = `blur(${blur}px)`;
+	fctx.drawImage(pressureField, 0, 0, w, h, 0, 0, w, h);
+	fctx.restore();
+	const image = fctx.getImageData(0, 0, w, h);
+	const data = image.data;
+	for (let k = 0; k < data.length; k += 4) data[k + 3] = data[k];
+	fctx.putImageData(image, 0, 0);
+
+	// 1. 線の形(普通の線と同じ)に、3. 濃さを掛け合わせる
+	const sctx = pressureScratch.getContext('2d')!;
+	sctx.save();
+	sctx.globalAlpha = 1;
+	sctx.globalCompositeOperation = 'source-over';
+	sctx.clearRect(0, 0, w, h);
+	sctx.translate(-x0, -y0);
+	drawStrokePath(sctx, { ...stroke, opacity: undefined, pressure: stroke.pressure === 'both' ? undefined : 'none' }, false);
+	sctx.restore();
+	sctx.save();
+	sctx.globalCompositeOperation = 'destination-in';
+	sctx.drawImage(pressureField, 0, 0, w, h, 0, 0, w, h);
+	sctx.restore();
+
+	ctx.save();
+	ctx.globalAlpha = stroke.opacity ?? 1;
+	ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
+	ctx.drawImage(pressureScratch, 0, 0, w, h, x0, y0, w, h);
+	ctx.restore();
+	// 大きな線に使った後は小さくしておく
+	if (w * h > 1024 * 1024) {
+		for (const c of [pressureScratch, pressureField]) {
+			c.width = 1;
+			c.height = 1;
+		}
+	}
 }
 
 // JUICE: 透明度ロックの線を、作業用キャンバスに普通に描いてから、レイヤーの描いてある所にだけ重ねる
@@ -326,6 +438,11 @@ function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape)
 	// JUICE: 囲って塗る(ペン)・囲った範囲を消す(消しゴム)は、多角形を塗りつぶす
 	if (stroke.tool === 'fill' || (stroke.tool === 'eraser' && stroke.brush === 'area')) {
 		drawFill(ctx, stroke);
+		return;
+	}
+	// JUICE: 筆圧で濃さを変える普通の筆の線
+	if (stroke.brush !== 'soft' && pressureAffectsOpacity(stroke)) {
+		drawPressureOpacityStroke(ctx, stroke);
 		return;
 	}
 	const opacity = stroke.opacity ?? 1;
@@ -413,7 +530,7 @@ const SOFT_STAMP_ALPHA = 0.22;
 /**
  * 点iの位置に、筆の種類に合わせた筆跡を1つ置く
  */
-function stampAt(ctx: CanvasRenderingContext2D, stroke: StrokeShape, x: number, y: number, width: number): void {
+function stampAt(ctx: CanvasRenderingContext2D, stroke: StrokeShape, x: number, y: number, width: number, pressure = 1): void {
 	if (stroke.brush === 'dot') {
 		// ドットは筆圧に関係なく、太さぶんの正方形の画素をくっきり塗る
 		const w = Math.max(1, Math.round(stroke.size));
@@ -423,7 +540,14 @@ function stampAt(ctx: CanvasRenderingContext2D, stroke: StrokeShape, x: number, 
 	}
 	const r = Math.max(0.5, width / 2);
 	// JUICE: 筆跡ごとにグラデーションを作ると重い(線が多い絵の描き直しで数秒かかる)ので、色ごとに作っておいた筆跡の絵を
-	// 大きさに合わせて置く
+	// 大きさに合わせて置く。筆圧で濃さを変える線は、筆跡ごとの濃さを筆圧に合わせる
+	if (pressureAffectsOpacity(stroke)) {
+		const alpha = ctx.globalAlpha;
+		ctx.globalAlpha = alpha * Math.min(1, Math.max(0, pressure));
+		ctx.drawImage(softStampOf(stroke.color), x - r, y - r, r * 2, r * 2);
+		ctx.globalAlpha = alpha;
+		return;
+	}
 	ctx.drawImage(softStampOf(stroke.color), x - r, y - r, r * 2, r * 2);
 }
 
@@ -494,9 +618,11 @@ function drawBrushLines(ctx: CanvasRenderingContext2D, stroke: StrokeShape, from
 		const w1 = strokeWidthAt(stroke, i);
 		const distance = Math.hypot(x1 - x0, y1 - y0);
 		const steps = Math.max(1, Math.ceil(distance / Math.max(0.5, ((w0 + w1) / 2) * 0.12)));
+		const p0 = p[(i - 1) * 3 + 2];
+		const p1 = p[i * 3 + 2];
 		for (let k = 1; k <= steps; k++) {
 			const t = k / steps;
-			stampAt(ctx, stroke, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, w0 + (w1 - w0) * t);
+			stampAt(ctx, stroke, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, w0 + (w1 - w0) * t, p0 + (p1 - p0) * t);
 		}
 	}
 }
@@ -515,6 +641,8 @@ export function rotatePoints(points: number[], angle: number, px: number, py: nu
 }
 
 function strokeWidthAt(stroke: StrokeShape, i: number): number {
+	// JUICE: 筆圧で太さを変えない線(pressureが'none'・'opacity')は、いつも同じ太さ
+	if (stroke.pressure === 'none' || stroke.pressure === 'opacity') return Math.max(0.5, stroke.size);
 	return Math.max(0.5, stroke.size * Math.max(0.1, stroke.points[i * 3 + 2]));
 }
 
@@ -573,7 +701,7 @@ function drawStrokePath(ctx: CanvasRenderingContext2D, stroke: StrokeShape, eras
 	ctx.save();
 	applyStrokeStyle(ctx, stroke, erase);
 	if (stroke.brush === 'dot' || stroke.brush === 'soft') {
-		stampAt(ctx, stroke, stroke.points[0], stroke.points[1], strokeWidthAt(stroke, 0));
+		stampAt(ctx, stroke, stroke.points[0], stroke.points[1], strokeWidthAt(stroke, 0), stroke.points[2]);
 		drawBrushLines(ctx, stroke, 1, count - 1);
 	} else if (count === 1) {
 		drawDot(ctx, stroke);
@@ -598,7 +726,7 @@ function drawStrokeIncrement(ctx: CanvasRenderingContext2D, stroke: StrokeShape,
 	applyStrokeStyle(ctx, stroke, false);
 	// ドット・にじみ筆は点と点を直線でつなぐので、届いた点までの区間は全て形が決まっている
 	if (stroke.brush === 'dot' || stroke.brush === 'soft') {
-		if (drawnSegments === 0) stampAt(ctx, stroke, stroke.points[0], stroke.points[1], strokeWidthAt(stroke, 0));
+		if (drawnSegments === 0) stampAt(ctx, stroke, stroke.points[0], stroke.points[1], strokeWidthAt(stroke, 0), stroke.points[2]);
 		if (count - 1 > drawnSegments) {
 			drawBrushLines(ctx, stroke, drawnSegments + 1, count - 1);
 			drawnSegments = count - 1;
@@ -658,7 +786,7 @@ export class DrawCanvasEngine {
 
 	// JUICE: 描いている途中の線を、重ね描き用のキャンバスに描くか。合成モードのレイヤーの線は、下の絵と正しく合成して見せるため、
 	// 消しゴム・透明度ロックの線と同じくレイヤーに重ねて描く
-	private isOverlay(layer: Layer, stroke: { tool: DrawTool; lock?: boolean }): boolean {
+	private isOverlay(layer: Layer, stroke: { tool: DrawTool; lock?: boolean; pressure?: StrokeShape['pressure']; brush?: StrokeShape['brush'] }): boolean {
 		return isOverlayStroke(stroke) && layer.blend === 'source-over';
 	}
 
@@ -733,7 +861,9 @@ export class DrawCanvasEngine {
 		const canvas = this.groupCanvas[group];
 		if (canvas == null) return;
 		const layers = group === 'below' ? this.splitGroups().below : this.splitGroups().above;
-		if (stroke.tool === 'eraser' || stroke.lock === true || layer.opacity < 1 || layer.blend !== 'source-over' || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !this.isOverlay(layer, entry))) {
+		// JUICE: 描いている途中からレイヤーに重ねて描いていた線(消しゴム・透明度ロック・筆圧で濃さを変える線など)は、
+		// まとめたキャンバスに途中の分が既に入っているので、直接描き足すと二重になる。範囲だけ重ね直す
+		if (!this.isOverlay(layer, stroke) || layer.opacity < 1 || layer.blend !== 'source-over' || layers.at(-1) !== layer || [...layer.pending.values()].some(entry => !this.isOverlay(layer, entry))) {
 			this.markLayerRegion(layer, strokeRect(stroke));
 			return;
 		}

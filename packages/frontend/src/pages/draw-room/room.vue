@@ -100,6 +100,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button v-tooltip="i18n.ts._drawRoom.brushAreaHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'area' }]" :aria-label="i18n.ts._drawRoom.lassoFill" :aria-pressed="brushType === 'area'" @click="brushType = 'area'"><i class="ti ti-lasso-polygon"></i></button>
 						<button v-tooltip="i18n.ts._drawRoom.clipToLinesHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: clipToLines }]" :aria-label="i18n.ts._drawRoom.clipToLines" :aria-pressed="clipToLines" @click="clipToLines = !clipToLines"><i class="ti ti-shape"></i></button>
 						</template>
+						<!-- JUICE: 筆圧で太さ・濃さを変えるか(ペン・消しゴム。囲って塗るときは使わない) -->
+						<template v-if="usesBrushSize && brushType !== 'area'">
+						<button
+							v-tooltip="i18n.ts._drawRoom.pressureSizeHint"
+							class="_button"
+							:class="[$style.toolButton, { [$style.toolButtonActive]: pressureSize }]"
+							:aria-label="i18n.ts._drawRoom.pressureSize"
+							:aria-pressed="pressureSize"
+							@click="pressureSize = !pressureSize"
+						><i class="ti ti-line-height"></i></button>
+						<button
+							v-if="brushType !== 'dot'"
+							v-tooltip="i18n.ts._drawRoom.pressureOpacityHint"
+							class="_button"
+							:class="[$style.toolButton, { [$style.toolButtonActive]: pressureOpacity }]"
+							:aria-label="i18n.ts._drawRoom.pressureOpacity"
+							:aria-pressed="pressureOpacity"
+							@click="pressureOpacity = !pressureOpacity"
+						><i class="ti ti-droplet-half-2"></i></button>
+						</template>
 						<!-- JUICE: 透明度ロック(ペン・塗りつぶしのとき。消しゴムには効かない) -->
 						<button
 							v-if="(usesBrushSize && tool !== 'eraser') || tool === 'bucket'"
@@ -717,6 +737,15 @@ const brushType = ref<'normal' | 'soft' | 'dot' | 'area'>('normal');
 const clipToLines = ref(false);
 // JUICE: 透明度ロック(レイヤーの描いてある所にだけ描く。ペン・塗りつぶし・囲って塗る)
 const alphaLock = ref(false);
+// JUICE: 筆圧で太さを変えるか・濃さを変えるか(プロファイルに覚える)
+const pressureSize = prefer.model('drawRoomPressureSize');
+const pressureOpacity = prefer.model('drawRoomPressureOpacity');
+const pressureMode = computed<'size' | NonNullable<CanvasStroke['pressure']>>(() => {
+	if (pressureSize.value && pressureOpacity.value) return 'both';
+	if (pressureSize.value) return 'size';
+	if (pressureOpacity.value) return 'opacity';
+	return 'none';
+});
 // ドットをくっきり表示する(拡大したときに画素をぼかさない)。表示の好みはプロファイルに覚える(バックアップ・復元で戻る)
 const dotView = prefer.model('drawRoomDotView');
 // 画素の格子は、1画素が画面上で8px以上に拡大されたときだけ出す(それより小さいと格子で絵が灰色に見えてしまう)。
@@ -1288,6 +1317,7 @@ function connect(): void {
 			brush: payload.brush,
 			layer: payload.layer,
 			...(payload.lock === true ? { lock: true } : {}),
+			...(payload.pressure != null ? { pressure: payload.pressure } : {}),
 			...(payload.clip != null ? { clip: decodePoints(payload.clip) } : {}),
 			points: decodePoints(payload.points),
 		});
@@ -1996,6 +2026,8 @@ type ActiveStroke = {
 	layer?: string;
 	// JUICE: 透明度ロック
 	lock?: boolean;
+	// JUICE: 筆圧で何を変えるか(無ければ太さだけ)
+	pressure?: CanvasStroke['pressure'];
 	points: number[];
 	// まだ送っていない点が始まる位置(points内のindex)
 	sentIndex: number;
@@ -2051,7 +2083,7 @@ function pressureOf(ev: PointerEvent): number {
 }
 
 // 今選んでいる道具で描く線の設定
-type StrokeStyle = Pick<ActiveStroke, 'tool' | 'color' | 'size' | 'opacity' | 'brush' | 'clip' | 'layer' | 'lock'>;
+type StrokeStyle = Pick<ActiveStroke, 'tool' | 'color' | 'size' | 'opacity' | 'brush' | 'clip' | 'layer' | 'lock' | 'pressure'>;
 
 function currentStrokeStyle(): StrokeStyle {
 	const drawTool: DrawTool = tool.value === 'eraser' ? 'eraser' : 'pen';
@@ -2064,6 +2096,8 @@ function currentStrokeStyle(): StrokeStyle {
 		...(activeLayerId.value !== '0' ? { layer: activeLayerId.value } : {}),
 		// JUICE: 透明度ロック(ペンのときだけ)
 		...(alphaLock.value && drawTool === 'pen' ? { lock: true } : {}),
+		// JUICE: 筆圧で何を変えるか(太さだけのときは省く。以前からの線と同じ)
+		...(pressureMode.value !== 'size' ? { pressure: pressureMode.value } : {}),
 	};
 }
 
@@ -2077,6 +2111,7 @@ function strokeStyleOf(stroke: ActiveStroke): StrokeStyle {
 		...(stroke.clip != null ? { clip: stroke.clip } : {}),
 		...(stroke.layer != null ? { layer: stroke.layer } : {}),
 		...(stroke.lock === true ? { lock: true } : {}),
+		...(stroke.pressure != null ? { pressure: stroke.pressure } : {}),
 	};
 }
 

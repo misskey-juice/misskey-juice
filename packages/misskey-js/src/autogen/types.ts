@@ -6663,6 +6663,8 @@ export type components = {
             dy?: number;
             layer?: string;
             lock?: boolean;
+            /** @enum {string} */
+            pressure?: 'none' | 'opacity' | 'both';
             points: string;
         };
         DrawLayer: {

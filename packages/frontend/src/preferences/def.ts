@@ -240,6 +240,13 @@ export const PREF_DEF = definePreferences({
 	drawRoomOpacity: {
 		default: 100,
 	},
+	// 筆圧で太さを変えるか・濃さを変えるか(ペン・消しゴム)
+	drawRoomPressureSize: {
+		default: true,
+	},
+	drawRoomPressureOpacity: {
+		default: false,
+	},
 	// カラーパレットに保存した色と、最近使った色
 	drawRoomSavedColors: {
 		default: [] as string[],

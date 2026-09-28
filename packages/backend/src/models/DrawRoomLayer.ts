@@ -30,6 +30,8 @@ export type DrawStroke = {
 	layer?: string;
 	// JUICE: 透明度ロック(その時点でレイヤーに描いてある所にだけ描く)。消しゴムには使わない
 	lock?: boolean;
+	// JUICE: 筆圧で何を変えるか。無ければ太さだけ(以前に描かれた線)。noneは変えない、opacityは濃さだけ、bothは太さと濃さ
+	pressure?: 'none' | 'opacity' | 'both';
 	points: string;
 };
 
