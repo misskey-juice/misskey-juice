@@ -295,18 +295,20 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 }
 
 // JUICE: 筆圧で濃さを変える普通の筆の線。
-// 1. 線の形は普通の線と同じに描く(輪郭をなめらかに保つ)
-// 2. 区間ごとの濃さ(筆圧)を、灰色の濃淡として「明るい方を残す」重ね方で、線より太く描き、ぼかす
-//    (区間の重なりで濃くならず、区間の境目の丸い形も見えないように)
-// 3. その明るさを不透明度にして、1の線に掛け合わせてから重ねる
+// 区間ごとの濃さ(筆圧)を、灰色の濃淡として線とまったく同じ形(同じつなぎ方・同じ太さ)で描き、その明るさを不透明度にする。
+// - 区間(2次曲線)は細かいまっすぐな小区間に分け、端を丸めずに、始まりの濃さから終わりの濃さへのグラデーションで描く
+//   (小区間どうしが重ならず、どの境目でも両側の濃さがそろう)
+// - 曲がり角のすき間と線の両端は、つなぎ目ごとにそのつなぎ目の濃さの丸を下に敷いて埋める(線の形と同じ丸い形になる)
+// - 1本の線の中で重なった所(同じ所で筆圧を変えた・線が交差した)は、濃い方を残す(小区間どうし・丸どうしとも)。
+//   丸は小区間の下に敷くので、小区間のある所は小区間の濃さになる
+// 線より太く描いたりぼかしたりしないので、ある区間の濃さはその区間の形の中にしか出ない。
+// (前は濃淡を線より太く描き「明るい方を残す」重ね方でぼかしていたため、1本の線が回り込んで描き始めの近くに来ると、
+// 描き終わりの濃さが描き始めの薄い所まで広がって濃くなっていた)
 let pressureScratch: HTMLCanvasElement | null = null;
 let pressureField: HTMLCanvasElement | null = null;
 
 function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
-	const blur = Math.max(1, stroke.size / 4);
-	const spread = Math.ceil(blur * 3);
-	// ぼかしが範囲の外(何も無い所)を拾って線の縁が薄くならないよう、ぼかす分だけ広く取る
-	const rect = pointsRect(stroke.points, stroke.size + 2 + spread);
+	const rect = pointsRect(stroke.points, stroke.size + 2);
 	if (rect == null) return;
 	const x0 = Math.floor(Math.max(0, rect.x0));
 	const y0 = Math.floor(Math.max(0, rect.y0));
@@ -328,58 +330,141 @@ function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: Stroke
 		return `rgb(${g}, ${g}, ${g})`;
 	};
 
-	// 2. 濃さの場(灰色)
+	// 濃さの場(灰色)。線の外は透明のまま
 	const fctx = pressureField.getContext('2d', { willReadFrequently: true })!;
 	fctx.save();
 	fctx.globalAlpha = 1;
 	fctx.globalCompositeOperation = 'source-over';
 	fctx.filter = 'none';
-	fctx.fillStyle = '#000000';
-	fctx.fillRect(0, 0, w, h);
+	fctx.clearRect(0, 0, w, h);
 	fctx.translate(-x0, -y0);
-	fctx.globalCompositeOperation = 'lighten';
-	fctx.lineCap = 'round';
 	fctx.lineJoin = 'round';
 	if (count === 1) {
 		fctx.fillStyle = gray(p[2]);
 		fctx.beginPath();
-		fctx.arc(p[0], p[1], strokeWidthAt(stroke, 0) / 2 + spread, 0, Math.PI * 2);
+		fctx.arc(p[0], p[1], strokeWidthAt(stroke, 0) / 2, 0, Math.PI * 2);
 		fctx.fill();
 	} else {
+		// 区間: 前の点との中点から、この点を通って次の点との中点まで(線の形と同じつなぎ方)。端の濃さは、となりの点との平均
+		const segments: { sx: number; sy: number; cx: number; cy: number; ex: number; ey: number; width: number; a: number; b: number }[] = [];
 		for (let i = 1; i < count; i++) {
 			const x = p[i * 3];
 			const y = p[i * 3 + 1];
 			const tail = i === count - 1;
-			fctx.beginPath();
-			fctx.lineWidth = (strokeWidthAt(stroke, i - 1) + strokeWidthAt(stroke, i)) / 2 + spread * 2;
-			fctx.strokeStyle = gray((p[(i - 1) * 3 + 2] + p[i * 3 + 2]) / 2);
-			fctx.moveTo(i === 1 ? p[0] : (p[(i - 1) * 3] + x) / 2, i === 1 ? p[1] : (p[(i - 1) * 3 + 1] + y) / 2);
-			fctx.quadraticCurveTo(x, y, tail ? x : (x + p[(i + 1) * 3]) / 2, tail ? y : (y + p[(i + 1) * 3 + 1]) / 2);
-			fctx.stroke();
+			segments.push({
+				sx: i === 1 ? p[0] : (p[(i - 1) * 3] + x) / 2,
+				sy: i === 1 ? p[1] : (p[(i - 1) * 3 + 1] + y) / 2,
+				cx: x,
+				cy: y,
+				ex: tail ? x : (x + p[(i + 1) * 3]) / 2,
+				ey: tail ? y : (y + p[(i + 1) * 3 + 1]) / 2,
+				width: (strokeWidthAt(stroke, i - 1) + strokeWidthAt(stroke, i)) / 2,
+				a: i === 1 ? p[2] : (p[(i - 1) * 3 + 2] + p[i * 3 + 2]) / 2,
+				b: tail ? p[i * 3 + 2] : (p[i * 3 + 2] + p[(i + 1) * 3 + 2]) / 2,
+			});
 		}
+		// 区間(2次曲線)を細かいまっすぐな小区間に分ける。小区間ごとに自分の向きにグラデーションをかけるので、
+		// 曲がっていても小区間の境目で両側の濃さがそろう
+		type Piece = { x0: number; y0: number; x1: number; y1: number; v0: number; v1: number; width: number };
+		const pieces: Piece[] = [];
+		for (const seg of segments) {
+			const approx = Math.hypot(seg.cx - seg.sx, seg.cy - seg.sy) + Math.hypot(seg.ex - seg.cx, seg.ey - seg.cy);
+			const n = Math.min(24, Math.max(1, Math.ceil(approx / 3)));
+			let px = seg.sx;
+			let py = seg.sy;
+			for (let k = 1; k <= n; k++) {
+				const t = k / n;
+				const qx = (1 - t) * (1 - t) * seg.sx + 2 * (1 - t) * t * seg.cx + t * t * seg.ex;
+				const qy = (1 - t) * (1 - t) * seg.sy + 2 * (1 - t) * t * seg.cy + t * t * seg.ey;
+				pieces.push({ x0: px, y0: py, x1: qx, y1: qy, v0: seg.a + (seg.b - seg.a) * (k - 1) / n, v1: seg.a + (seg.b - seg.a) * t, width: seg.width });
+				px = qx;
+				py = qy;
+			}
+		}
+		// 下敷き: つなぎ目ごとに、そのつなぎ目の濃さの丸を置く(曲がり角のすき間と、線の両端の丸い所を埋める)
+		// 重なった所は濃い方を残す(同じ所で筆圧を変えたとき、後から軽くなっても薄くならないように)
+		fctx.globalCompositeOperation = 'lighten';
+		const dot = (x: number, y: number, r: number, v: number) => {
+			fctx.fillStyle = gray(v);
+			fctx.beginPath();
+			fctx.arc(x, y, r, 0, Math.PI * 2);
+			fctx.fill();
+		};
+		dot(pieces[0].x0, pieces[0].y0, pieces[0].width / 2, pieces[0].v0);
+		for (const piece of pieces) dot(piece.x1, piece.y1, piece.width / 2, piece.v1);
+		// 線の両端の丸い所(端より外側の半分)は、端の濃さにする(となりの濃い丸がかぶって、端だけ段になって濃く見えないように)。
+		// その場で押した点のように道のりがペン幅より短い線では、外側が決まらないので行わない
+		const moving = pieces.filter(piece => piece.x0 !== piece.x1 || piece.y0 !== piece.y1);
+		const pathLength = moving.reduce((sum, piece) => sum + Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0), 0);
+		if (moving.length > 0 && pathLength >= Math.max(...pieces.map(piece => piece.width))) {
+			const cap = (x: number, y: number, dx: number, dy: number, r: number, v: number) => {
+				const len = Math.hypot(dx, dy);
+				const ux = dx / len * (r + 2);
+				const uy = dy / len * (r + 2);
+				fctx.save();
+				fctx.globalCompositeOperation = 'source-over';
+				fctx.beginPath();
+				fctx.moveTo(x - uy, y + ux);
+				fctx.lineTo(x - uy + ux, y + ux + uy);
+				fctx.lineTo(x + uy + ux, y - ux + uy);
+				fctx.lineTo(x + uy, y - ux);
+				fctx.closePath();
+				fctx.clip();
+				dot(x, y, r, v);
+				fctx.restore();
+			};
+			const first = moving[0];
+			const last = moving[moving.length - 1];
+			cap(pieces[0].x0, pieces[0].y0, first.x0 - first.x1, first.y0 - first.y1, pieces[0].width / 2, pieces[0].v0);
+			const end = pieces[pieces.length - 1];
+			cap(end.x1, end.y1, last.x1 - last.x0, last.y1 - last.y0, end.width / 2, end.v1);
+		}
+		// 上: 端を丸めない小区間を、始まりの濃さから終わりの濃さへのグラデーションで。
+		// 別のキャンバスに(重なりは濃い方を残して)描いてから、丸の上に重ねる(小区間のある所は小区間の濃さにする)
+		const pctx = pressureScratch.getContext('2d')!;
+		pctx.save();
+		pctx.globalAlpha = 1;
+		pctx.globalCompositeOperation = 'source-over';
+		pctx.clearRect(0, 0, w, h);
+		pctx.translate(-x0, -y0);
+		pctx.globalCompositeOperation = 'lighten';
+		pctx.lineCap = 'butt';
+		for (const piece of pieces) {
+			if (piece.x0 === piece.x1 && piece.y0 === piece.y1) continue;
+			const gradient = pctx.createLinearGradient(piece.x0, piece.y0, piece.x1, piece.y1);
+			gradient.addColorStop(0, gray(piece.v0));
+			gradient.addColorStop(1, gray(piece.v1));
+			pctx.strokeStyle = gradient;
+			pctx.lineWidth = piece.width;
+			// 縁のなめらか処理で小区間の境目に細いすき間ができて筋に見えないよう、前後に1pxずつ伸ばして重ねる
+			// (伸ばした所はグラデーションの端の色のままなので、となりの濃さは持ち込まない)
+			const len = Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0);
+			const ux = (piece.x1 - piece.x0) / len;
+			const uy = (piece.y1 - piece.y0) / len;
+			pctx.beginPath();
+			pctx.moveTo(piece.x0 - ux, piece.y0 - uy);
+			pctx.lineTo(piece.x1 + ux, piece.y1 + uy);
+			pctx.stroke();
+		}
+		pctx.restore();
+		fctx.setTransform(1, 0, 0, 1, 0, 0);
+		fctx.globalCompositeOperation = 'source-over';
+		fctx.drawImage(pressureScratch, 0, 0, w, h, 0, 0, w, h);
 	}
 	fctx.restore();
-	// ぼかしてから、明るさを不透明度にする(ぼかしは、描いた濃淡の上に同じ絵をぼかして描き直して行う)
-	fctx.save();
-	fctx.globalCompositeOperation = 'copy';
-	fctx.filter = `blur(${blur}px)`;
-	fctx.drawImage(pressureField, 0, 0, w, h, 0, 0, w, h);
-	fctx.restore();
+	// 明るさ×描いてある割合(縁のなめらかさ)を不透明度にする
 	const image = fctx.getImageData(0, 0, w, h);
 	const data = image.data;
-	for (let k = 0; k < data.length; k += 4) data[k + 3] = data[k];
+	for (let k = 0; k < data.length; k += 4) data[k + 3] = Math.round(data[k] * data[k + 3] / 255);
 	fctx.putImageData(image, 0, 0);
 
-	// 1. 線の形(普通の線と同じ)に、3. 濃さを掛け合わせる
+	// 線の色を、その不透明度で切り抜く
 	const sctx = pressureScratch.getContext('2d')!;
 	sctx.save();
 	sctx.globalAlpha = 1;
-	sctx.globalCompositeOperation = 'source-over';
-	sctx.clearRect(0, 0, w, h);
-	sctx.translate(-x0, -y0);
-	drawStrokePath(sctx, { ...stroke, opacity: undefined, pressure: stroke.pressure === 'both' ? undefined : 'none' }, false);
-	sctx.restore();
-	sctx.save();
+	sctx.globalCompositeOperation = 'copy';
+	sctx.fillStyle = stroke.color;
+	sctx.fillRect(0, 0, w, h);
 	sctx.globalCompositeOperation = 'destination-in';
 	sctx.drawImage(pressureField, 0, 0, w, h, 0, 0, w, h);
 	sctx.restore();
