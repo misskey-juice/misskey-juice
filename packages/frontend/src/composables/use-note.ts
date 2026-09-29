@@ -475,9 +475,17 @@ export function useNote(
 
 			const favorite = !isFavorited.value;
 			if (favorite) claimAchievement('noteFavorited1');
-			// 失敗はapiWithDialogが知らせる
-			const ok = await os.apiWithDialog(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', { noteId: appearNote.id }).then(() => true, () => false);
-			if (!ok) return;
+			try {
+				await misskeyApi(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', { noteId: appearNote.id });
+				os.success();
+			} catch (err) {
+				// ほかの画面・端末で先に登録・解除されていたときは、エラーにせずその状態に合わせる
+				const code = (err as { code?: string } | null)?.code;
+				if (code !== 'ALREADY_FAVORITED' && code !== 'NOT_FAVORITED') {
+					os.alert({ type: 'error', text: (err as { message?: string } | null)?.message ?? i18n.ts.somethingHappened });
+					return;
+				}
+			}
 			setFavoriteState(appearNote.id, favorite);
 			globalEvents.emit(favorite ? 'noteFavorited' : 'noteUnfavorited', appearNote.id);
 		} finally {

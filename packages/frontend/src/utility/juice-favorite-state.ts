@@ -19,11 +19,13 @@ export function setFavoriteState(noteId: string, favorited: boolean): void {
 	known.set(noteId, favorited);
 }
 
-// お気に入りの一覧に出したノートは、お気に入り済み
+// お気に入りの一覧に出したノートは、お気に入り済み。ただし、この画面で外したノート(false)はそのままにする
+// (一覧に残っているノートを「もっと見る」等で読み直したときに、外したのにお気に入り済みに戻らないように)
 export function markFavorited(items: { noteId: string; note: { id: string } }[]): void {
 	for (const item of items) {
-		known.set(item.noteId, true);
-		known.set(item.note.id, true);
+		for (const id of [item.noteId, item.note.id]) {
+			if (!known.has(id)) known.set(id, true);
+		}
 	}
 }
 

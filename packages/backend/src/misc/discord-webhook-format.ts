@@ -273,10 +273,16 @@ function formatInactiveModeratorsInvitationOnlyChanged(server: string, t: Messag
 // JUICE: 1回の送信でまとめて作られた申請は、名前を並べて件数を添える(一覧が長すぎないよう、並べるのは20件まで)
 const MAX_LISTED_REQUESTS = 20;
 
+// まとめる前の形(count・requestsが無い。デプロイ前にキューに入ったWebhook等)は、1件として扱う
+function requestsOf(payload: EmojiRequestCreatedPayload): { requests: { name: string }[]; count: number } {
+	const requests = payload.requests != null && payload.requests.length > 0 ? payload.requests : [payload];
+	return { requests, count: payload.count ?? requests.length };
+}
+
 function formatRequestNames(payload: EmojiRequestCreatedPayload, t: Messages, format: (name: string) => string): string {
-	const requests = payload.requests.length > 0 ? payload.requests : [payload];
+	const { requests, count } = requestsOf(payload);
 	const listed = requests.slice(0, MAX_LISTED_REQUESTS).map(r => format(r.name)).join('\n');
-	const rest = payload.count - Math.min(requests.length, MAX_LISTED_REQUESTS);
+	const rest = count - Math.min(requests.length, MAX_LISTED_REQUESTS);
 	return rest > 0 ? `${listed}\n${t.moreRequests(rest)}` : listed;
 }
 
@@ -284,8 +290,9 @@ function requestFields(server: string, payload: EmojiRequestCreatedPayload, t: M
 	const fields: NonNullable<DiscordEmbed['fields']> = [
 		{ name: t.requesterField, value: formatUserLink(server, payload.requester), inline: true },
 	];
-	if (payload.count > 1) {
-		fields.push({ name: t.requestCountField, value: String(payload.count), inline: true });
+	const { count } = requestsOf(payload);
+	if (count > 1) {
+		fields.push({ name: t.requestCountField, value: String(count), inline: true });
 	} else {
 		fields.push({ name: t.categoryField, value: payload.category ?? t.noCategory, inline: true });
 	}

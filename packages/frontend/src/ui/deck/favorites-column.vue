@@ -40,8 +40,9 @@ const paginator = markRaw(new Paginator('i/favorites', {
 	limit: 10,
 }));
 
-// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)
-watch(() => paginator.items.value.length, () => markFavorited(paginator.items.value), { immediate: true });
+// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)。
+// 再読み込みで件数が同じまま中身が入れ替わっても拾えるよう、並んでいるidで見る
+watch(() => paginator.items.value.map(item => item.id).join(), () => markFavorited(paginator.items.value), { immediate: true });
 
 function reloadTimeline() {
 	return new Promise<void>((res) => {

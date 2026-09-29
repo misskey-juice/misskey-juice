@@ -52,17 +52,22 @@ export function useJuiceBulkReview(kind: Kind, items: Ref<Item[]>, state: Ref<st
 		const done = os.waiting({ text: i18n.ts._juice.bulkReviewProgress });
 		const failed: { name: string; message: string }[] = [];
 		let succeeded = 0;
-		for (const item of targets) {
-			try {
-				await call(item);
+		try {
+			for (const item of targets) {
+				try {
+					await call(item);
+				} catch (err) {
+					failed.push({ name: item.name, message: (err as { message?: string } | null)?.message ?? String(err) });
+					continue;
+				}
 				succeeded++;
 				removeItem(item.id);
 				forget(item.id);
-			} catch (err) {
-				failed.push({ name: item.name, message: (err as { message?: string } | null)?.message ?? String(err) });
 			}
+		} finally {
+			// 途中で思わぬ例外が出ても、待ちの表示が残らないように
+			done();
 		}
-		done();
 		if (selected.value.length === 0) selecting.value = false;
 		const lines = [i18n.tsx._juice.bulkReviewDone({ n: succeeded })];
 		if (failed.length > 0) {
@@ -87,8 +92,10 @@ export function useJuiceBulkReview(kind: Kind, items: Ref<Item[]>, state: Ref<st
 		const targets = selectedItems.value;
 		if (targets.length === 0) return;
 		const { canceled, result: reason } = await os.inputText({
-			title: i18n.ts._emojiRequestApprovals.rejectReasonTitle,
+			title: kind === 'emoji' ? i18n.ts._emojiRequestApprovals.rejectReasonTitle : i18n.ts._avatarDecorationRequestApprovals.rejectReasonTitle,
 			text: i18n.tsx._juice.bulkRejectText({ n: targets.length }),
+			// 却下のAPIの理由の上限と同じ(超えると全件が同じエラーで失敗するため)
+			maxLength: 1024,
 		});
 		if (canceled || !reason) return;
 		await run(targets, item => misskeyApi(endpoints[kind].reject, { requestId: item.id, reason }));

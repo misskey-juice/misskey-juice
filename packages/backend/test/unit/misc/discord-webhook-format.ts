@@ -101,6 +101,19 @@ describe('misc:discord-webhook-format', () => {
 			expect(result.embeds[0].description).toBe('sparkle_crown');
 		});
 
+		test('formats emojiRequestCreated (JUICE) queued before bundling (no count / requests) as a single request', () => {
+			// まとめる前に入ったジョブのペイロード(count・requestsが無い)
+			const result = formatSystemWebhookForDiscord('emojiRequestCreated', {
+				id: 'req1',
+				name: 'old_style',
+				category: null,
+				requester: user,
+			}, server);
+
+			expect(result.embeds[0].description).toBe('`:old_style:`');
+			expect(result.embeds[0].fields?.map(f => f.name)).toContain('カテゴリ');
+		});
+
 		test('formats emojiRequestCreated (JUICE) that bundles several requests into one embed', () => {
 			const requests = Array.from({ length: 22 }, (_, i) => ({ id: `req${i}`, name: `emoji_${i}`, category: null }));
 			const result = formatSystemWebhookForDiscord('emojiRequestCreated', {

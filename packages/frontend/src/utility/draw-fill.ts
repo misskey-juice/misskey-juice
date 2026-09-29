@@ -153,12 +153,42 @@ function floodFillClosingGaps(width: number, height: number, sx: number, sy: num
 
 /**
  * JUICE: 囲って塗るの「線の中だけ塗る」。投げ縄(xy: [x, y, …]の多角形)の中で、線に閉じ込められている所だけを求める。
- * 塗れる画素は、囲み始めた所(sx, sy)と似た色の画素(ふつうは背景)。投げ縄の中で塗れる画素がつながっているかたまりのうち、
+ * 塗れる画素は、投げ縄が通った所でいちばん多い色と似た色の画素(ふつうは背景。線の上から囲み始めても、線の色にならないように)。投げ縄の中で塗れる画素がつながっているかたまりのうち、
  * 投げ縄の外の塗れる画素につながっていないもの(線で閉じている所)を塗る。線そのものは色が違うので塗らない。
  * gapが1以上なら、それより狭い線の隙間は閉じているものとして扱う(バケツの隙間閉じと同じ考え方)。
- * 塗る所が無ければnull
+ * 塗る所が無ければnull。隙間閉じで細い閉じた所が1つも見つからなければ、隙間閉じ無しでもう一度探す
  */
-export function enclosedFillMask(image: ImageData, xy: number[], sx: number, sy: number, tolerance: number, gap = 0): Uint8Array | null {
+export function enclosedFillMask(image: ImageData, xy: number[], tolerance: number, gap = 0): Uint8Array | null {
+	const result = enclosedFillMaskWith(image, xy, tolerance, gap);
+	if (result == null && gap > 0) return enclosedFillMaskWith(image, xy, tolerance, 0);
+	return result;
+}
+
+// 投げ縄が通った所の画素で、いちばん多い色(似た色をまとめるため、各色を16段階に丸めて数える)
+function dominantColorOnPath(image: ImageData, xy: number[]): [number, number, number, number] {
+	const { width, height, data } = image;
+	const counts = new Map<number, { n: number; o: number }>();
+	const n = xy.length / 2;
+	for (let k = 0; k < n; k++) {
+		const ax = xy[k * 2]; const ay = xy[k * 2 + 1];
+		const bx = xy[((k + 1) % n) * 2]; const by = xy[((k + 1) % n) * 2 + 1];
+		const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+		for (let t = 0; t < steps; t++) {
+			const x = Math.min(width - 1, Math.max(0, Math.floor(ax + (bx - ax) * t / steps)));
+			const y = Math.min(height - 1, Math.max(0, Math.floor(ay + (by - ay) * t / steps)));
+			const o = (y * width + x) * 4;
+			const key = ((data[o] >> 4) << 12) | ((data[o + 1] >> 4) << 8) | ((data[o + 2] >> 4) << 4) | (data[o + 3] >> 4);
+			const entry = counts.get(key);
+			if (entry == null) counts.set(key, { n: 1, o });
+			else entry.n++;
+		}
+	}
+	let best = { n: 0, o: 0 };
+	for (const entry of counts.values()) if (entry.n > best.n) best = entry;
+	return [data[best.o], data[best.o + 1], data[best.o + 2], data[best.o + 3]];
+}
+
+function enclosedFillMaskWith(image: ImageData, xy: number[], tolerance: number, gap: number): Uint8Array | null {
 	const { width, height, data } = image;
 	if (xy.length < 6) return null;
 	// 投げ縄を囲む範囲(外側の1画素も、投げ縄の外として見る)
@@ -196,11 +226,8 @@ export function enclosedFillMask(image: ImageData, xy: number[], sx: number, sy:
 		}
 	}
 
-	// 塗れる画素(囲み始めた所と似た色)
-	const px = Math.min(width - 1, Math.max(0, Math.floor(sx)));
-	const py = Math.min(height - 1, Math.max(0, Math.floor(sy)));
-	const seed = (py * width + px) * 4;
-	const [r0, g0, b0, a0] = [data[seed], data[seed + 1], data[seed + 2], data[seed + 3]];
+	// 塗れる画素(投げ縄が通った所でいちばん多い色と似た色)
+	const [r0, g0, b0, a0] = dominantColorOnPath(image, xy);
 	const fillable = new Uint8Array(size);
 	for (let y = 0; y < bh; y++) {
 		for (let x = 0; x < bw; x++) {

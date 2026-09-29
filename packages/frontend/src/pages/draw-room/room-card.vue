@@ -67,8 +67,9 @@ const remainingMinutes = computed(() => (props.room.deletesAt == null ? 0 : Math
 	flex-shrink: 0;
 	padding: 0 6px;
 	border-radius: 999px;
-	background: var(--MI_THEME-warn);
-	color: var(--MI_THEME-fgOnAccent);
+	// テーマによって警告の色の上の白文字が読みにくいので、薄い背景に警告の色の文字にする
+	background: color-mix(in srgb, var(--MI_THEME-warn), transparent 80%);
+	color: var(--MI_THEME-warn);
 	font-weight: bold;
 }
 

@@ -2935,11 +2935,11 @@ function commitFill(xy: number[]): void {
 	commitFillStroke(points);
 }
 
-// JUICE: 囲って塗るの「線の中だけ塗る」。囲んだ中で、線で閉じている所(囲み始めた所と似た色の、外につながっていない所)だけを塗る
+// JUICE: 囲って塗るの「線の中だけ塗る」。囲んだ中で、線で閉じている所(投げ縄が通った所の色と似た色の、外につながっていない所)だけを塗る
 function commitEnclosedFill(xy: number[]): void {
 	const e = engine.value;
 	if (e == null || xy.length < 6) return;
-	const mask = enclosedFillMask(e.referenceImage(), xy, xy[0], xy[1], BUCKET_TOLERANCE, gapClosePixels());
+	const mask = enclosedFillMask(e.referenceImage(), xy, BUCKET_TOLERANCE, gapClosePixels());
 	if (mask == null) {
 		os.toast(i18n.ts._drawRoom.lassoFillNothingEnclosed);
 		return;
@@ -3844,8 +3844,9 @@ definePage(() => ({
 .contentGateBadge {
 	padding: 2px 8px;
 	border-radius: 999px;
-	background: var(--MI_THEME-warn);
-	color: var(--MI_THEME-fgOnAccent);
+	// テーマによって警告の色の上の白文字が読みにくいので、薄い背景に警告の色の文字にする
+	background: color-mix(in srgb, var(--MI_THEME-warn), transparent 80%);
+	color: var(--MI_THEME-warn);
 	font-size: 0.8em;
 	font-weight: bold;
 }

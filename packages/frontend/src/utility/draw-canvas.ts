@@ -276,7 +276,11 @@ function createScratch(): HTMLCanvasElement {
  * 太さが区間ごとに変わるので、区間ごとに線を引いて丸い線端でつなぐ。
  * 半透明の線は、区間の重なりが濃くならないよう作業用キャンバスに不透明で描いてから、まとめて薄く重ねる
  */
-export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+/**
+ * regionを渡すと、その範囲だけを描き直すものとして、重い線(筆圧で濃さを変える線)の計算をその範囲に絞る
+ * (描く範囲そのものは、呼び出し側のclipで絞っておくこと)
+ */
+export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape, region?: Rect): void {
 	// JUICE: 透明度ロックの線は、レイヤーの描いてある所(透明でない所)にだけ描く
 	if (stroke.lock === true && stroke.tool !== 'eraser') {
 		drawLockedStroke(ctx, stroke);
@@ -287,11 +291,11 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 		ctx.save();
 		tracePolygon(ctx, stroke.clip);
 		ctx.clip('evenodd');
-		drawStrokeUnclipped(ctx, stroke);
+		drawStrokeUnclipped(ctx, stroke, region);
 		ctx.restore();
 		return;
 	}
-	drawStrokeUnclipped(ctx, stroke);
+	drawStrokeUnclipped(ctx, stroke, region);
 }
 
 // JUICE: 筆圧で濃さを変える普通の筆の線。
@@ -307,13 +311,15 @@ export function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): 
 let pressureScratch: HTMLCanvasElement | null = null;
 let pressureField: HTMLCanvasElement | null = null;
 
-function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape, region?: Rect): void {
 	const rect = pointsRect(stroke.points, stroke.size + 2);
 	if (rect == null) return;
-	const x0 = Math.floor(Math.max(0, rect.x0));
-	const y0 = Math.floor(Math.max(0, rect.y0));
-	const x1 = Math.ceil(Math.min(ctx.canvas.width, rect.x1));
-	const y1 = Math.ceil(Math.min(ctx.canvas.height, rect.y1));
+	// 描いている途中は、描き足した範囲だけを描き直す。濃さの計算と画素の読み書きもその範囲に絞る
+	// (線全体を毎回計算すると、線が長くなるほど描き足しが重くなるため)
+	const x0 = Math.floor(Math.max(0, rect.x0, region?.x0 ?? 0));
+	const y0 = Math.floor(Math.max(0, rect.y0, region?.y0 ?? 0));
+	const x1 = Math.ceil(Math.min(ctx.canvas.width, rect.x1, region?.x1 ?? Infinity));
+	const y1 = Math.ceil(Math.min(ctx.canvas.height, rect.y1, region?.y1 ?? Infinity));
 	if (x1 <= x0 || y1 <= y0) return;
 	const w = x1 - x0;
 	const h = y1 - y0;
@@ -384,7 +390,11 @@ function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: Stroke
 		// 下敷き: つなぎ目ごとに、そのつなぎ目の濃さの丸を置く(曲がり角のすき間と、線の両端の丸い所を埋める)
 		// 重なった所は濃い方を残す(同じ所で筆圧を変えたとき、後から軽くなっても薄くならないように)
 		fctx.globalCompositeOperation = 'lighten';
+		// 計算する範囲にかからない丸・小区間は描かない
+		const touches = (ax: number, ay: number, bx: number, by: number, r: number) =>
+			Math.max(ax, bx) + r >= x0 && Math.min(ax, bx) - r <= x1 && Math.max(ay, by) + r >= y0 && Math.min(ay, by) - r <= y1;
 		const dot = (x: number, y: number, r: number, v: number) => {
+			if (!touches(x, y, x, y, r)) return;
 			fctx.fillStyle = gray(v);
 			fctx.beginPath();
 			fctx.arc(x, y, r, 0, Math.PI * 2);
@@ -396,7 +406,10 @@ function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: Stroke
 		// その場で押した点のように道のりがペン幅より短い線では、外側が決まらないので行わない
 		const moving = pieces.filter(piece => piece.x0 !== piece.x1 || piece.y0 !== piece.y1);
 		const pathLength = moving.reduce((sum, piece) => sum + Math.hypot(piece.x1 - piece.x0, piece.y1 - piece.y0), 0);
-		if (moving.length > 0 && pathLength >= Math.max(...pieces.map(piece => piece.width))) {
+		// (点の多い線で引数の数の上限を超えないよう、Math.max(...)ではなくループで最大を取る)
+		let maxWidth = 0;
+		for (const piece of pieces) if (piece.width > maxWidth) maxWidth = piece.width;
+		if (moving.length > 0 && pathLength >= maxWidth) {
 			const cap = (x: number, y: number, dx: number, dy: number, r: number, v: number) => {
 				const len = Math.hypot(dx, dy);
 				const ux = dx / len * (r + 2);
@@ -431,6 +444,7 @@ function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: Stroke
 		pctx.lineCap = 'butt';
 		for (const piece of pieces) {
 			if (piece.x0 === piece.x1 && piece.y0 === piece.y1) continue;
+			if (!touches(piece.x0, piece.y0, piece.x1, piece.y1, piece.width / 2 + 1)) continue;
 			const gradient = pctx.createLinearGradient(piece.x0, piece.y0, piece.x1, piece.y1);
 			gradient.addColorStop(0, gray(piece.v0));
 			gradient.addColorStop(1, gray(piece.v1));
@@ -504,8 +518,14 @@ function drawLockedStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): v
 	lctx.globalCompositeOperation = 'source-over';
 	lctx.globalAlpha = 1;
 	lctx.clearRect(0, 0, w, h);
-	lctx.translate(-x0, -y0);
-	drawStroke(lctx, { ...stroke, lock: undefined });
+	// 小さいキャンバスの左上に合わせて、線の点をずらして描く(キャンバスを移動して描くと、筆圧で濃さを変える線・半透明の線の
+	// 描く範囲の計算がキャンバスの大きさに合わず、消えたり切れたりするため。移動ツールと同じ)
+	drawStroke(lctx, {
+		...stroke,
+		lock: undefined,
+		points: shiftPoints(stroke.points, -x0, -y0),
+		...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, -x0, -y0) } : {}),
+	});
 	lctx.restore();
 	ctx.save();
 	ctx.globalAlpha = 1;
@@ -519,7 +539,7 @@ function drawLockedStroke(ctx: CanvasRenderingContext2D, stroke: StrokeShape): v
 	}
 }
 
-function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape): void {
+function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape, region?: Rect): void {
 	// JUICE: 囲って塗る(ペン)・囲った範囲を消す(消しゴム)は、多角形を塗りつぶす
 	if (stroke.tool === 'fill' || (stroke.tool === 'eraser' && stroke.brush === 'area')) {
 		drawFill(ctx, stroke);
@@ -527,7 +547,7 @@ function drawStrokeUnclipped(ctx: CanvasRenderingContext2D, stroke: StrokeShape)
 	}
 	// JUICE: 筆圧で濃さを変える普通の筆の線
 	if (stroke.brush !== 'soft' && pressureAffectsOpacity(stroke)) {
-		drawPressureOpacityStroke(ctx, stroke);
+		drawPressureOpacityStroke(ctx, stroke, region);
 		return;
 	}
 	const opacity = stroke.opacity ?? 1;
@@ -1856,7 +1876,8 @@ export class DrawCanvasEngine {
 		ctx.globalCompositeOperation = 'source-over';
 		ctx.clearRect(x, y, w, h);
 		ctx.drawImage(layer.committed, x, y, w, h, x, y, w, h);
-		for (const stroke of erasing) drawStroke(ctx, stroke);
+		const region = { x0: x, y0: y, x1: x + w, y1: y + h };
+		for (const stroke of erasing) drawStroke(ctx, stroke, region);
 		ctx.restore();
 		return layer.live;
 	}

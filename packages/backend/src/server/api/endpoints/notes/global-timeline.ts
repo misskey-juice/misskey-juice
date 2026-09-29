@@ -13,7 +13,7 @@ import ActiveUsersChart from '@/core/chart/charts/active-users.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '../../error.js';
-import { andWhereOnlyNovel, isNovelOrNovelRenote } from '@/misc/novel-filter.js';
+import { andWhereOnlyNovel } from '@/misc/novel-filter.js';
 
 export const meta = {
 	tags: ['notes'],

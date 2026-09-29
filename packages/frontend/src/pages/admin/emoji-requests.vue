@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo v-if="paginator.items.value.length === 0 && !paginator.fetching.value">{{ state === 'pending' ? i18n.ts._emojiRequestApprovals.noPendingRequests : i18n.ts._emojiRequestApprovals.noRequests }}</MkInfo>
 			<!-- JUICE: 審査待ちの申請を選んで、まとめて承認・却下する -->
 			<div v-if="state === 'pending' && bulk.pendingItems.value.length > 0" class="_buttons">
-				<MkButton rounded :primary="bulk.selecting.value" @click="bulk.toggleSelecting"><i class="ti ti-checkbox"></i> {{ i18n.ts._juice.bulkReviewSelect }}<span class="_juice">JUICE</span></MkButton>
+				<MkButton rounded :primary="bulk.selecting.value" :aria-pressed="bulk.selecting.value" @click="bulk.toggleSelecting"><i class="ti ti-checkbox"></i> {{ i18n.ts._juice.bulkReviewSelect }}<span class="_juice">JUICE</span></MkButton>
 				<template v-if="bulk.selecting.value">
 					<MkButton rounded @click="bulk.toggleAll">{{ bulk.allSelected.value ? i18n.ts._juice.bulkReviewDeselectAll : i18n.ts._juice.bulkReviewSelectAll }}</MkButton>
 					<MkButton rounded primary :disabled="bulk.selectedItems.value.length === 0" @click="bulk.bulkApprove"><i class="ti ti-check"></i> {{ i18n.tsx._juice.bulkApprove({ n: bulk.selectedItems.value.length }) }}</MkButton>

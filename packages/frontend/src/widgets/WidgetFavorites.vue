@@ -65,8 +65,9 @@ const paginator = markRaw(new Paginator('i/favorites', {
 	limit: 10,
 }));
 
-// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)
-watch(() => paginator.items.value.length, () => markFavorited(paginator.items.value), { immediate: true });
+// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)。
+// 再読み込みで件数が同じまま中身が入れ替わっても拾えるよう、並んでいるidで見る
+watch(() => paginator.items.value.map(item => item.id).join(), () => markFavorited(paginator.items.value), { immediate: true });
 
 // JUICE: このウィジェットを表示中に同一クライアント内でノートをお気に入りに追加/解除した場合、
 // サーバーからのプッシュが無い(i/favoritesはストリーミング非対応)ためリアルタイムに反映されない
