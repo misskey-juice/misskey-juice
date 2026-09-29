@@ -31,6 +31,7 @@ import { getPluginHandlers } from '@/plugin.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { globalEvents, useGlobalEvent } from '@/events.js';
+import { favoriteStateOf, setFavoriteState } from '@/utility/juice-favorite-state.js';
 import MkUsersTooltip from '@/components/MkUsersTooltip.vue';
 import MkReactionsViewerDetails from '@/components/MkReactionsViewer.details.vue';
 import MkRippleEffect from '@/components/MkRippleEffect.vue';
@@ -446,15 +447,10 @@ export function useNote(
 		}), els.clipButton?.value).then(focus);
 	}
 
-	// JUICE: ノートの画面のお気に入りボタン。お気に入りかどうかは、押したときに初めて調べる(ノートごとに問い合わせない)
-	const isFavorited = ref<boolean | null>(null);
+	// JUICE: ノートの画面のお気に入りボタン。お気に入りかどうかは、お気に入りの一覧に出した・登録/解除したノートなら
+	// 分かっている(juice-favorite-state)。分からなければ、押したときに初めて調べる(ノートごとに問い合わせない)
+	const isFavorited = computed(() => favoriteStateOf(appearNote.id));
 	const favoriting = ref(false);
-	useGlobalEvent('noteFavorited', (noteId) => {
-		if (noteId === appearNote.id) isFavorited.value = true;
-	});
-	useGlobalEvent('noteUnfavorited', (noteId) => {
-		if (noteId === appearNote.id) isFavorited.value = false;
-	});
 
 	async function toggleFavorite(): Promise<void> {
 		if (props.mock || favoriting.value) return;
@@ -469,7 +465,7 @@ export function useNote(
 					os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 					return;
 				}
-				isFavorited.value = state.isFavorited;
+				setFavoriteState(appearNote.id, state.isFavorited);
 				// 見えていなかった状態で解除してしまわないよう、登録済みだったら知らせるだけにする
 				if (state.isFavorited) {
 					os.toast(i18n.ts.alreadyFavorited);
@@ -482,7 +478,7 @@ export function useNote(
 			// 失敗はapiWithDialogが知らせる
 			const ok = await os.apiWithDialog(favorite ? 'notes/favorites/create' : 'notes/favorites/delete', { noteId: appearNote.id }).then(() => true, () => false);
 			if (!ok) return;
-			isFavorited.value = favorite;
+			setFavoriteState(appearNote.id, favorite);
 			globalEvents.emit(favorite ? 'noteFavorited' : 'noteUnfavorited', appearNote.id);
 		} finally {
 			favoriting.value = false;

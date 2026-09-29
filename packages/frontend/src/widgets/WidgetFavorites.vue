@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { markRaw } from 'vue';
+import { markRaw, watch } from 'vue';
 import { useWidgetPropsManager } from './widget.js';
 import type { WidgetComponentEmits, WidgetComponentExpose, WidgetComponentProps } from './widget.js';
 import type { FormWithDefault, GetFormResultType } from '@/utility/form.js';
@@ -30,6 +30,7 @@ import MkPagination from '@/components/MkPagination.vue';
 import MkNote from '@/components/MkNote.vue';
 import { i18n } from '@/i18n.js';
 import { Paginator } from '@/utility/paginator.js';
+import { markFavorited } from '@/utility/juice-favorite-state.js';
 import { useGlobalEvent } from '@/events.js';
 
 const name = 'favorites';
@@ -63,6 +64,9 @@ const { widgetProps, configure } = useWidgetPropsManager(name,
 const paginator = markRaw(new Paginator('i/favorites', {
 	limit: 10,
 }));
+
+// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)
+watch(() => paginator.items.value.length, () => markFavorited(paginator.items.value), { immediate: true });
 
 // JUICE: このウィジェットを表示中に同一クライアント内でノートをお気に入りに追加/解除した場合、
 // サーバーからのプッシュが無い(i/favoritesはストリーミング非対応)ためリアルタイムに反映されない
