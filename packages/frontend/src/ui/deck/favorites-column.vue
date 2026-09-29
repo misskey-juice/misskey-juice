@@ -20,13 +20,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { markRaw } from 'vue';
+import { markRaw, watch } from 'vue';
 import XColumn from './column.vue';
 import type { Column } from '@/deck.js';
 import MkPagination from '@/components/MkPagination.vue';
 import MkNote from '@/components/MkNote.vue';
 import { i18n } from '@/i18n.js';
 import { Paginator } from '@/utility/paginator.js';
+import { markFavorited } from '@/utility/juice-favorite-state.js';
 import { useGlobalEvent } from '@/events.js';
 
 defineProps<{
@@ -38,6 +39,10 @@ defineProps<{
 const paginator = markRaw(new Paginator('i/favorites', {
 	limit: 10,
 }));
+
+// JUICE: 一覧に出したノートはお気に入り済み(ノートの画面のお気に入りボタンを塗りつぶしの星にする)。
+// 再読み込みで件数が同じまま中身が入れ替わっても拾えるよう、並んでいるidで見る
+watch(() => paginator.items.value.map(item => item.id).join(), () => markFavorited(paginator.items.value), { immediate: true });
 
 function reloadTimeline() {
 	return new Promise<void>((res) => {

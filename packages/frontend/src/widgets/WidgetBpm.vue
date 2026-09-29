@@ -31,8 +31,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:class="[$style.tap, { [$style.tapActive]: flashing }]"
 				:aria-label="i18n.ts._juice.bpmTap"
 				@pointerdown.prevent="tap"
-				@keydown.space.prevent="tap"
-				@keydown.enter.prevent="tap"
+				@keydown.space.prevent="onKeyTap"
+				@keydown.enter.prevent="onKeyTap"
+				@click="onClickTap"
 			>
 				<i class="ti ti-hand-finger"></i> {{ i18n.ts._juice.bpmTap }}
 			</button>
@@ -205,10 +206,27 @@ function connect(source: Source): void {
 }
 
 watch(() => widgetProps.source, connect, { immediate: true });
+// メディア・リレーは、メディアタイムラインの対象・表示するリレーの設定を変えたらつなぎ直す
+watch([() => prefer.r.mediaTimelineSrc.value, () => prefer.r.relayTimelineFilter.value.join(',')], () => {
+	if (widgetProps.source === 'media' || widgetProps.source === 'relay') connect(widgetProps.source);
+});
 //#endregion
 
 const bpm = computed(() => (isTap.value ? tapBpm.value : streamBpm.value));
 const bpmText = computed(() => (bpm.value == null ? '--' : bpm.value.toFixed(1)));
+
+// キーを押しっぱなしにしたときの繰り返しは数えない
+function onKeyTap(ev: KeyboardEvent): void {
+	if (ev.repeat) return;
+	tap();
+}
+
+// スクリーンリーダーやスイッチ操作ではpointerdownが来ずclickだけが来るので、それも数える
+// (マウス・タッチのclickはpointerdownで数えているのでdetailが1以上。キーボード・支援技術のclickはdetailが0。
+// キーボードのclickは上のkeydownで止めているので、ここに来るのは支援技術から)
+function onClickTap(ev: MouseEvent): void {
+	if (ev.detail === 0) tap();
+}
 
 function reset(): void {
 	taps.value = [];

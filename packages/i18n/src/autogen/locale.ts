@@ -10102,6 +10102,10 @@ export interface Locale extends ILocale {
          */
         "bucketFill": string;
         /**
+         * 囲んだ中に、線で閉じた所がありませんでした
+         */
+        "lassoFillNothingEnclosed": string;
+        /**
          * 形が細かすぎて塗りつぶせませんでした
          */
         "bucketFillTooComplex": string;
@@ -10166,7 +10170,7 @@ export interface Locale extends ILocale {
          */
         "clipToLines": string;
         /**
-         * 線の中だけ塗る(描き始めた所を囲む線の中にだけ塗れます)
+         * 線の中だけ塗る(描き始めた所を囲む線の中にだけ塗れます。囲って塗るでは、囲んだ中の線で閉じた所だけを塗ります)
          */
         "clipToLinesHint": string;
         /**
@@ -13060,9 +13064,17 @@ export interface Locale extends ILocale {
          */
         "newEmojiRequest": ParameterizedString<"name">;
         /**
+         * 絵文字申請「{name}」ほか{n}件が届きました
+         */
+        "newEmojiRequests": ParameterizedString<"name" | "n">;
+        /**
          * アバターデコレーション申請「{name}」が届きました
          */
         "newAvatarDecorationRequest": ParameterizedString<"name">;
+        /**
+         * アバターデコレーション申請「{name}」ほか{n}件が届きました
+         */
+        "newAvatarDecorationRequests": ParameterizedString<"name" | "n">;
         /**
          * 新しい承認式登録の申請が届きました
          */
@@ -13080,9 +13092,17 @@ export interface Locale extends ILocale {
          */
         "newEmojiRequestHeader": ParameterizedString<"name">;
         /**
+         * 絵文字申請「{name}」ほか{n}件
+         */
+        "newEmojiRequestsHeader": ParameterizedString<"name" | "n">;
+        /**
          * アバターデコレーション申請「{name}」
          */
         "newAvatarDecorationRequestHeader": ParameterizedString<"name">;
+        /**
+         * アバターデコレーション申請「{name}」ほか{n}件
+         */
+        "newAvatarDecorationRequestsHeader": ParameterizedString<"name" | "n">;
         /**
          * 承認式登録の申請
          */
@@ -16650,6 +16670,46 @@ export interface Locale extends ILocale {
          * {emoji}でリアクション
          */
         "quickReactWith": ParameterizedString<"emoji">;
+        /**
+         * 選んでまとめて審査
+         */
+        "bulkReviewSelect": string;
+        /**
+         * すべて選ぶ
+         */
+        "bulkReviewSelectAll": string;
+        /**
+         * 選択を外す
+         */
+        "bulkReviewDeselectAll": string;
+        /**
+         * まとめて承認({n}件)
+         */
+        "bulkApprove": ParameterizedString<"n">;
+        /**
+         * まとめて却下({n}件)
+         */
+        "bulkReject": ParameterizedString<"n">;
+        /**
+         * 選んだ{n}件の申請を承認しますか？(内容は編集せず、申請のまま承認します)
+         */
+        "bulkApproveConfirm": ParameterizedString<"n">;
+        /**
+         * 選んだ{n}件の申請を、すべて同じ理由で却下します
+         */
+        "bulkRejectText": ParameterizedString<"n">;
+        /**
+         * 審査しています…
+         */
+        "bulkReviewProgress": string;
+        /**
+         * {n}件を処理しました
+         */
+        "bulkReviewDone": ParameterizedString<"n">;
+        /**
+         * {n}件は処理できませんでした:
+         */
+        "bulkReviewFailed": ParameterizedString<"n">;
         /**
          * MFMの検索で使う検索エンジン
          */

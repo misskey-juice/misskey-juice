@@ -5557,6 +5557,7 @@ export type components = {
             requestId: string;
             name: string;
             category: string | null;
+            count: number;
         } | {
             /** Format: id */
             id: string;
@@ -5569,6 +5570,7 @@ export type components = {
             requestId: string;
             name: string;
             category: string | null;
+            count: number;
         } | {
             /** Format: id */
             id: string;

@@ -342,6 +342,11 @@ export class WebhookTestService {
 					name: 'dummy_emoji',
 					category: null,
 					requester: await this.toPackedUserLite(dummyUser1),
+					count: 2,
+					requests: [
+						{ id: 'dummy-emoji-request-1', name: 'dummy_emoji', category: null },
+						{ id: 'dummy-emoji-request-2', name: 'dummy_emoji_2', category: null },
+					],
 				});
 				break;
 			}
@@ -360,6 +365,11 @@ export class WebhookTestService {
 					name: 'dummy_decoration',
 					category: null,
 					requester: await this.toPackedUserLite(dummyUser1),
+					count: 2,
+					requests: [
+						{ id: 'dummy-avatar-decoration-request-1', name: 'dummy_decoration', category: null },
+						{ id: 'dummy-avatar-decoration-request-2', name: 'dummy_decoration_2', category: null },
+					],
 				});
 				break;
 			}

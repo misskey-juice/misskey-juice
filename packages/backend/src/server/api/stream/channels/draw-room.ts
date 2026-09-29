@@ -415,7 +415,8 @@ export class DrawRoomChannel extends Channel {
 				// 上限の値(本数、またはMB)も一緒に送る
 				if (result === 'strokes' || result === 'bytes') {
 					const limits = await this.drawRoomService.strokeLimits(user.id);
-					this.send('strokeLimitReached', { kind: result, limit: result === 'strokes' ? limits.strokes : Math.round(limits.bytes / 1024 / 1024) });
+					// MBは小数を切り上げる(0.5MB未満の上限でも0と出ないように)
+					this.send('strokeLimitReached', { kind: result, limit: result === 'strokes' ? limits.strokes : Math.max(1, Math.round(limits.bytes / 1024 / 1024)) });
 				} else if (result === 'room') {
 					this.send('strokeLimitReached', { kind: result, limit: Math.round(await this.drawRoomService.maxRoomBytes() / 1024 / 1024) });
 				}

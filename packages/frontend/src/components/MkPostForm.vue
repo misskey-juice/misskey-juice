@@ -229,9 +229,19 @@ if (props.initialVisibleUsers) {
 	props.initialVisibleUsers.forEach(u => pushVisibleUser(u));
 }
 const reactionAcceptance = ref(store.s.reactionAcceptance);
-// JUICE: nullなら投稿時にサーバー側でユーザーの表示言語設定が既定値として使われる
-// JUICE: 投稿の言語は、アカウントの言語設定(無ければ表示言語)から始める
-const lang = ref<string | null>($i.lang ?? uiLang);
+
+// JUICE: 投稿の言語は、アカウントの言語設定(無ければ表示言語)から始める。
+// アカウントの言語はlangmapのコード(ja・frなど)なので、選べる言語(UIの言語、ja-JPなど)に合わせる
+// (同じコードが無ければ主な言語が同じもの、それも無ければ表示言語)
+function initialPostLang(): string {
+	const account = $i.lang;
+	if (account == null) return uiLang;
+	if (langs.some(([k]) => k === account)) return account;
+	const primary = account.split('-')[0].toLowerCase();
+	return langs.find(([k]) => k.split('-')[0].toLowerCase() === primary)?.[0] ?? uiLang;
+}
+
+const lang = ref<string | null>(initialPostLang());
 const scheduledAt = ref<number | null>(null);
 const draghover = ref(false);
 const quoteId = ref<string | null>(null);

@@ -183,24 +183,29 @@ export interface AdminEventTypes {
 		reporterId: MiUser['id'],
 		comment: string;
 	};
-	// JUICE: 絵文字申請が作成された時のリアルタイム通知
+	// JUICE: 絵文字申請が作成された時のリアルタイム通知(1回の送信でまとめて作られた申請は1つにまとめる。
+	// id・name・categoryは1件目、countは件数、requestsは一覧)
 	newEmojiRequest: {
 		id: string;
 		name: string;
 		category: string | null;
 		requester: Packed<'UserLite'>;
+		count: number;
+		requests: { id: string; name: string; category: string | null }[];
 	};
 	// JUICE: 承認式登録の申請が作成された時のリアルタイム通知
 	newSignupApplication: {
 		applicant: Packed<'UserLite'>;
 		reason: string | null;
 	};
-	// JUICE: アバターデコレーション申請が作成された時のリアルタイム通知
+	// JUICE: アバターデコレーション申請が作成された時のリアルタイム通知(まとめ方は絵文字申請と同じ)
 	newAvatarDecorationRequest: {
 		id: string;
 		name: string;
 		category: string | null;
 		requester: Packed<'UserLite'>;
+		count: number;
+		requests: { id: string; name: string; category: string | null }[];
 	};
 	// JUICE: お問い合わせが送信された時のリアルタイム通知。本文にメールアドレス・IPアドレス等の
 	// PIIを含むため、こちらはWebhookペイロード(ContactFormPayload)と異なりPIIを含まない

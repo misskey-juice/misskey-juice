@@ -41,12 +41,20 @@ export type InactiveModeratorsWarningPayload = {
 	remainingTime: ModeratorInactivityRemainingTime;
 };
 
-// JUICE: 絵文字申請が作成された時のWebhookペイロード
-export type EmojiRequestCreatedPayload = {
+// JUICE: 申請(絵文字・アバターデコレーション)1件の要約
+export type RequestSummary = {
 	id: string;
 	name: string;
 	category: string | null;
+};
+
+// JUICE: 絵文字申請が作成された時のWebhookペイロード。1回の送信(emoji-requests/create-many)でまとめて作られた申請は、
+// 1つのペイロードにまとめる。id・name・categoryは1件目の申請(前からある受け取り側がそのまま使えるように残している)、
+// countはまとめた件数、requestsはまとめた申請の一覧
+export type EmojiRequestCreatedPayload = RequestSummary & {
 	requester: Packed<'UserLite'>;
+	count: number;
+	requests: RequestSummary[];
 };
 
 // JUICE: 承認式登録の申請が作成された時のWebhookペイロード
@@ -57,13 +65,8 @@ export type SignupApplicationCreatedPayload = {
 	reason: string | null;
 };
 
-// JUICE: アバターデコレーション申請が作成された時のWebhookペイロード
-export type AvatarDecorationRequestCreatedPayload = {
-	id: string;
-	name: string;
-	category: string | null;
-	requester: Packed<'UserLite'>;
-};
+// JUICE: アバターデコレーション申請が作成された時のWebhookペイロード(まとめ方は絵文字申請と同じ)
+export type AvatarDecorationRequestCreatedPayload = EmojiRequestCreatedPayload;
 
 // JUICE: misskey-tempuraのコンタクトフォームを参考に追加。コンタクトフォームが送信された時のWebhookペイロード
 // 注意: email/ipAddress/userAgentを含むため、このイベントを有効にしたSystemWebhookの送信先URLへ

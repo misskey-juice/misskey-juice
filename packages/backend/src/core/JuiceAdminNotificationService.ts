@@ -7,10 +7,11 @@ import { Injectable } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { RoleService } from '@/core/RoleService.js';
-import { SystemWebhookService, type EmojiRequestCreatedPayload, type SignupApplicationCreatedPayload, type AvatarDecorationRequestCreatedPayload, type ContactFormPayload } from '@/core/SystemWebhookService.js';
+import { SystemWebhookService, type EmojiRequestCreatedPayload, type SignupApplicationCreatedPayload, type RequestSummary, type ContactFormPayload } from '@/core/SystemWebhookService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import type Logger from '@/logger.js';
+import type { Packed } from '@/misc/json-schema.js';
 
 // JUICE: 絵文字申請・承認式登録申請が来たことをモデレータに通知する。
 // AbuseReportNotificationService(通報の通知)と同じ「モデレータ一覧取得→admin streamへpublish→
@@ -55,9 +56,27 @@ export class JuiceAdminNotificationService {
 		return [...new Set([...moderatorIds, ...policyHolderIds])];
 	}
 
+	// JUICE: 1回の送信でまとめて作られた申請を、1つのペイロード(1件目の値+件数+一覧)にまとめる
+	private summarize(requester: Packed<'UserLite'>, requests: RequestSummary[]): EmojiRequestCreatedPayload {
+		const first = requests[0];
+		return {
+			id: first.id,
+			name: first.name,
+			category: first.category,
+			requester,
+			count: requests.length,
+			requests: requests.map(r => ({ id: r.id, name: r.name, category: r.category })),
+		};
+	}
+
+	/**
+	 * JUICE: 絵文字申請が来たことを知らせる。1回の送信でまとめて作られた申請は、通知もWebhookも1つにまとめる
+	 */
 	@bindThis
-	public async notifyNewEmojiRequest(payload: EmojiRequestCreatedPayload): Promise<void> {
+	public async notifyNewEmojiRequests(requester: Packed<'UserLite'>, requests: RequestSummary[]): Promise<void> {
+		if (requests.length === 0) return;
 		try {
+			const payload = this.summarize(requester, requests);
 			const recipientIds = await this.getRecipientIds('canApproveEmojiRequests');
 
 			for (const recipientId of recipientIds) {
@@ -70,6 +89,7 @@ export class JuiceAdminNotificationService {
 					requestId: payload.id,
 					name: payload.name,
 					category: payload.category,
+					count: payload.count,
 				});
 			}
 
@@ -99,9 +119,14 @@ export class JuiceAdminNotificationService {
 		}
 	}
 
+	/**
+	 * JUICE: アバターデコレーション申請が来たことを知らせる(まとめ方は絵文字申請と同じ)
+	 */
 	@bindThis
-	public async notifyNewAvatarDecorationRequest(payload: AvatarDecorationRequestCreatedPayload): Promise<void> {
+	public async notifyNewAvatarDecorationRequests(requester: Packed<'UserLite'>, requests: RequestSummary[]): Promise<void> {
+		if (requests.length === 0) return;
 		try {
+			const payload = this.summarize(requester, requests);
 			const recipientIds = await this.getRecipientIds('canApproveAvatarDecorationRequests');
 
 			for (const recipientId of recipientIds) {
@@ -112,6 +137,7 @@ export class JuiceAdminNotificationService {
 					requestId: payload.id,
 					name: payload.name,
 					category: payload.category,
+					count: payload.count,
 				});
 			}
 

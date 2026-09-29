@@ -633,7 +633,7 @@ import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { ensureSignin, iAmModerator } from '@/i.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
-import { floodFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
+import { floodFillMask, enclosedFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
 import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, rotatePoints, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
 import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
@@ -2531,7 +2531,11 @@ function onPointerUp(ev: PointerEvent): void {
 	if (fillGesture.value != null && fillGesture.value.pointerId === ev.pointerId) {
 		const gesture = fillGesture.value;
 		fillGesture.value = null;
-		if (ev.type !== 'pointercancel') commitFill(gesture.points);
+		if (ev.type !== 'pointercancel') {
+			// 「線の中だけ塗る」なら、囲んだ中の線で閉じている所だけを塗る(消す)
+			if (clipToLines.value) commitEnclosedFill(gesture.points);
+			else commitFill(gesture.points);
+		}
 		return;
 	}
 	if (selectGesture.value != null && selectGesture.value.pointerId === ev.pointerId) {
@@ -2928,6 +2932,24 @@ function commitFill(xy: number[]): void {
 	const step = Math.ceil(count / STROKE_MAX_POINTS);
 	const points: number[] = [];
 	for (let i = 0; i < count; i += step) points.push(xy[i * 2], xy[i * 2 + 1], 1);
+	commitFillStroke(points);
+}
+
+// JUICE: 囲って塗るの「線の中だけ塗る」。囲んだ中で、線で閉じている所(投げ縄が通った所の色と似た色の、外につながっていない所)だけを塗る
+function commitEnclosedFill(xy: number[]): void {
+	const e = engine.value;
+	if (e == null || xy.length < 6) return;
+	const mask = enclosedFillMask(e.referenceImage(), xy, BUCKET_TOLERANCE, gapClosePixels());
+	if (mask == null) {
+		os.toast(i18n.ts._drawRoom.lassoFillNothingEnclosed);
+		return;
+	}
+	// 線の縁のぼかしに塗り残しが出ないよう、少し広げてから輪郭を取る(バケツと同じ)
+	const points = maskToFillPoints(dilateMask(mask, e.width, e.height, 1), e.width, e.height, STROKE_MAX_POINTS);
+	if (points == null) {
+		os.toast(i18n.ts._drawRoom.bucketFillTooComplex);
+		return;
+	}
 	commitFillStroke(points);
 }
 
@@ -3822,8 +3844,9 @@ definePage(() => ({
 .contentGateBadge {
 	padding: 2px 8px;
 	border-radius: 999px;
-	background: var(--MI_THEME-warn);
-	color: var(--MI_THEME-fgOnAccent);
+	// テーマによって警告の色の上の白文字が読みにくいので、薄い背景に警告の色の文字にする
+	background: color-mix(in srgb, var(--MI_THEME-warn), transparent 80%);
+	color: var(--MI_THEME-warn);
 	font-size: 0.8em;
 	font-weight: bold;
 }

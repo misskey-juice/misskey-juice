@@ -63,6 +63,8 @@ describe('misc:discord-webhook-format', () => {
 				name: 'party_parrot',
 				category: 'fun',
 				requester: user,
+				count: 1,
+				requests: [{ id: 'req1', name: 'party_parrot', category: 'fun' }],
 			}, server);
 
 			expect(result.embeds[0].title).toBe('🙂 絵文字申請が届きました');
@@ -91,10 +93,42 @@ describe('misc:discord-webhook-format', () => {
 				name: 'sparkle_crown',
 				category: 'fun',
 				requester: user,
+				count: 1,
+				requests: [{ id: 'req1', name: 'sparkle_crown', category: 'fun' }],
 			}, server);
 
 			expect(result.embeds[0].title).toBe('✨ アバターデコレーション申請が届きました');
 			expect(result.embeds[0].description).toBe('sparkle_crown');
+		});
+
+		test('formats emojiRequestCreated (JUICE) queued before bundling (no count / requests) as a single request', () => {
+			// まとめる前に入ったジョブのペイロード(count・requestsが無い)
+			const result = formatSystemWebhookForDiscord('emojiRequestCreated', {
+				id: 'req1',
+				name: 'old_style',
+				category: null,
+				requester: user,
+			}, server);
+
+			expect(result.embeds[0].description).toBe('`:old_style:`');
+			expect(result.embeds[0].fields?.map(f => f.name)).toContain('カテゴリ');
+		});
+
+		test('formats emojiRequestCreated (JUICE) that bundles several requests into one embed', () => {
+			const requests = Array.from({ length: 22 }, (_, i) => ({ id: `req${i}`, name: `emoji_${i}`, category: null }));
+			const result = formatSystemWebhookForDiscord('emojiRequestCreated', {
+				...requests[0],
+				requester: user,
+				count: requests.length,
+				requests,
+			}, server);
+
+			const lines = result.embeds[0].description!.split('\n');
+			// 並べるのは20件まで、残りは件数で
+			expect(lines.slice(0, 2)).toEqual(['`:emoji_0:`', '`:emoji_1:`']);
+			expect(lines).toHaveLength(21);
+			expect(lines[20]).toBe('ほか2件');
+			expect(result.embeds[0].fields?.map(f => [f.name, f.value])).toContainEqual(['件数', '22']);
 		});
 	});
 

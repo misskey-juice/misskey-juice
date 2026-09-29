@@ -997,6 +997,12 @@ export type Channels = {
                 name: string;
                 category: string | null;
                 requester: UserLite;
+                count: number;
+                requests: {
+                    id: string;
+                    name: string;
+                    category: string | null;
+                }[];
             };
             newSignupApplication: {
                 applicant: UserLite;
@@ -1007,6 +1013,12 @@ export type Channels = {
                 name: string;
                 category: string | null;
                 requester: UserLite;
+                count: number;
+                requests: {
+                    id: string;
+                    name: string;
+                    category: string | null;
+                }[];
             };
             newContactForm: {
                 id: string;
@@ -4426,9 +4438,9 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:281:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:296:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:311:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:287:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:302:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:317:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

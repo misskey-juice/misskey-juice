@@ -265,12 +265,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const requester = await this.userEntityService.pack(me, null, { schema: 'UserLite' });
 
-			// JUICE: モデレータへ新規申請をリアルタイム通知(admin stream + SystemWebhook)
-			await Promise.all(newRequests.map(request => this.juiceAdminNotificationService.notifyNewEmojiRequest({
+			// JUICE: モデレータへ新規申請をリアルタイム通知(admin stream + SystemWebhook)。
+			// 1回の送信でまとめて作った申請は、通知もWebhookも1つにまとめる
+			await this.juiceAdminNotificationService.notifyNewEmojiRequests(requester, newRequests.map(request => ({
 				id: request.id,
 				name: request.name,
 				category: request.category,
-				requester,
 			})));
 
 			return newRequests.map((request, i) => ({
