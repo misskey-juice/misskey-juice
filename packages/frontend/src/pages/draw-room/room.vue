@@ -441,7 +441,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="[$style.layerRow, { [$style.layerRowOffline]: !room.isEnded && !onlineUserIds.has(userId) }]">
 					<!-- JUICE: 今この部屋を開いている人は緑の点、閉じている人は薄く表示する -->
 					<span :class="$style.layerAvatarWrap">
-						<MkAvatar v-if="userMap.get(userId)" :class="$style.layerAvatar" :user="userMap.get(userId)!"/>
+						<!-- JUICE: アイコン・名前からプロフィールを開ける(マウスを乗せると簡単なプロフィール) -->
+						<MkAvatar v-if="userMap.get(userId)" :class="$style.layerAvatar" :user="userMap.get(userId)!" link preview/>
 						<span
 							v-if="!room.isEnded"
 							v-tooltip="onlineUserIds.has(userId) ? i18n.ts._drawRoom.online : i18n.ts._drawRoom.offline"
@@ -452,7 +453,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</span>
 					<!-- JUICE: 名前が長くても、部屋主・描く人のアイコンは省略せずに出す -->
 					<span :class="$style.layerIdentity">
-						<span :class="$style.layerName"><MkUserName v-if="userMap.get(userId)" :user="userMap.get(userId)!"/></span>
+						<span :class="$style.layerName"><MkA v-if="userMap.get(userId)" v-user-preview="userId" :to="userPage(userMap.get(userId)!)" :class="$style.userLink"><MkUserName :user="userMap.get(userId)!"/></MkA></span>
 						<i v-if="userId === room.ownerId" v-tooltip="i18n.ts._drawRoom.owner" class="ti ti-crown" :class="$style.ownerIcon" role="img" :aria-label="i18n.ts._drawRoom.owner"></i>
 						<i v-if="!room.isEnded && room.members.some(m => m.id === userId)" v-tooltip="i18n.ts._drawRoom.members" class="ti ti-brush" :class="$style.drawingIcon" role="img" :aria-label="i18n.ts._drawRoom.members"></i>
 					</span>
@@ -590,10 +591,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div ref="chatListEl" :class="$style.chatList">
 					<div v-for="item in chatMessages" :key="item.message.id" :class="$style.chatItem">
-						<MkAvatar :class="$style.chatAvatar" :user="item.user"/>
+						<!-- JUICE: アイコン・名前からプロフィールを開ける(マウスを乗せると簡単なプロフィール) -->
+						<MkAvatar :class="$style.chatAvatar" :user="item.user" link preview/>
 						<div :class="$style.chatBody">
 							<div :class="$style.chatName">
-								<MkUserName :user="item.user"/>
+								<MkA v-user-preview="item.user.id" :to="userPage(item.user)" :class="$style.userLink"><MkUserName :user="item.user"/></MkA>
 								<!-- JUICE: 発言した時刻(「◯分前」。マウスを乗せると日時) -->
 								<MkTime :time="item.message.createdAt" :class="$style.chatTime"/>
 							</div>
@@ -651,6 +653,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { url } from '@@/js/config.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { haptic } from '@/utility/haptic.js';
+import { userPage } from '@/filters/user.js';
 import type { MenuItem } from '@/types/menu.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
@@ -4734,6 +4737,15 @@ definePage(() => ({
 	display: flex;
 	gap: 6px;
 	margin-top: 8px;
+}
+
+.userLink {
+	color: inherit;
+	min-width: 0;
+
+	&:hover {
+		text-decoration: underline;
+	}
 }
 
 .chatInput {
