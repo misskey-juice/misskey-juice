@@ -230,12 +230,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			// JUICE: モデレータへ新規申請をリアルタイム通知(admin stream + SystemWebhook)
-			await this.juiceAdminNotificationService.notifyNewEmojiRequest({
+			await this.juiceAdminNotificationService.notifyNewEmojiRequests(await this.userEntityService.pack(me, null, { schema: 'UserLite' }), [{
 				id: request.id,
 				name: request.name,
 				category: request.category,
-				requester: await this.userEntityService.pack(me, null, { schema: 'UserLite' }),
-			});
+			}]);
 
 			return {
 				id: request.id,

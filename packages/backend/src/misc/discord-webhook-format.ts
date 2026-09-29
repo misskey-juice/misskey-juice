@@ -75,6 +75,8 @@ type Messages = {
 	requesterField: string;
 	categoryField: string;
 	noCategory: string;
+	requestCountField: string;
+	moreRequests: (n: number) => string;
 	signupApplicationCreatedTitle: string;
 	noReason: string;
 	applicantField: string;
@@ -118,6 +120,8 @@ const MESSAGES_JA: Messages = {
 	requesterField: '申請者',
 	categoryField: 'カテゴリ',
 	noCategory: '*未設定*',
+	requestCountField: '件数',
+	moreRequests: (n: number) => `ほか${n}件`,
 	signupApplicationCreatedTitle: '📝 承認式登録の申請が届きました',
 	noReason: '*理由なし*',
 	applicantField: '申請者',
@@ -161,6 +165,8 @@ const MESSAGES_EN: Messages = {
 	requesterField: 'Requester',
 	categoryField: 'Category',
 	noCategory: '*Unset*',
+	requestCountField: 'Requests',
+	moreRequests: (n: number) => `and ${n} more`,
 	signupApplicationCreatedTitle: '📝 New signup application',
 	noReason: '*No reason given*',
 	applicantField: 'Applicant',
@@ -264,16 +270,35 @@ function formatInactiveModeratorsInvitationOnlyChanged(server: string, t: Messag
 	};
 }
 
+// JUICE: 1回の送信でまとめて作られた申請は、名前を並べて件数を添える(一覧が長すぎないよう、並べるのは20件まで)
+const MAX_LISTED_REQUESTS = 20;
+
+function formatRequestNames(payload: EmojiRequestCreatedPayload, t: Messages, format: (name: string) => string): string {
+	const requests = payload.requests.length > 0 ? payload.requests : [payload];
+	const listed = requests.slice(0, MAX_LISTED_REQUESTS).map(r => format(r.name)).join('\n');
+	const rest = payload.count - Math.min(requests.length, MAX_LISTED_REQUESTS);
+	return rest > 0 ? `${listed}\n${t.moreRequests(rest)}` : listed;
+}
+
+function requestFields(server: string, payload: EmojiRequestCreatedPayload, t: Messages): NonNullable<DiscordEmbed['fields']> {
+	const fields: NonNullable<DiscordEmbed['fields']> = [
+		{ name: t.requesterField, value: formatUserLink(server, payload.requester), inline: true },
+	];
+	if (payload.count > 1) {
+		fields.push({ name: t.requestCountField, value: String(payload.count), inline: true });
+	} else {
+		fields.push({ name: t.categoryField, value: payload.category ?? t.noCategory, inline: true });
+	}
+	return fields;
+}
+
 // JUICE
 function formatEmojiRequestCreated(server: string, payload: EmojiRequestCreatedPayload, t: Messages): DiscordEmbed {
 	return {
 		title: t.emojiRequestCreatedTitle,
-		description: `\`:${payload.name}:\``,
+		description: formatRequestNames(payload, t, name => `\`:${name}:\``),
 		color: COLORS.PURPLE,
-		fields: [
-			{ name: t.requesterField, value: formatUserLink(server, payload.requester), inline: true },
-			{ name: t.categoryField, value: payload.category ?? t.noCategory, inline: true },
-		],
+		fields: requestFields(server, payload, t),
 		footer: { text: server },
 	};
 }
@@ -293,12 +318,9 @@ function formatSignupApplicationCreated(server: string, payload: SignupApplicati
 function formatAvatarDecorationRequestCreated(server: string, payload: AvatarDecorationRequestCreatedPayload, t: Messages): DiscordEmbed {
 	return {
 		title: t.avatarDecorationRequestCreatedTitle,
-		description: payload.name,
+		description: formatRequestNames(payload, t, name => name),
 		color: COLORS.PURPLE,
-		fields: [
-			{ name: t.requesterField, value: formatUserLink(server, payload.requester), inline: true },
-			{ name: t.categoryField, value: payload.category ?? t.noCategory, inline: true },
-		],
+		fields: requestFields(server, payload, t),
 		footer: { text: server },
 	};
 }

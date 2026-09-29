@@ -239,6 +239,9 @@ export type Channels = {
 				name: string;
 				category: string | null;
 				requester: UserLite;
+				// JUICE: 1回の送信でまとめて作られた申請の件数と一覧(id・name・categoryは1件目)
+				count: number;
+				requests: { id: string; name: string; category: string | null }[];
 			};
 			// JUICE: 承認式登録の申請が作成されたとき
 			newSignupApplication: {
@@ -251,6 +254,9 @@ export type Channels = {
 				name: string;
 				category: string | null;
 				requester: UserLite;
+				// JUICE: 1回の送信でまとめて作られた申請の件数と一覧(id・name・categoryは1件目)
+				count: number;
+				requests: { id: string; name: string; category: string | null }[];
 			};
 			// JUICE: お問い合わせが送信されたとき(PIIを含まない要約のみ)
 			newContactForm: {

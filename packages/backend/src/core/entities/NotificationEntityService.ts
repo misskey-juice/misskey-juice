@@ -231,6 +231,7 @@ export class NotificationEntityService implements OnModuleInit {
 				requestId: notification.requestId,
 				name: notification.name,
 				category: notification.category,
+				count: notification.count ?? 1,
 			} : {}),
 			...(notification.type === 'newSignupApplication' ? {
 				reason: notification.reason,

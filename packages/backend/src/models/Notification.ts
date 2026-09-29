@@ -156,6 +156,8 @@ export type MiNotification = {
 	requestId: string;
 	name: string;
 	category: string | null;
+	// JUICE: 1回の送信でまとめて作られた申請の件数(requestId・nameは1件目)。前からある通知には無い(1件)
+	count?: number;
 } | {
 	// JUICE: アバターデコレーション申請が新しく来たとき(モデレーター・canApproveAvatarDecorationRequestsロールポリシー保持者向け)。
 	// requesterIdについてはnewEmojiRequestと同じ理由でnotifierIdを使わない
@@ -166,6 +168,8 @@ export type MiNotification = {
 	requestId: string;
 	name: string;
 	category: string | null;
+	// JUICE: 1回の送信でまとめて作られた申請の件数(requestId・nameは1件目)。前からある通知には無い(1件)
+	count?: number;
 } | {
 	// JUICE: 承認式新規登録の申請が新しく来たとき(モデレーター・canApproveSignupsロールポリシー保持者向け)。
 	// applicantIdについてはnewEmojiRequestと同じ理由でnotifierIdを使わない

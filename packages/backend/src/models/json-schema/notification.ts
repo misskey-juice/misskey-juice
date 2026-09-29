@@ -503,6 +503,11 @@ export const packedNotificationSchema = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			// JUICE: 1回の送信でまとめて作られた申請の件数(requestId・nameは1件目)
+			count: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
 		},
 	}, {
 		// JUICE: アバターデコレーション申請が新しく来たとき
@@ -531,6 +536,11 @@ export const packedNotificationSchema = {
 			category: {
 				type: 'string',
 				optional: false, nullable: true,
+			},
+			// JUICE: 1回の送信でまとめて作られた申請の件数(requestId・nameは1件目)
+			count: {
+				type: 'integer',
+				optional: false, nullable: false,
 			},
 		},
 	}, {

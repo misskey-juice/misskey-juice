@@ -55,6 +55,29 @@ describe('新着申請の通知(admin向け)', () => {
 		assert.strictEqual(notification!.requester.id, alice.id);
 	});
 
+	test('まとめて申請(create-many)すると、モデレーターへの新着通知は1件にまとまり、件数が入る', async () => {
+		const bob = await signup();
+		const files = await Promise.all([0, 1, 2].map(() => uploadFile(bob)));
+		const stamp = Date.now();
+		const requests = await successfulApiCall({
+			endpoint: 'emoji-requests/create-many',
+			parameters: { requests: files.map((file, i) => ({ fileId: file.body!.id, name: `bulk_${stamp}_${i}` })) },
+			user: bob,
+		});
+		assert.strictEqual(requests.length, 3);
+
+		await allSettled();
+		await setTimeout(500);
+
+		const res = await api('i/notifications', {}, root);
+		assert.strictEqual(res.status, 200);
+		const notifications = res.body.filter((n: { type: string; requester?: { id: string } }) => n.type === 'newEmojiRequest' && n.requester?.id === bob.id) as { requestId: string; name: string; count: number }[];
+		assert.strictEqual(notifications.length, 1);
+		assert.strictEqual(notifications[0].count, 3);
+		assert.strictEqual(notifications[0].requestId, requests[0].id);
+		assert.strictEqual(notifications[0].name, requests[0].name);
+	});
+
 	test('申請者をミュートしていても、モデレーターに新着通知が届く(管理用通知はミュートの影響を受けない)', async () => {
 		const mutedRequester = await signup();
 		await successfulApiCall({
