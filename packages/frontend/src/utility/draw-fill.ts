@@ -152,6 +152,170 @@ function floodFillClosingGaps(width: number, height: number, sx: number, sy: num
 }
 
 /**
+ * JUICE: 囲って塗るの「線の中だけ塗る」。投げ縄(xy: [x, y, …]の多角形)の中で、線に閉じ込められている所だけを求める。
+ * 塗れる画素は、囲み始めた所(sx, sy)と似た色の画素(ふつうは背景)。投げ縄の中で塗れる画素がつながっているかたまりのうち、
+ * 投げ縄の外の塗れる画素につながっていないもの(線で閉じている所)を塗る。線そのものは色が違うので塗らない。
+ * gapが1以上なら、それより狭い線の隙間は閉じているものとして扱う(バケツの隙間閉じと同じ考え方)。
+ * 塗る所が無ければnull
+ */
+export function enclosedFillMask(image: ImageData, xy: number[], sx: number, sy: number, tolerance: number, gap = 0): Uint8Array | null {
+	const { width, height, data } = image;
+	if (xy.length < 6) return null;
+	// 投げ縄を囲む範囲(外側の1画素も、投げ縄の外として見る)
+	let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+	for (let k = 0; k < xy.length; k += 2) {
+		minX = Math.min(minX, xy[k]); maxX = Math.max(maxX, xy[k]);
+		minY = Math.min(minY, xy[k + 1]); maxY = Math.max(maxY, xy[k + 1]);
+	}
+	const bx0 = Math.max(0, Math.floor(minX) - 1);
+	const by0 = Math.max(0, Math.floor(minY) - 1);
+	const bx1 = Math.min(width, Math.ceil(maxX) + 2);
+	const by1 = Math.min(height, Math.ceil(maxY) + 2);
+	const bw = bx1 - bx0;
+	const bh = by1 - by0;
+	if (bw <= 0 || bh <= 0) return null;
+	const size = bw * bh;
+
+	// 投げ縄の中(画素の中心で判定、偶奇規則)
+	const inside = new Uint8Array(size);
+	const n = xy.length / 2;
+	const crossings: number[] = [];
+	for (let y = 0; y < bh; y++) {
+		const cy = by0 + y + 0.5;
+		crossings.length = 0;
+		for (let k = 0; k < n; k++) {
+			const ax = xy[k * 2]; const ay = xy[k * 2 + 1];
+			const cx2 = xy[((k + 1) % n) * 2]; const cy2 = xy[((k + 1) % n) * 2 + 1];
+			if ((ay <= cy) !== (cy2 <= cy)) crossings.push(ax + (cy - ay) / (cy2 - ay) * (cx2 - ax));
+		}
+		crossings.sort((a, b) => a - b);
+		for (let c = 0; c + 1 < crossings.length; c += 2) {
+			const from = Math.max(0, Math.ceil(crossings[c] - 0.5 - bx0));
+			const to = Math.min(bw - 1, Math.floor(crossings[c + 1] - 0.5 - bx0));
+			for (let x = from; x <= to; x++) inside[y * bw + x] = 1;
+		}
+	}
+
+	// 塗れる画素(囲み始めた所と似た色)
+	const px = Math.min(width - 1, Math.max(0, Math.floor(sx)));
+	const py = Math.min(height - 1, Math.max(0, Math.floor(sy)));
+	const seed = (py * width + px) * 4;
+	const [r0, g0, b0, a0] = [data[seed], data[seed + 1], data[seed + 2], data[seed + 3]];
+	const fillable = new Uint8Array(size);
+	for (let y = 0; y < bh; y++) {
+		for (let x = 0; x < bw; x++) {
+			const o = ((by0 + y) * width + bx0 + x) * 4;
+			if (Math.max(Math.abs(data[o] - r0), Math.abs(data[o + 1] - g0), Math.abs(data[o + 2] - b0), Math.abs(data[o + 3] - a0)) <= tolerance) fillable[y * bw + x] = 1;
+		}
+	}
+
+	// 隙間閉じ: 線(塗れない画素)からgapより離れた画素だけで、かたまりを分ける(幅2×gapより狭い隙間は通れない)
+	const INF = 0xffff;
+	const threshold = gap * 3;
+	let dist: Uint16Array | null = null;
+	if (gap > 0) {
+		dist = chamferFrom(fillable, bw, bh, INF);
+	}
+	const core = (j: number) => fillable[j] === 1 && (dist == null || dist[j] > threshold);
+
+	// 投げ縄の中の、塗れる画素のかたまりを順にたどり、投げ縄の外の塗れる画素につながっていないものを残す
+	const result = new Uint8Array(size);
+	const seen = new Uint8Array(size);
+	const queue = new Int32Array(size);
+	let any = false;
+	for (let start = 0; start < size; start++) {
+		if (seen[start] === 1 || inside[start] === 0 || !core(start)) continue;
+		let head = 0;
+		let tail = 0;
+		queue[tail++] = start;
+		seen[start] = 1;
+		let open = false;
+		while (head < tail) {
+			const j = queue[head++];
+			const x = j % bw;
+			const y = (j - x) / bw;
+			const visit = (k: number) => {
+				if (!core(k)) return;
+				if (inside[k] === 0) {
+					open = true;
+					return;
+				}
+				if (seen[k] === 1) return;
+				seen[k] = 1;
+				queue[tail++] = k;
+			};
+			if (x > 0) visit(j - 1);
+			if (x < bw - 1) visit(j + 1);
+			if (y > 0) visit(j - bw);
+			if (y < bh - 1) visit(j + bw);
+		}
+		if (open) continue;
+		for (let q = 0; q < tail; q++) result[queue[q]] = 1;
+		any = true;
+	}
+	if (!any) return null;
+
+	// 隙間閉じで削った分を、塗れる画素の中(投げ縄の中)だけで広げ直す(線の際まで塗る)
+	if (dist != null) {
+		const blocked = new Uint8Array(size);
+		for (let j = 0; j < size; j++) blocked[j] = fillable[j] === 1 && inside[j] === 1 ? 1 : 0;
+		const grow = chamferFrom(result, bw, bh, INF, blocked);
+		for (let j = 0; j < size; j++) if (blocked[j] === 1 && grow[j] <= threshold + 3) result[j] = 1;
+	}
+
+	const mask = new Uint8Array(width * height);
+	for (let y = 0; y < bh; y++) {
+		for (let x = 0; x < bw; x++) {
+			if (result[y * bw + x] === 1) mask[(by0 + y) * width + bx0 + x] = 1;
+		}
+	}
+	return mask;
+}
+
+/**
+ * JUICE: sourceが0の画素からの距離(縦横3・斜め4で数える近似)。passableを渡すと、その画素だけをたどる(ほかはINFのまま)
+ * 線を回り込む所もたどれるよう、前から・後ろからの2回を2周する
+ */
+function chamferFrom(source: Uint8Array, width: number, height: number, INF: number, passable?: Uint8Array): Uint16Array {
+	const size = width * height;
+	const dist = new Uint16Array(size);
+	// passable無し: sourceが0の画素(線)を起点に、塗れる画素の距離を測る。passable有り: sourceが1の画素(塗る所)を起点に広げる
+	for (let i = 0; i < size; i++) dist[i] = passable == null ? (source[i] === 1 ? INF : 0) : (source[i] === 1 ? 0 : INF);
+	const relax = (i: number, j: number, w: number) => {
+		const d = dist[j] + w;
+		if (d < dist[i]) dist[i] = d;
+	};
+	const rounds = passable == null ? 1 : 2;
+	for (let round = 0; round < rounds; round++) {
+		for (let y = 0; y < height; y++) {
+			for (let x = 0; x < width; x++) {
+				const i = y * width + x;
+				if (dist[i] === 0 || (passable != null && passable[i] === 0)) continue;
+				if (x > 0) relax(i, i - 1, 3);
+				if (y > 0) {
+					relax(i, i - width, 3);
+					if (x > 0) relax(i, i - width - 1, 4);
+					if (x < width - 1) relax(i, i - width + 1, 4);
+				}
+			}
+		}
+		for (let y = height - 1; y >= 0; y--) {
+			for (let x = width - 1; x >= 0; x--) {
+				const i = y * width + x;
+				if (dist[i] === 0 || (passable != null && passable[i] === 0)) continue;
+				if (x < width - 1) relax(i, i + 1, 3);
+				if (y < height - 1) {
+					relax(i, i + width, 3);
+					if (x < width - 1) relax(i, i + width + 1, 4);
+					if (x > 0) relax(i, i + width - 1, 4);
+				}
+			}
+		}
+	}
+	return dist;
+}
+
+/**
  * 範囲を周りにradius画素だけ広げる(線の縁のぼかしの部分に、塗り残しの隙間ができないように)
  */
 export function dilateMask(mask: Uint8Array, width: number, height: number, radius: number): Uint8Array {

@@ -10102,6 +10102,10 @@ export interface Locale extends ILocale {
          */
         "bucketFill": string;
         /**
+         * 囲んだ中に、線で閉じた所がありませんでした
+         */
+        "lassoFillNothingEnclosed": string;
+        /**
          * 形が細かすぎて塗りつぶせませんでした
          */
         "bucketFillTooComplex": string;
@@ -10166,7 +10170,7 @@ export interface Locale extends ILocale {
          */
         "clipToLines": string;
         /**
-         * 線の中だけ塗る(描き始めた所を囲む線の中にだけ塗れます)
+         * 線の中だけ塗る(描き始めた所を囲む線の中にだけ塗れます。囲って塗るでは、囲んだ中の線で閉じた所だけを塗ります)
          */
         "clipToLinesHint": string;
         /**
