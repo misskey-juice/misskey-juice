@@ -107,8 +107,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			(85行目)と同じ「名詞句+コロン+ユーザー名」構成にするため、名詞句のみの専用キー(Header接尾辞)を使う -->
 			<!-- JUICE: 後方互換のガード。requester解決前(あるいはユーザー削除等)でnotification.requesterが
 			無い場合にMkUserNameをクラッシュさせないよう、名前部分だけ省略して表示を継続する -->
-			<span v-else-if="notification.type === 'newEmojiRequest'">{{ i18n.tsx._notification.newEmojiRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
-			<span v-else-if="notification.type === 'newAvatarDecorationRequest'">{{ i18n.tsx._notification.newAvatarDecorationRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
+			<!-- JUICE: 1回の送信でまとめて作られた申請は「ほかN件」を付ける -->
+			<span v-else-if="notification.type === 'newEmojiRequest'">{{ notification.count > 1 ? i18n.tsx._notification.newEmojiRequestsHeader({ name: notification.name, n: notification.count - 1 }) : i18n.tsx._notification.newEmojiRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
+			<span v-else-if="notification.type === 'newAvatarDecorationRequest'">{{ notification.count > 1 ? i18n.tsx._notification.newAvatarDecorationRequestsHeader({ name: notification.name, n: notification.count - 1 }) : i18n.tsx._notification.newAvatarDecorationRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
 			<span v-else-if="notification.type === 'newSignupApplication'">{{ i18n.ts._notification.newSignupApplicationHeader }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
 			<span v-else-if="notification.type === 'newAbuseUserReport'">{{ i18n.ts._notification.newAbuseUserReportHeader }}<template v-if="notification.targetUser">: <MkUserName :user="notification.targetUser"/></template></span>
 			<MkA v-else-if="notification.type === 'follow' || notification.type === 'mention' || notification.type === 'reply' || notification.type === 'renote' || notification.type === 'quote' || notification.type === 'reaction' || notification.type === 'receiveFollowRequest' || notification.type === 'followRequestAccepted'" v-user-preview="notification.user.id" :class="$style.headerName" :to="userPage(notification.user)"><MkUserName :user="notification.user"/></MkA>
@@ -166,18 +167,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-else-if="notification.type === 'createToken'" :class="$style.text" to="/settings/apps">
 				<Mfm :text="i18n.tsx._notification.createTokenDescription({ text: i18n.ts.manageAccessTokens })"/>
 			</MkA>
-			<MkA v-else-if="notification.type === 'emojiRequestApproved'" :class="$style.text" to="/emoji-request">
-				{{ i18n.ts.check }}
-			</MkA>
-			<MkA v-else-if="notification.type === 'emojiRequestRejected'" :class="$style.text" to="/emoji-request">
-				{{ notification.reason }}
-			</MkA>
-			<MkA v-else-if="notification.type === 'avatarDecorationRequestApproved'" :class="$style.text" to="/avatar-decoration-request">
-				{{ i18n.ts.check }}
-			</MkA>
-			<MkA v-else-if="notification.type === 'avatarDecorationRequestRejected'" :class="$style.text" to="/avatar-decoration-request">
-				{{ notification.reason }}
-			</MkA>
+			<!-- JUICE: 申請者向けの承認・却下の通知も、モデレーター向けの新着通知と同じ「確認」ボタンにする(却下なら理由も表示) -->
+			<template v-else-if="notification.type === 'emojiRequestApproved' || notification.type === 'emojiRequestRejected' || notification.type === 'avatarDecorationRequestApproved' || notification.type === 'avatarDecorationRequestRejected'">
+				<div v-if="(notification.type === 'emojiRequestRejected' || notification.type === 'avatarDecorationRequestRejected') && notification.reason" :class="$style.text" style="opacity: 0.6;">{{ notification.reason }}</div>
+				<div :class="$style.requestActions">
+					<MkButton small rounded type="routerLink" :to="notification.type === 'emojiRequestApproved' || notification.type === 'emojiRequestRejected' ? '/emoji-request' : '/avatar-decoration-request'">{{ i18n.ts.check }}</MkButton>
+				</div>
+			</template>
 			<!-- JUICE: ヘッダーで既に名前(絵文字名等)や申請者名を表示しているため、本文は理由/件名等の
 			補足情報と、「確認」への導線(Misskeyの標準ボタン見た目=MkButton)のみにする。
 			リンク先はモデレーターでなくても到達できる"-manager"側のルート(custom-emojis-managerと同じ方式) -->
