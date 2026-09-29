@@ -1978,7 +1978,7 @@ export type paths = {
          * draw-rooms/chat-history
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+         *     **Credential required**: *No* / **Permission**: *read:draw-rooms*
          */
         post: operations['draw-rooms___chat-history'];
     };
@@ -2050,7 +2050,7 @@ export type paths = {
          * draw-rooms/show
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+         *     **Credential required**: *No* / **Permission**: *read:draw-rooms*
          */
         post: operations['draw-rooms___show'];
     };
@@ -2059,7 +2059,7 @@ export type paths = {
          * draw-rooms/strokes
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+         *     **Credential required**: *No* / **Permission**: *read:draw-rooms*
          */
         post: operations['draw-rooms___strokes'];
     };

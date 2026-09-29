@@ -29,6 +29,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else-if="room.viewOnly">
 					<div :class="$style.statusText"><i class="ti ti-shield"></i> {{ i18n.ts._drawRoom.viewingAsModerator }}</div>
 				</template>
+				<!-- JUICE: ログインしていない人は見るだけ。描くにはログインしてもらう -->
+				<template v-else-if="isGuest">
+					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.spectatingAsGuest }}</div>
+					<MkButton small primary @click="pleaseLogin()"><i class="ti ti-login-2"></i> {{ i18n.ts._drawRoom.loginToJoin }}</MkButton>
+				</template>
 				<template v-else-if="!room.isMember">
 					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ isFull ? i18n.ts._drawRoom.full : i18n.ts._drawRoom.spectating }}</div>
 					<MkButton v-if="!isFull" small primary @click="join"><i class="ti ti-brush"></i> {{ i18n.ts._drawRoom.join }}</MkButton>
@@ -152,6 +157,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 				<!-- JUICE: スマホでは、レイヤーとチャットを下から出すパネルにする -->
 				<div :class="$style.statusEnd">
+				<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える)。見つけやすいよう、画像の保存の横に名前付きで置く -->
+				<button
+					v-if="canPet"
+					v-tooltip="i18n.ts._drawRoom.petToolHint"
+					class="_button"
+					:class="[$style.petButton, { [$style.petButtonActive]: petting }]"
+					:aria-label="i18n.ts._drawRoom.petTool"
+					:aria-pressed="petting"
+					@click="petting = !petting"
+				><i class="ti ti-hand-stop"></i><span>{{ i18n.ts._drawRoom.petTool }}</span></button>
 				<!-- JUICE: 開催中・終了後どちらでも、全体または選んだ範囲を画像(PNG)にして保存・投稿できる -->
 				<button
 					v-tooltip="i18n.ts._drawRoom.imageMenu"
@@ -202,6 +217,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="room.cw != null" :class="$style.contentGateCw">{{ room.cw }}</div>
 					<div v-else :class="$style.contentGateText">{{ i18n.ts._drawRoom.roomSensitiveGate }}</div>
 					<MkButton primary rounded @click="acceptContent"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.openRoomContent }}</MkButton>
+					<!-- JUICE: 開く前に、サーバーのルールの「絵チャでのNSFWについて」を読んでもらう -->
+					<a :href="DRAW_ROOM_NSFW_RULES_URL" target="_blank" rel="noopener" class="_link" :class="$style.contentGateRules"><i class="ti ti-external-link"></i> {{ i18n.ts._drawRoom.nsfwRulesLink }}</a>
 				</div>
 				<!-- JUICE: 線の読み込み中(線が多い部屋では時間がかかる)は、キャンバスの上に進み具合を出す -->
 				<div v-if="canvasLoading != null" :class="$style.canvasLoading" role="status">
@@ -282,6 +299,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkAvatar v-if="userMap.get(userId)" :class="$style.cursorAvatar" :user="userMap.get(userId)!"/>
 				</div>
 				</template>
+				<!-- JUICE: 自分がなでているところにも手を出す(ほかの人の画面と同じ見た目。指・マウスにぴったりついてくる) -->
+				<div
+					v-if="myPetAt != null"
+					:class="[$style.cursor, $style.cursorSelf]"
+					:style="{ transform: `translate(${canvasToView(myPetAt.x, myPetAt.y)[0]}px, ${canvasToView(myPetAt.x, myPetAt.y)[1]}px)` }"
+				>
+					<i class="ti ti-hand-stop" :class="$style.cursorHand"></i>
+				</div>
 				<!-- JUICE: なでたところに出るハート(自分のなでた分も出す) -->
 				<i
 					v-for="heart in petHearts"
@@ -308,8 +333,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<select v-model="imageFormat" :class="$style.selectionFormat" :aria-label="i18n.ts._drawRoom.imageFormat">
 							<option v-for="option in imageFormatOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
 						</select>
-						<button class="_button" :class="$style.selectionAction" @click="saveImageToDrive(selection)"><i class="ti ti-cloud-upload"></i> {{ i18n.ts._drawRoom.saveImage }}</button>
-						<button class="_button" :class="$style.selectionAction" @click="postImage(selection)"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</button>
+						<template v-if="!isGuest">
+							<button class="_button" :class="$style.selectionAction" @click="saveImageToDrive(selection)"><i class="ti ti-cloud-upload"></i> {{ i18n.ts._drawRoom.saveImage }}</button>
+							<button class="_button" :class="$style.selectionAction" @click="postImage(selection)"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</button>
+						</template>
 						<button class="_button" :class="$style.selectionAction" @click="downloadImage(selection)"><i class="ti ti-download"></i> {{ i18n.ts._drawRoom.downloadImage }}</button>
 					</template>
 					<button v-tooltip="i18n.ts.cancel" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts.cancel" @click="cancelSelecting"><i class="ti ti-x"></i></button>
@@ -333,16 +360,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</svg>
 					</div>
 					<div :class="$style.minimapBar">
-						<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える) -->
-						<button
-							v-if="canPet"
-							v-tooltip="i18n.ts._drawRoom.petToolHint"
-							class="_button"
-							:class="[$style.minimapToggle, { [$style.minimapToggleActive]: petting }]"
-							:aria-label="i18n.ts._drawRoom.petTool"
-							:aria-pressed="petting"
-							@click="petting = !petting"
-						><i class="ti ti-hand-stop"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.petTool }}</span></button>
 						<!-- JUICE: キャンバスの回転(PC向け。スマホ・タブレットは2本指で回せる) -->
 						<button v-tooltip="i18n.ts._drawRoom.rotateLeft" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.rotateLeft" @click="rotateBy(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
 						<button v-if="rotationDegrees !== 0" v-tooltip="i18n.ts._drawRoom.resetRotation" class="_button" :class="$style.zoomLevel" :aria-label="i18n.ts._drawRoom.resetRotation" @click="resetRotation">{{ rotationDegrees }}°</button>
@@ -585,7 +602,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 						<!-- JUICE: ほかの人の発言は通報できる -->
 						<button
-							v-if="item.user.id !== $i.id && !room.viewOnly"
+							v-if="item.user.id !== $i.id && !room.viewOnly && !isGuest"
 							v-tooltip="i18n.ts.menu"
 							class="_button"
 							:class="$style.chatMenuButton"
@@ -594,7 +611,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						><i class="ti ti-dots"></i></button>
 					</div>
 				</div>
-				<form v-if="!room.isEnded && !room.viewOnly" :class="$style.chatForm" @submit.prevent="sendChat">
+				<form v-if="!room.isEnded && !room.viewOnly && !isGuest" :class="$style.chatForm" @submit.prevent="sendChat">
 					<input ref="chatInputEl" v-model="chatText" :class="$style.chatInput" type="text" maxlength="500" :placeholder="i18n.ts._drawRoom.chatPlaceholder" :aria-label="i18n.ts._drawRoom.chatPlaceholder"/>
 					<button v-tooltip="i18n.ts.emoji" class="_button" :class="$style.chatSend" type="button" :aria-label="i18n.ts.emoji" @click="insertChatEmoji"><i class="ti ti-mood-happy"></i></button>
 					<button v-tooltip="i18n.ts.send" class="_button" :class="$style.chatSend" type="submit" :disabled="chatText.trim().length === 0" :aria-label="i18n.ts.send"><i class="ti ti-send"></i></button>
@@ -603,6 +620,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 	</div>
+<!-- JUICE: 長押しでスポイトの手応え。押している間は0.5秒で満ちる輪、スポイトになったら指の上に拾った色を出す -->
+<Teleport to="body">
+	<div
+		v-if="longPressIndicator != null"
+		:class="[$style.longPress, { [$style.longPressPicking]: longPressIndicator.picking }]"
+		:style="{ left: `${longPressIndicator.x}px`, top: `${longPressIndicator.y}px`, '--juice-long-press-color': longPressIndicator.color, '--juice-long-press-ms': `${LONG_PRESS_MS}ms` }"
+		aria-hidden="true"
+	>
+		<svg v-if="!longPressIndicator.picking" viewBox="0 0 56 56" :class="$style.longPressRing"><circle cx="28" cy="28" r="24"/></svg>
+		<div v-else :class="$style.longPressSwatch"></div>
+	</div>
+</Teleport>
 </PageWithHeader>
 </template>
 
@@ -621,6 +650,8 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { url } from '@@/js/config.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
+import { haptic } from '@/utility/haptic.js';
+import type { MenuItem } from '@/types/menu.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { uploadFile } from '@/utility/drive.js';
@@ -631,7 +662,8 @@ import { useStream } from '@/stream.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
-import { ensureSignin, iAmModerator } from '@/i.js';
+import { $i as signedInUser, iAmModerator } from '@/i.js';
+import { pleaseLogin } from '@/utility/please-login.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { floodFillMask, enclosedFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
 import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, rotatePoints, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
@@ -643,7 +675,10 @@ const props = defineProps<{
 	roomId: string;
 }>();
 
-const $i = ensureSignin();
+// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見るだけで開ける。そのときは誰とも一致しないidで扱い、
+// 描く・チャットを書く・なでる・通報・ドライブへの保存・投稿は出さない(ロールの値は使わない所だけで使うので、仮の値にしておく)
+const isGuest = signedInUser == null;
+const $i = signedInUser ?? { id: '', policies: { drawRoomMaxStrokes: 30000, drawRoomMaxStrokeMegabytes: 64, drawRoomMaxCanvasSize: 0 } };
 const router = useRouter();
 
 // JUICE: よく使う色。これ以外はカラーピッカーで選ぶ
@@ -961,6 +996,34 @@ async function deleteAllMyLayers(): Promise<void> {
 	activeLayerId.value = id;
 }
 
+// JUICE: レイヤーの結合。上(+1)・下(-1)のとなりのレイヤーに結合する(下描きどうし・皆に見えるレイヤーどうしだけ)
+function mergeMenuItems(meta: LayerMeta, index: number): MenuItem[] {
+	const items: MenuItem[] = [];
+	for (const direction of [1, -1] as const) {
+		const target = myLayers.value[index + direction] as LayerMeta | undefined;
+		if (target == null || (target.private === true) !== (meta.private === true)) continue;
+		items.push({
+			text: direction === 1 ? i18n.ts._drawRoom.mergeLayerUp : i18n.ts._drawRoom.mergeLayerDown,
+			icon: direction === 1 ? 'ti ti-layers-selected' : 'ti ti-layers-selected-bottom',
+			action: () => mergeMyLayer(meta, target),
+		});
+	}
+	return items.length > 0 ? [{ type: 'divider' }, ...items] : [];
+}
+
+async function mergeMyLayer(meta: LayerMeta, target: LayerMeta): Promise<void> {
+	const text = [i18n.tsx._drawRoom.mergeLayerConfirm({ from: layerName($i.id, meta), into: layerName($i.id, target) })];
+	// 結合元の合成モードは引き継がない(濃さは線に焼き込む)
+	if (meta.blend != null) text.push(i18n.tsx._drawRoom.mergeLayerBlendLost({ name: layerName($i.id, meta) }));
+	const { canceled } = await os.confirm({ type: 'warning', text: text.join('\n') });
+	if (canceled) return;
+	// 名前の無いレイヤーは並びの番号で表示するので、1枚減って番号がずれないよう、先に今の名前を付けておく
+	if (myLayers.value.some(layer => layer.name === '')) sendMyLayers(withFixedNames(myLayers.value));
+	clearStrokeSelection();
+	activeLayerId.value = target.id;
+	connection.value?.send('mergeLayer', { from: meta.id, into: target.id });
+}
+
 function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 	const index = myLayers.value.findIndex(layer => layer.id === meta.id);
 	os.popupMenu([{
@@ -991,7 +1054,7 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.moveLayerDown,
 		icon: 'ti ti-arrow-down',
 		action: () => moveMyLayer(meta.id, -1),
-	}] : []), ...(myLayers.value.length > 1 ? [{ type: 'divider' as const }, {
+	}] : []), ...mergeMenuItems(meta, index), ...(myLayers.value.length > 1 ? [{ type: 'divider' as const }, {
 		text: i18n.ts._drawRoom.deleteLayer,
 		icon: 'ti ti-trash',
 		danger: true,
@@ -1043,7 +1106,7 @@ const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: numb
 // JUICE: なでるツール。オンの間は、ドラッグしても描かず・表示も動かさず、なでている位置を送る
 const petting = ref(false);
 // なでられるのは開催中の部屋だけ(終了した部屋・確認のために開いている部屋では、ボタンも出さない)
-const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly);
+const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly && !isGuest);
 watch(canPet, (value) => {
 	if (!value) petting.value = false;
 });
@@ -1052,6 +1115,8 @@ watch(canPet, (value) => {
 const PET_STALE_MS = 800;
 const petStaleTimers = new Map<string, number>();
 let petPointerId: number | null = null;
+// 自分がなでているところ(キャンバス座標)。なでていなければnull
+const myPetAt = ref<{ x: number; y: number } | null>(null);
 // なでたところに出るハート(キャンバス座標)。しばらくしたら消す
 const petHearts = ref<{ id: number; x: number; y: number; drift: number }[]>([]);
 let petHeartSeq = 0;
@@ -1083,6 +1148,9 @@ const contentAccepted = ref(acceptedRoomIds.has(props.roomId));
 watch(() => props.roomId, (roomId) => {
 	contentAccepted.value = acceptedRoomIds.has(roomId);
 });
+// JUICE: サーバーのルールの「絵チャでのNSFWについて」
+const DRAW_ROOM_NSFW_RULES_URL = 'https://docs.mk-juice.dev/service/rules#%E7%B5%B5%E3%83%81%E3%83%A3%E3%81%A6%E3%82%99%E3%81%AEnsfw%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6';
+
 const contentGated = computed(() => {
 	const r = room.value;
 	if (r == null || isOwner.value || contentAccepted.value) return false;
@@ -1434,6 +1502,16 @@ function connect(): void {
 		e.beginLoadLayer(key);
 		e.loadStrokes(key, payload.strokes.map(decodeStroke), 0, Infinity);
 		e.finishLoad([key]);
+	}));
+	// JUICE: レイヤーを結合した(結合元のレイヤーは直前のlayersUpdatedで消えているので、結合先のレイヤーの線を入れ直す)
+	c.on('layerMerged', payload => applyEvent(() => {
+		const e = engine.value;
+		if (e == null) return;
+		const key = keyFor(payload.userId, payload.layer);
+		e.beginLoadLayer(key);
+		e.loadStrokes(key, payload.strokes.map(decodeStroke), 0, Infinity);
+		e.finishLoad([key]);
+		if (payload.userId === $i.id) pruneStrokeSelection();
 	}));
 	c.on('strokesDeleted', payload => applyEvent(() => {
 		if (payload.userId === $i.id) return;
@@ -2249,7 +2327,7 @@ function onPointerDown(ev: PointerEvent): void {
 		if (touches.size >= 2) {
 			// 1本目の指で始めた操作(線・範囲選択・囲って塗る・移動・表示の移動など)は取りやめる
 			cancelLongPress();
-			pickingPointerId = null;
+			endLongPressPicking();
 			cancelStroke();
 			selectFrom = null;
 			selectGesture.value = null;
@@ -2266,6 +2344,8 @@ function onPointerDown(ev: PointerEvent): void {
 	if (petting.value && canPet.value && !spaceHeld.value && ev.button === 0 && !selecting.value) {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		petPointerId = ev.pointerId;
+		const [x, y] = toCanvasPoint(ev);
+		myPetAt.value = { x, y };
 		sendCursor(ev, true);
 		return;
 	}
@@ -2334,6 +2414,8 @@ const LONG_PRESS_MOVE_PX = 10;
 let longPress: { pointerId: number; startX: number; startY: number; moved: number; last: PointerEvent; timer: number } | null = null;
 // 長押しでスポイトにした指。離すまで、動かした先の色を拾い続ける
 let pickingPointerId: number | null = null;
+// 長押しの手応えの表示(画面の座標)。pickingは、スポイトになって色を拾っているか
+const longPressIndicator = ref<{ x: number; y: number; picking: boolean; color: string } | null>(null);
 
 function startLongPress(ev: PointerEvent): void {
 	cancelLongPress();
@@ -2352,14 +2434,24 @@ function startLongPress(ev: PointerEvent): void {
 			if (activeStroke != null && activeStroke.pointerId === pointerId) cancelStroke();
 			pickingPointerId = pointerId;
 			pickColorAt(press.last);
+			haptic();
+			longPressIndicator.value = { x: press.last.clientX, y: press.last.clientY, picking: true, color: color.value };
 		}, LONG_PRESS_MS),
 	};
+	longPressIndicator.value = { x: ev.clientX, y: ev.clientY, picking: false, color: color.value };
 }
 
 function cancelLongPress(): void {
 	if (longPress == null) return;
 	window.clearTimeout(longPress.timer);
 	longPress = null;
+	if (longPressIndicator.value != null && !longPressIndicator.value.picking) longPressIndicator.value = null;
+}
+
+// 長押しのスポイトをやめる(指を離した・2本目の指が触れた)
+function endLongPressPicking(): void {
+	pickingPointerId = null;
+	longPressIndicator.value = null;
 }
 //#endregion
 
@@ -2406,6 +2498,10 @@ function onPointerLeave(): void {
 
 function onPointerMove(ev: PointerEvent): void {
 	if (touches.size < 2) sendCursor(ev);
+	if (petPointerId != null && petPointerId === ev.pointerId) {
+		const [x, y] = toCanvasPoint(ev);
+		myPetAt.value = { x, y };
+	}
 	if (ev.pointerType === 'touch' && touches.has(ev.pointerId)) {
 		touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
 		if (pinch != null && touches.size >= 2) {
@@ -2436,6 +2532,7 @@ function onPointerMove(ev: PointerEvent): void {
 	}
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
 		pickColorAt(ev);
+		longPressIndicator.value = { x: ev.clientX, y: ev.clientY, picking: true, color: color.value };
 		return;
 	}
 	if (panFrom != null && panFrom.pointerId === ev.pointerId) {
@@ -2510,11 +2607,12 @@ function onPointerUp(ev: PointerEvent): void {
 	}
 	if (longPress != null && longPress.pointerId === ev.pointerId) cancelLongPress();
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
-		pickingPointerId = null;
+		endLongPressPicking();
 		return;
 	}
 	if (petPointerId != null && petPointerId === ev.pointerId) {
 		petPointerId = null;
+		myPetAt.value = null;
 		// なで終わったことを送る(カーソルの表示を普通に戻す)
 		sendCursor(ev, true);
 		return;
@@ -3288,7 +3386,7 @@ async function downloadImage(area?: ImageArea | null): Promise<void> {
 }
 
 function openImageMenu(ev: MouseEvent): void {
-	os.popupMenu([{
+	os.popupMenu([...(isGuest ? [] : [{
 		text: i18n.ts._drawRoom.saveImage,
 		icon: 'ti ti-cloud-upload',
 		action: () => saveImageToDrive(),
@@ -3296,7 +3394,7 @@ function openImageMenu(ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.postImage,
 		icon: 'ti ti-pencil',
 		action: () => postImage(),
-	}, {
+	}]), {
 		text: i18n.ts._drawRoom.downloadImage,
 		icon: 'ti ti-download',
 		action: () => downloadImage(),
@@ -3414,7 +3512,7 @@ const headerActions = computed(() => {
 		});
 	}
 	// JUICE: 部屋主以外は部屋を通報できる。モデレーターは(開催中でも)部屋を削除できる
-	if (!isOwner.value && room.value != null && !room.value.viewOnly) {
+	if (!isOwner.value && room.value != null && !room.value.viewOnly && !isGuest) {
 		actions.push({
 			icon: 'ti ti-exclamation-circle',
 			text: i18n.ts._drawRoom.reportRoom,
@@ -3761,6 +3859,32 @@ definePage(() => ({
 	}
 }
 
+.petButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 0.9em;
+	font-weight: bold;
+	white-space: nowrap;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent), transparent 85%);
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-accent), transparent 75%);
+	}
+}
+
+.petButtonActive {
+	color: var(--MI_THEME-fgOnAccent);
+	background: var(--MI_THEME-accent);
+
+	&:hover {
+		background: var(--MI_THEME-accent);
+	}
+}
+
 .toolButtonActive {
 	color: var(--MI_THEME-accent);
 	background: var(--MI_THEME-accentedBg);
@@ -3860,6 +3984,10 @@ definePage(() => ({
 
 .contentGateText {
 	opacity: 0.8;
+}
+
+.contentGateRules {
+	font-size: 0.9em;
 }
 
 .canvasLoading {
@@ -4047,34 +4175,26 @@ definePage(() => ({
 	font-variant-numeric: tabular-nums;
 }
 
-// JUICE: 狭い画面(スマホ等)ではツールチップが出ないので、下のバーのアイコンの下にも小さく名前を出す
+// JUICE: タッチ操作(スマホ・タブレット)ではツールチップが出ないので、画面の広さにかかわらず、下のバーのアイコンの下に小さく名前を出す
 .minimapToggle,
 .selectionAction {
-	@container drawRoom (max-width: 800px) {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1px;
-	}
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1px;
 }
 
 .minimapToggle {
-	@container drawRoom (max-width: 800px) {
-		padding: 3px 6px 2px;
-		border-radius: 8px;
-	}
+	padding: 3px 6px 2px;
+	border-radius: 8px;
 }
 
 .barLabel {
-	display: none;
-
-	@container drawRoom (max-width: 800px) {
-		display: block;
-		font-size: 9px;
-		line-height: 1.2;
-		white-space: nowrap;
-		opacity: 0.8;
-	}
+	display: block;
+	font-size: 9px;
+	line-height: 1.2;
+	white-space: nowrap;
+	opacity: 0.8;
 }
 
 .cursor {
@@ -4100,6 +4220,12 @@ definePage(() => ({
 	line-height: 1.5;
 	pointer-events: none;
 	white-space: nowrap;
+}
+
+.cursorSelf {
+	// 自分の手は、指・マウスにぴったりついてくるよう、なめらかに動かさない
+	transition: none;
+	z-index: 1;
 }
 
 .cursorHand {
@@ -4629,5 +4755,62 @@ definePage(() => ({
 	&:disabled {
 		opacity: 0.4;
 	}
+}
+
+// JUICE: 長押しでスポイトの手応え(指の位置に出す。指で色が隠れないよう、拾った色は指の上に出す)
+.longPress {
+	position: fixed;
+	z-index: 10000;
+	width: 56px;
+	height: 56px;
+	margin: -28px 0 0 -28px;
+	pointer-events: none;
+	// 普通に線を描くときに毎回ちらつかないよう、少し押し続けてから見せる
+	opacity: 0;
+	animation: juice-long-press-show 0s 150ms forwards;
+}
+
+@keyframes juice-long-press-show {
+	to {
+		opacity: 1;
+	}
+}
+
+.longPressRing {
+	width: 100%;
+	height: 100%;
+	transform: rotate(-90deg);
+
+	> circle {
+		fill: none;
+		stroke: var(--MI_THEME-accent);
+		stroke-width: 4;
+		stroke-linecap: round;
+		stroke-dasharray: 151;
+		stroke-dashoffset: 151;
+		animation: juice-long-press-fill var(--juice-long-press-ms) linear forwards;
+	}
+}
+
+@keyframes juice-long-press-fill {
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
+.longPressPicking {
+	transform: translateY(-64px);
+	opacity: 1;
+	animation: none;
+}
+
+.longPressSwatch {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	background: var(--juice-long-press-color);
+	border: 3px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.3);
+	box-sizing: border-box;
 }
 </style>

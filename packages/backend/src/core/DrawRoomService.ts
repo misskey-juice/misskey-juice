@@ -22,6 +22,7 @@ import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DEFAULT_POLICIES, RoleService } from '@/core/RoleService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { resolveDrawRoomLimitSettings, resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
+import { renderDrawRoomThumbnail } from '@/misc/draw-room-thumbnail.js';
 
 export const DRAW_ROOM_CANVAS_PRESETS = {
 	landscape: [1600, 900],
@@ -69,6 +70,8 @@ export function decodeDrawPoints(encoded: string, maxPoints: number): number[] |
 	return points;
 }
 export const DRAW_CHAT_MAX_LENGTH = 500;
+// JUICE: OGP用の絵を使い回す時間
+const THUMBNAIL_CACHE_MS = 1000 * 60 * 5;
 
 /**
  * JUICE: 部屋の注意書き(CW)を整える(改行などの制御文字を除き、前後の空白を取る)。空ならnull(注意書き無し)
@@ -529,6 +532,68 @@ end
 return { removed, before or '' }
 `;
 
+// JUICE: 自分のレイヤー(from)を、となりのレイヤー(into)に結合する。fromの線をintoの線にし(下へ結合するときはintoの線の後ろ、
+// 上へ結合するときはintoの線の前に並べて、重なり順を保つ)、fromの濃さが100%未満ならその濃さを線に焼き込み、一覧からfromを消す。
+// 線のJSONは読み直さずに文字列のまま書き換える(idを先頭に置いたまま保つため。strokeIdOf参照)。
+// 結合は取り消せないので、取り消し・やり直しの履歴は捨てる。一覧が呼び出し側で読んだものから変わっていたら断る。
+// 返り値は、結合したなら1・一覧が変わっていたなら0・終了済みなら-1
+// KEYS: ended, strokes, bytes, layers, history, redo, historyBytes, redoBytes / ARGV: from, into, 読んだ一覧, 新しい一覧, 濃さ, 下へ結合なら'1', ttl
+const MERGE_LAYER_SCRIPT = LAYER_OF_STROKE_LUA + `
+if redis.call('EXISTS', KEYS[1]) == 1 then return -1 end
+if (redis.call('GET', KEYS[4]) or '') ~= ARGV[3] then return 0 end
+local from, into, factor, below, ttl = ARGV[1], ARGV[2], tonumber(ARGV[5]), ARGV[6] == '1', tonumber(ARGV[7])
+local function retag(raw)
+	local key = '"layer":"' .. from .. '"'
+	local a, b = string.find(raw, key, 1, true)
+	if a then
+		raw = string.sub(raw, 1, a - 1) .. '"layer":"' .. into .. '"' .. string.sub(raw, b + 1)
+	else
+		raw = string.sub(raw, 1, -2) .. ',"layer":"' .. into .. '"}'
+	end
+	if factor < 1 then
+		local oa, ob, v = string.find(raw, '"opacity":([%d%.eE%-]+)')
+		if oa then
+			raw = string.sub(raw, 1, oa - 1) .. '"opacity":' .. string.format('%.4g', tonumber(v) * factor) .. string.sub(raw, ob + 1)
+		else
+			raw = string.sub(raw, 1, -2) .. ',"opacity":' .. string.format('%.4g', factor) .. '}'
+		end
+	end
+	return raw
+end
+local list = redis.call('LRANGE', KEYS[2], 0, -1)
+local moved = {}
+local rest = {}
+for _, raw in ipairs(list) do
+	if layerOf(raw) == from then table.insert(moved, retag(raw)) else table.insert(rest, raw) end
+end
+local at = nil
+if below then
+	for i = #rest, 1, -1 do
+		if layerOf(rest[i]) == into then at = i + 1 break end
+	end
+else
+	for i = 1, #rest do
+		if layerOf(rest[i]) == into then at = i break end
+	end
+end
+if at == nil then at = #rest + 1 end
+local result = {}
+for i = 1, at - 1 do table.insert(result, rest[i]) end
+for _, raw in ipairs(moved) do table.insert(result, raw) end
+for i = at, #rest do table.insert(result, rest[i]) end
+local bytes = 0
+for _, raw in ipairs(result) do bytes = bytes + string.len(raw) end
+redis.call('DEL', KEYS[2])
+for i = 1, #result, 500 do
+	redis.call('RPUSH', KEYS[2], unpack(result, i, math.min(i + 499, #result)))
+end
+if #result > 0 then redis.call('EXPIRE', KEYS[2], ttl) end
+redis.call('SET', KEYS[3], bytes, 'EX', ttl)
+redis.call('SET', KEYS[4], ARGV[4], 'EX', ttl)
+redis.call('DEL', KEYS[5], KEYS[6], KEYS[7], KEYS[8])
+return 1
+`;
+
 // 自分のレイヤーの線を全て消す。返り値は、消したなら1・終了済みなら0・消す線が無かったなら2
 // JUICE: 部屋主が消したときなので、取り消し・やり直しの履歴も捨てる(消された線を本人が取り消しで戻せないように)
 // KEYS: ended, strokes, bytes, history, redo, historyBytes, redoBytes
@@ -833,7 +898,9 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public async canView(room: MiDrawRoom, me: MiUser | null): Promise<boolean> {
-		if (me == null || me.host != null) return false;
+		// JUICE: ログインしていない人は、公開範囲がローカル全体でNSFWの印が無い部屋だけ(見るだけ)
+		if (me == null) return await this.isPublicToAnonymous(room);
+		if (me.host != null) return false;
 		if (room.ownerId === me.id) return true;
 		// JUICE: 凍結された人の部屋は、本人以外には見せない(一覧にも出さない)
 		const owner = await this.cacheService.findUserById(room.ownerId).catch(() => null);
@@ -843,6 +910,17 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (room.visibility === 'local') return true;
 		const followings = await this.cacheService.userFollowingsCache.fetch(me.id);
 		return followings[room.ownerId] != null;
+	}
+
+	/**
+	 * JUICE: ログインしていない人も(URLで)見られる部屋か。公開範囲がローカル全体で、NSFWの印が無く、部屋主が凍結されていない。
+	 * 注意書き(CW)の部屋は見られる(開くまで絵を隠す)
+	 */
+	@bindThis
+	public async isPublicToAnonymous(room: MiDrawRoom): Promise<boolean> {
+		if (room.visibility !== 'local' || room.isSensitive) return false;
+		const owner = await this.cacheService.findUserById(room.ownerId).catch(() => null);
+		return owner != null && !owner.isSuspended;
 	}
 
 	@bindThis
@@ -1261,6 +1339,39 @@ export class DrawRoomService implements OnApplicationShutdown {
 		return true;
 	}
 
+	/**
+	 * JUICE: 自分のレイヤー(from)を、重なり順でとなりのレイヤー(into)に結合する。下描きどうし・皆に見えるレイヤーどうしだけ結合できる。
+	 * fromの合成モードは引き継がない(濃さは線に焼き込む)。取り消せない
+	 */
+	@bindThis
+	public async mergeLayer(roomId: MiDrawRoom['id'], userId: MiUser['id'], from: string, into: string): Promise<boolean> {
+		const raw = await this.redisClient.get(this.layersKey(roomId, userId));
+		if (raw == null) return false;
+		const layers = this.parseLayers(raw);
+		const fromIndex = layers.findIndex(layer => layer.id === from);
+		const intoIndex = layers.findIndex(layer => layer.id === into);
+		if (fromIndex === -1 || intoIndex === -1 || Math.abs(fromIndex - intoIndex) !== 1) return false;
+		const fromLayer = layers[fromIndex];
+		const intoLayer = layers[intoIndex];
+		if ((fromLayer.private === true) !== (intoLayer.private === true)) return false;
+		const next = layers.filter(layer => layer.id !== from);
+		const factor = Math.min(1, Math.max(0, fromLayer.opacity));
+		const result = await this.redisClient.eval(
+			MERGE_LAYER_SCRIPT, 8,
+			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), this.layersKey(roomId, userId), ...this.historyKeys(roomId, userId),
+			from, into, raw, JSON.stringify(next), factor.toString(), intoIndex < fromIndex ? '1' : '0', REDIS_KEY_TTL_SEC.toString(),
+		) as number;
+		if (result !== 1) return false;
+		await this.touch(roomId);
+		// 先に一覧を配って結合元のレイヤーを消してもらい、結合先のレイヤーの線を配り直す(ほかの人のストリームでは、下描きは流さない)
+		this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers: next });
+		const strokes = (await this.redisClient.lrange(this.strokesKey(roomId, userId), 0, -1))
+			.map(x => JSON.parse(x) as DrawStroke)
+			.filter(stroke => (stroke.layer ?? '0') === into);
+		this.globalEventService.publishDrawRoomStream(roomId, 'layerMerged', { userId, layer: into, strokes, ...(intoLayer.private ? { private: true } : {}) });
+		return true;
+	}
+
 	// JUICE: その人の下描き(本人だけに見える)のレイヤーのid。一覧を変えるのと同時に届いた操作で、古い判定のまま
 	// 皆に配ってしまわないよう、覚えておかずに毎回読む
 	@bindThis
@@ -1280,6 +1391,28 @@ export class DrawRoomService implements OnApplicationShutdown {
 				strokes: entry.strokes.filter(stroke => !privateIds.has(stroke.layer ?? '0')),
 			};
 		});
+	}
+
+	// JUICE: OGP用の絵(PNG)。描くのは重いので、しばらく使い回す
+	private thumbnailCache = new Map<MiDrawRoom['id'], { at: number; png: Buffer }>();
+
+	/**
+	 * JUICE: 部屋の今の絵を、OGP用の画像(PNG)にする(ログインしていない人に見える分だけ。5分間使い回す)
+	 */
+	@bindThis
+	public async getThumbnail(room: MiDrawRoom): Promise<Buffer> {
+		const cached = this.thumbnailCache.get(room.id);
+		if (cached != null && Date.now() - cached.at < THUMBNAIL_CACHE_MS) return cached.png;
+		const entries = await this.getLayers(room, null);
+		const png = await renderDrawRoomThumbnail(room.canvasWidth, room.canvasHeight, entries);
+		this.thumbnailCache.set(room.id, { at: Date.now(), png });
+		// 覚えておく部屋が増えすぎないよう、古いものから捨てる
+		while (this.thumbnailCache.size > 50) {
+			const oldest = this.thumbnailCache.keys().next().value;
+			if (oldest == null) break;
+			this.thumbnailCache.delete(oldest);
+		}
+		return png;
 	}
 
 	/**

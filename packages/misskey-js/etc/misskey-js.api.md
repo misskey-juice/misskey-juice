@@ -1158,6 +1158,12 @@ export type Channels = {
                 layer: string;
                 strokes: DrawStroke[];
             }) => void;
+            layerMerged: (payload: {
+                userId: User['id'];
+                layer: string;
+                strokes: DrawStroke[];
+                private?: boolean;
+            }) => void;
             operationRejected: (payload: Record<string, never>) => void;
             strokeLimitReached: (payload: {
                 kind: 'strokes' | 'bytes' | 'room';
@@ -1220,6 +1226,10 @@ export type Channels = {
             };
             setLayers: {
                 layers: DrawLayer[];
+            };
+            mergeLayer: {
+                from: string;
+                into: string;
             };
             moveStrokes: {
                 strokeIds: string[] | null;

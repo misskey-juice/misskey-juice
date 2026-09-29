@@ -340,6 +340,14 @@ export interface DrawRoomEventTypes {
 		layer: string;
 		strokes: DrawStroke[];
 	};
+	// JUICE: レイヤーを結合した(結合先のレイヤーの今の線。結合元のレイヤーは直前のlayersUpdatedで消えている)。
+	// privateなら下描きのレイヤーどうしの結合(ほかの人には流さない)
+	layerMerged: {
+		userId: MiUser['id'];
+		layer: string;
+		strokes: DrawStroke[];
+		private?: boolean;
+	};
 	// 選んだ線を消した
 	strokesDeleted: {
 		userId: MiUser['id'];

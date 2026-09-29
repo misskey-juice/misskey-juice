@@ -38,7 +38,8 @@ const RECHECK_INTERVAL_MS = 1000 * 30;
 export class DrawRoomChannel extends Channel {
 	public readonly chName = 'drawRoom';
 	public static shouldShare = false;
-	public static requireCredential = true as const;
+	// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見るだけでつなげる(操作は受け付けない)
+	public static requireCredential = false as const;
 	public static kind = 'read:draw-rooms';
 
 	private room: MiDrawRoom | null = null;
@@ -47,6 +48,8 @@ export class DrawRoomChannel extends Channel {
 	// JUICE: 部屋を開いている人(オンライン)として記録するときの、この接続のid
 	private readonly presenceId = randomUUID();
 	private presenceTimer: NodeJS.Timeout | null = null;
+	// JUICE: ログインしていない人の接続で、まだ見られるか(NSFWになった等)を確かめ直すタイマー
+	private recheckTimer: NodeJS.Timeout | null = null;
 	// 画面を離れている(別のタブ・アプリを見ている)ならオフラインとして扱う
 	private away = false;
 	// JUICE: モデレーターが公開範囲の外から確認のために開いている。見るだけで、チャット・カーソル・
@@ -64,12 +67,18 @@ export class DrawRoomChannel extends Channel {
 
 	@bindThis
 	public async init(params: JsonObject) {
-		if (typeof params.roomId !== 'string' || this.user == null) return;
-		const room = await this.drawRoomService.getRoom(params.roomId, this.user).catch(() => null);
+		if (typeof params.roomId !== 'string') return;
+		const room = await this.drawRoomService.getRoom(params.roomId, this.user ?? null).catch(() => null);
 		if (room == null) return;
 		this.room = room;
-		this.isMember = await this.drawRoomService.isMember(room.id, this.user.id);
 		this.lastCheckedAt = Date.now();
+		// JUICE: ログインしていない人は見るだけ(オンラインの一覧にも入れない)。見られなくなったら購読をやめる
+		if (this.user == null) {
+			this.subscriber.on(`drawRoomStream:${room.id}`, this.onEvent);
+			this.recheckTimer = setInterval(() => { this.stillAllowed().catch(() => {}); }, RECHECK_INTERVAL_MS);
+			return;
+		}
+		this.isMember = await this.drawRoomService.isMember(room.id, this.user.id);
 		this.viewOnly = !await this.drawRoomService.canView(room, this.user);
 		this.subscriber.on(`drawRoomStream:${room.id}`, this.onEvent);
 		if (this.viewOnly) return;
@@ -96,9 +105,11 @@ export class DrawRoomChannel extends Channel {
 	// JUICE: 自分に関わる出来事(参加・キック・終了)で、描けるかどうかの状態を更新してからクライアントへ流す
 	@bindThis
 	private onEvent(data: GlobalEvents['drawRoom']['payload']) {
-		if (this.room == null || this.user == null) return;
-		if (data.type === 'memberJoined' && data.body.user.id === this.user.id) this.isMember = true;
-		if (data.type === 'memberLeft' && data.body.userId === this.user.id) this.isMember = false;
+		if (this.room == null) return;
+		// JUICE: ログインしていない人はnull(誰の操作でもない。ほかの人の下描きを除くのは、ログインしている人と同じ)
+		const selfId = this.user?.id ?? null;
+		if (data.type === 'memberJoined' && data.body.user.id === selfId) this.isMember = true;
+		if (data.type === 'memberLeft' && data.body.userId === selfId) this.isMember = false;
 		if (data.type === 'ended' || data.type === 'deleted') this.room = { ...this.room, isEnded: true };
 		if (data.type === 'updated') {
 			const { title, maxMembers, canvasWidth, canvasHeight } = data.body.room;
@@ -106,7 +117,7 @@ export class DrawRoomChannel extends Channel {
 			this.room = { ...this.room, title, maxMembers, canvasWidth, canvasHeight };
 		}
 		// JUICE: ほかの人の下描き(本人だけに見える)のレイヤーの線と、レイヤーそのものは流さない
-		if ('userId' in data.body && data.body.userId !== this.user.id) {
+		if ('userId' in data.body && data.body.userId !== selfId) {
 			if (data.type === 'strokePart' || data.type === 'stroke') {
 				const strokeId = data.type === 'stroke' ? data.body.stroke.id : data.body.strokeId;
 				if (data.body.private) {
@@ -118,6 +129,8 @@ export class DrawRoomChannel extends Channel {
 				else this.forwardedPartIds.delete(strokeId);
 			}
 			if (data.type === 'clearLayer' && data.body.private) return;
+			// JUICE: 下描きのレイヤーどうしの結合は、ほかの人には流さない
+			if (data.type === 'layerMerged' && data.body.private) return;
 			if (data.type === 'strokesPatched' && data.body.privateLayers != null) {
 				// 戻す線のうち、下描きのレイヤーの線だけを除く(消す・ずらす線のidは、持っていなければ何も起きないのでそのまま)
 				const hidden = new Set(data.body.privateLayers);
@@ -167,13 +180,15 @@ export class DrawRoomChannel extends Channel {
 	 */
 	@bindThis
 	private async stillAllowed(): Promise<boolean> {
-		if (this.room == null || this.user == null) return false;
+		if (this.room == null) return false;
 		if (Date.now() - this.lastCheckedAt < RECHECK_INTERVAL_MS) return true;
 		this.lastCheckedAt = Date.now();
-		const allowed = await this.drawRoomService.getRoom(this.room.id, this.user).then(() => true, () => false);
+		const allowed = await this.drawRoomService.getRoom(this.room.id, this.user ?? null).then(() => true, () => false);
 		if (!allowed) {
 			this.subscriber.off(`drawRoomStream:${this.room.id}`, this.onEvent);
 			this.stopPresence(this.room.id);
+			if (this.recheckTimer != null) clearInterval(this.recheckTimer);
+			this.recheckTimer = null;
 			this.room = null;
 			this.isMember = false;
 		}
@@ -445,6 +460,15 @@ export class DrawRoomChannel extends Channel {
 				if (!await this.drawRoomService.setUserLayers(room.id, user.id, layers)) this.rejectOperation();
 				break;
 			}
+			case 'mergeLayer': {
+				// JUICE: 自分のレイヤーを、重なり順でとなりのレイヤーに結合する
+				if (!this.canDraw() || !isJsonObject(body)) return;
+				const { from, into } = body;
+				if (typeof from !== 'string' || typeof into !== 'string' || from === into || from.length > 32 || into.length > 32) return;
+				if (!await rate('other')) return;
+				if (!await this.drawRoomService.mergeLayer(room.id, user.id, from, into)) this.rejectOperation();
+				break;
+			}
 			case 'moveStrokes': {
 				// JUICE: 移動ツール。自分のレイヤーの、選んだ線(strokeIdsがnullならレイヤー全体)をずらす
 				if (!this.canDraw() || !isJsonObject(body)) return;
@@ -517,6 +541,8 @@ export class DrawRoomChannel extends Channel {
 
 	@bindThis
 	public dispose() {
+		if (this.recheckTimer != null) clearInterval(this.recheckTimer);
+		this.recheckTimer = null;
 		if (this.room != null) {
 			this.subscriber.off(`drawRoomStream:${this.room.id}`, this.onEvent);
 			this.stopPresence(this.room.id);

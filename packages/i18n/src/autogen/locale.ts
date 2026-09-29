@@ -9662,6 +9662,10 @@ export interface Locale extends ILocale {
          */
         "roomSensitiveGate": string;
         /**
+         * 最初にこちらをご確認ください
+         */
+        "nsfwRulesLink": string;
+        /**
          * 開く
          */
         "openRoomContent": string;
@@ -9713,6 +9717,14 @@ export interface Locale extends ILocale {
          * 見学中
          */
         "spectating": string;
+        /**
+         * ログインしていないため、見るだけです
+         */
+        "spectatingAsGuest": string;
+        /**
+         * ログインして参加
+         */
+        "loginToJoin": string;
         /**
          * 満員のため見学のみできます
          */
@@ -10085,6 +10097,22 @@ export interface Locale extends ILocale {
          * 下へ
          */
         "moveLayerDown": string;
+        /**
+         * 上のレイヤーと結合
+         */
+        "mergeLayerUp": string;
+        /**
+         * 下のレイヤーと結合
+         */
+        "mergeLayerDown": string;
+        /**
+         * 「{from}」を「{into}」に結合しますか？結合は取り消せません。
+         */
+        "mergeLayerConfirm": ParameterizedString<"from" | "into">;
+        /**
+         * 「{name}」の合成モードは引き継がれません。
+         */
+        "mergeLayerBlendLost": ParameterizedString<"name">;
         /**
          * 囲って塗る(なぞって囲った範囲を、ペンなら塗り、消しゴムなら消す)
          */
