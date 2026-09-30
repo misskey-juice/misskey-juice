@@ -57,7 +57,7 @@ export const drawRoomErrors = {
 		id: '4591aa2b-28d2-4073-8b89-61ab90df10cf',
 	},
 	notEnded: {
-		message: 'End the room before deleting it.',
+		message: 'The room has not ended yet.',
 		code: 'ROOM_NOT_ENDED',
 		id: 'ade63663-3dcc-46c8-a3b7-85951300f295',
 	},

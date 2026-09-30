@@ -10,9 +10,10 @@
 // - ドットは四角い線端の直線、塗りつぶし(囲って塗る・バケツ)は多角形、消しゴムは消す描き方
 // - 半透明の線・透明度ロック・線の中だけ塗るの線は、線ごとに作業用のキャンバスに描いてから重ねる(不透明な線はそのまま描く)
 // - レイヤーの表示・濃さ・合成モードを反映する(下描きのレイヤーは呼び出し側で除いておくこと)
+// - 結合したレイヤーの中のまとまり(DrawLayerMetaのgroups)は、まとまりごとに作業用の絵に描いてから重ねる
 import { createCanvas } from '@napi-rs/canvas';
 import type { Canvas, SKRSContext2D } from '@napi-rs/canvas';
-import type { DrawLayerMeta, DrawStroke } from '@/models/DrawRoomLayer.js';
+import { DRAW_LAYER_GROUP_MAX_DEPTH, type DrawLayerMeta, type DrawStroke } from '@/models/DrawRoomLayer.js';
 
 const POINT_BYTES = 5;
 const POINT_SCALE = 8;
@@ -111,6 +112,61 @@ export async function renderDrawRoomThumbnail(canvasWidth: number, canvasHeight:
 	const lctx = layerCanvas.getContext('2d');
 	const scratch: Canvas = createCanvas(w, h);
 	const sctx = scratch.getContext('2d');
+	// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(入れ子の深さごと)
+	const groupCanvases: Canvas[] = [];
+
+	// 1本の線を、tctx(レイヤー、またはまとまりの作業用の絵)に描く
+	const drawStrokeOn = (tctx: SKRSContext2D, stroke: DrawStroke) => {
+		const p = decodePoints(stroke.points, stroke.dx, stroke.dy);
+		if (p.length === 0) return;
+		const erase = stroke.tool === 'eraser';
+		const opacity = Math.min(1, Math.max(0, stroke.opacity ?? 1)) * (stroke.brush === 'soft' ? 0.6 : 1);
+		const clip = stroke.clip != null ? decodePoints(stroke.clip, stroke.dx, stroke.dy) : null;
+		const lock = stroke.lock === true && !erase;
+		const op = erase ? 'destination-out' : lock ? 'source-atop' : 'source-over';
+		// 不透明な普通の線は、そのまま描く(線が多い部屋でも重くならないように)
+		if (opacity >= 1 && !lock && clip == null) {
+			tctx.save();
+			tctx.setTransform(scale, 0, 0, scale, 0, 0);
+			tctx.globalCompositeOperation = op;
+			drawShape(tctx, stroke, p);
+			tctx.restore();
+			return;
+		}
+		// 半透明・透明度ロック・線の中だけ塗るの線は、線ごとに作業用のキャンバスへ描いてから重ねる
+		// (線の中の重なりで濃くならないように)。線がかかる範囲だけを扱う
+		let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+		for (let i = 0; i < p.length; i += 3) {
+			if (p[i] < minX) minX = p[i];
+			if (p[i] > maxX) maxX = p[i];
+			if (p[i + 1] < minY) minY = p[i + 1];
+			if (p[i + 1] > maxY) maxY = p[i + 1];
+		}
+		const pad = stroke.size + 2;
+		const rx = Math.max(0, Math.floor((minX - pad) * scale));
+		const ry = Math.max(0, Math.floor((minY - pad) * scale));
+		const rw = Math.min(w, Math.ceil((maxX + pad) * scale)) - rx;
+		const rh = Math.min(h, Math.ceil((maxY + pad) * scale)) - ry;
+		if (rw <= 0 || rh <= 0) return;
+		sctx.setTransform(1, 0, 0, 1, 0, 0);
+		sctx.globalCompositeOperation = 'source-over';
+		sctx.globalAlpha = 1;
+		sctx.clearRect(rx, ry, rw, rh);
+		sctx.setTransform(scale, 0, 0, scale, 0, 0);
+		sctx.save();
+		if (clip != null && clip.length >= 9) {
+			tracePolygon(sctx, clip);
+			sctx.clip('evenodd');
+		}
+		drawShape(sctx, stroke, p);
+		sctx.restore();
+		tctx.save();
+		tctx.setTransform(1, 0, 0, 1, 0, 0);
+		tctx.globalAlpha = opacity;
+		tctx.globalCompositeOperation = op;
+		tctx.drawImage(scratch, rx, ry, rw, rh, rx, ry, rw, rh);
+		tctx.restore();
+	};
 
 	for (const entry of entries) {
 		for (const meta of entry.layers) {
@@ -121,56 +177,46 @@ export async function renderDrawRoomThumbnail(canvasWidth: number, canvasHeight:
 			lctx.globalCompositeOperation = 'source-over';
 			lctx.globalAlpha = 1;
 			lctx.clearRect(0, 0, w, h);
+			// JUICE: 結合したレイヤーのまとまり。まとまりの線は作業用の絵に描いてから、まとまりの濃さ・合成モードで親に重ねる
+			// (結合元の消しゴム・透明度ロックの線が、結合先の線に効かないように)
+			const groups = new Map((meta.groups ?? []).map(group => [group.id, group]));
+			const pathOf = (g: string | undefined): string[] => {
+				const path: string[] = [];
+				for (let group = g != null ? groups.get(g) : undefined; group != null && path.length < DRAW_LAYER_GROUP_MAX_DEPTH && !path.includes(group.id); group = group.parent != null ? groups.get(group.parent) : undefined) {
+					path.unshift(group.id);
+				}
+				return path;
+			};
+			const stack: { id: string | null; ctx: SKRSContext2D }[] = [{ id: null, ctx: lctx }];
+			const closeGroup = () => {
+				const top = stack.pop()!;
+				const group = groups.get(top.id!)!;
+				const parent = stack[stack.length - 1].ctx;
+				if (group.opacity <= 0) return;
+				parent.save();
+				parent.setTransform(1, 0, 0, 1, 0, 0);
+				parent.globalAlpha = Math.min(1, group.opacity);
+				parent.globalCompositeOperation = group.blend ?? 'source-over';
+				parent.drawImage(top.ctx.canvas, 0, 0);
+				parent.restore();
+			};
 			for (const stroke of strokes) {
-				const p = decodePoints(stroke.points, stroke.dx, stroke.dy);
-				if (p.length === 0) continue;
-				const erase = stroke.tool === 'eraser';
-				const opacity = Math.min(1, Math.max(0, stroke.opacity ?? 1)) * (stroke.brush === 'soft' ? 0.6 : 1);
-				const clip = stroke.clip != null ? decodePoints(stroke.clip, stroke.dx, stroke.dy) : null;
-				const lock = stroke.lock === true && !erase;
-				const op = erase ? 'destination-out' : lock ? 'source-atop' : 'source-over';
-				// 不透明な普通の線は、そのままレイヤーに描く(線が多い部屋でも重くならないように)
-				if (opacity >= 1 && !lock && clip == null) {
-					lctx.save();
-					lctx.setTransform(scale, 0, 0, scale, 0, 0);
-					lctx.globalCompositeOperation = op;
-					drawShape(lctx, stroke, p);
-					lctx.restore();
-					continue;
+				const path = pathOf(stroke.g);
+				let common = 0;
+				while (common < path.length && common + 1 < stack.length && stack[common + 1].id === path[common]) common++;
+				while (stack.length - 1 > common) closeGroup();
+				for (let i = stack.length - 1; i < path.length; i++) {
+					const canvas = groupCanvases[i] ??= createCanvas(w, h);
+					const gctx = canvas.getContext('2d');
+					gctx.setTransform(1, 0, 0, 1, 0, 0);
+					gctx.globalCompositeOperation = 'source-over';
+					gctx.globalAlpha = 1;
+					gctx.clearRect(0, 0, w, h);
+					stack.push({ id: path[i], ctx: gctx });
 				}
-				// 半透明・透明度ロック・線の中だけ塗るの線は、線ごとに作業用のキャンバスへ描いてから重ねる
-				// (線の中の重なりで濃くならないように)。線がかかる範囲だけを扱う
-				let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
-				for (let i = 0; i < p.length; i += 3) {
-					if (p[i] < minX) minX = p[i];
-					if (p[i] > maxX) maxX = p[i];
-					if (p[i + 1] < minY) minY = p[i + 1];
-					if (p[i + 1] > maxY) maxY = p[i + 1];
-				}
-				const pad = stroke.size + 2;
-				const rx = Math.max(0, Math.floor((minX - pad) * scale));
-				const ry = Math.max(0, Math.floor((minY - pad) * scale));
-				const rw = Math.min(w, Math.ceil((maxX + pad) * scale)) - rx;
-				const rh = Math.min(h, Math.ceil((maxY + pad) * scale)) - ry;
-				if (rw <= 0 || rh <= 0) continue;
-				sctx.setTransform(1, 0, 0, 1, 0, 0);
-				sctx.globalCompositeOperation = 'source-over';
-				sctx.globalAlpha = 1;
-				sctx.clearRect(rx, ry, rw, rh);
-				sctx.setTransform(scale, 0, 0, scale, 0, 0);
-				sctx.save();
-				if (clip != null && clip.length >= 9) {
-					tracePolygon(sctx, clip);
-					sctx.clip('evenodd');
-				}
-				drawShape(sctx, stroke, p);
-				sctx.restore();
-				lctx.setTransform(1, 0, 0, 1, 0, 0);
-				lctx.globalAlpha = opacity;
-				lctx.globalCompositeOperation = op;
-				lctx.drawImage(scratch, rx, ry, rw, rh, rx, ry, rw, rh);
-				lctx.globalAlpha = 1;
+				drawStrokeOn(stack[stack.length - 1].ctx, stroke);
 			}
+			while (stack.length > 1) closeGroup();
 			octx.globalAlpha = Math.min(1, meta.opacity);
 			octx.globalCompositeOperation = meta.blend ?? 'source-over';
 			octx.drawImage(layerCanvas, 0, 0);

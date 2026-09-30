@@ -10146,7 +10146,7 @@ export interface Locale extends ILocale {
          */
         "mergeLayerConfirm": ParameterizedString<"from" | "into">;
         /**
-         * 「{name}」の合成モードは引き継がれません。
+         * 「{name}」は合成モードを使っているので、結合すると見た目が変わることがあります。
          */
         "mergeLayerBlendLost": ParameterizedString<"name">;
         /**
@@ -10185,6 +10185,18 @@ export interface Locale extends ILocale {
          * 選んだ部分を右に回転
          */
         "rotateSelectionRight": string;
+        /**
+         * 選んだ部分を左右反転
+         */
+        "flipSelectionHorizontal": string;
+        /**
+         * 左右反転
+         */
+        "shortFlipHorizontal": string;
+        /**
+         * キャンバスから大きくはみ出すので、この変形はできません
+         */
+        "transformOutOfRange": string;
         /**
          * {n}本の線を選択中
          */

@@ -155,32 +155,38 @@ export class DrawRoomChannel extends Channel {
 			}
 		}
 		if (data.type === 'strokeParts') {
-			this.sendStrokeParts(data.body.parts, selfId);
+			this.sendStrokeParts(data, selfId);
 			return;
 		}
 		this.sendShared(data);
 	}
 
 	// JUICE: まとめて届いた描いている途中の線を流す。ほかの人の下描きの線だけを除く
-	// (無ければ、全員に同じ内容をそのまま流す)
-	private sendStrokeParts(parts: DrawRoomEventTypes['strokePart'][], selfId: string | null): void {
-		let hidden = false;
+	// (無ければ、受け取った出来事をそのまま全員に流す。JSONにするのは1回で済む)
+	private sendStrokeParts(data: GlobalEvents['drawRoom']['payload'] & { type: 'strokeParts' }, selfId: string | null): void {
+		const parts = data.body.parts;
+		// 下描きの線がある線(途中で下描きに変わった線)は、その線の分を全て除く(まとめの中で、下描きに変わる前の分だけが届かないように)
+		const hiddenStrokes = new Set<string>();
 		for (const part of parts) {
-			if (part.userId === selfId) continue;
-			if (part.private) {
-				hidden = true;
-				// 描いている途中で下描きに変わった線は、途中まで届いていた分をこの人の画面から消してもらう
-				if (this.forwardedPartIds.delete(part.strokeId)) this.send('strokeCancel', { userId: part.userId, strokeId: part.strokeId });
-			} else {
-				this.rememberForwardedPart(part.strokeId);
-			}
+			if (part.userId !== selfId && part.private) hiddenStrokes.add(part.strokeId);
 		}
-		if (!hidden) {
-			this.sendShared({ type: 'strokeParts', body: { parts } });
+		if (hiddenStrokes.size === 0) {
+			for (const part of parts) {
+				if (part.userId !== selfId) this.rememberForwardedPart(part.strokeId);
+			}
+			this.sendShared(data);
 			return;
 		}
-		const visible = parts.filter(part => part.userId === selfId || !part.private);
+		const visible = parts.filter(part => part.userId === selfId || !hiddenStrokes.has(part.strokeId));
+		for (const part of visible) {
+			if (part.userId !== selfId) this.rememberForwardedPart(part.strokeId);
+		}
 		if (visible.length > 0) this.send('strokeParts', { parts: visible });
+		// 描いている途中で下描きに変わった線は、途中まで届いていた分をこの人の画面から消してもらう(まとめを流した後で)
+		for (const part of parts) {
+			if (part.userId === selfId || !hiddenStrokes.has(part.strokeId)) continue;
+			if (this.forwardedPartIds.delete(part.strokeId)) this.send('strokeCancel', { userId: part.userId, strokeId: part.strokeId });
+		}
 	}
 
 	// JUICE: 全員に同じ内容を流すときは、本文をJSONにするのを1回で済ませる(受け取った出来事ごとに覚えておく)
@@ -245,7 +251,10 @@ export class DrawRoomChannel extends Channel {
 	@bindThis
 	private parseStrokeBody(body: JsonObject, maxPoints: number, margin: number = DRAW_STROKE_MAX_SIZE): Omit<DrawStroke, 'id'> | null {
 		if (this.room == null) return null;
-		const { tool, color, size, opacity, points, brush, clip, layer, lock, pressure } = body;
+		const { tool, color, size, opacity, points, brush, clip, layer, lock, pressure, g } = body;
+		// JUICE: 結合したレイヤーの中のまとまり(切った線・動かした線が、元の線のまとまりを引き継ぐ)。
+		// 知らないまとまりを指していても、描くときにレイヤーそのものの線として扱うだけ
+		if (g !== undefined && !(typeof g === 'string' && /^[0-9a-z]{1,16}$/.test(g))) return null;
 		// JUICE: どのレイヤーの線か(省略したら最初のレイヤー)
 		if (layer !== undefined && !this.isValidLayerId(layer)) return null;
 		if (tool !== 'pen' && tool !== 'eraser' && tool !== 'fill') return null;
@@ -280,6 +289,7 @@ export class DrawRoomChannel extends Channel {
 			...(layer !== undefined && layer !== '0' ? { layer } : {}),
 			...(lock === true && tool !== 'eraser' ? { lock: true } : {}),
 			...(pressure !== undefined ? { pressure } : {}),
+			...(g !== undefined ? { g } : {}),
 			points,
 		};
 	}

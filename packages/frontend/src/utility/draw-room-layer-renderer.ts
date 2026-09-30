@@ -4,7 +4,7 @@
  */
 
 import DrawRoomLayerWorker from '@/workers/draw-room-layer?worker';
-import type { DrawStroke } from '@/utility/draw-canvas.js';
+import type { DrawLayerGroup, DrawStroke } from '@/utility/draw-canvas.js';
 
 // JUICE: 絵チャの部屋を開くときに、レイヤーの線を複数のWorkerで同時に描いて画像にする。
 // 使い終わったらdispose()でWorkerを止める(Workerごとにキャンバス1枚ぶんのメモリを使うため)
@@ -14,6 +14,7 @@ type Job = {
 	width: number;
 	height: number;
 	strokes: DrawStroke[];
+	groups: DrawLayerGroup[] | undefined;
 	resolve: (bitmap: ImageBitmap | null) => void;
 };
 
@@ -67,10 +68,10 @@ export class DrawRoomLayerRenderer {
 	/**
 	 * 線を描いた画像を作る。Workerで描けなかったときはnull(呼んだ側で描く)
 	 */
-	public render(width: number, height: number, strokes: DrawStroke[]): Promise<ImageBitmap | null> {
+	public render(width: number, height: number, strokes: DrawStroke[], groups?: DrawLayerGroup[]): Promise<ImageBitmap | null> {
 		if (this.workers.length === 0) return Promise.resolve(null);
 		return new Promise(resolve => {
-			this.queue.push({ id: this.nextId++, width, height, strokes, resolve });
+			this.queue.push({ id: this.nextId++, width, height, strokes, groups, resolve });
 			this.dispatch();
 		});
 	}
@@ -91,7 +92,7 @@ export class DrawRoomLayerRenderer {
 			const job = this.queue.shift();
 			if (job == null) return;
 			slot.job = job;
-			slot.worker.postMessage({ id: job.id, width: job.width, height: job.height, strokes: job.strokes });
+			slot.worker.postMessage({ id: job.id, width: job.width, height: job.height, strokes: job.strokes, groups: job.groups });
 		}
 	}
 

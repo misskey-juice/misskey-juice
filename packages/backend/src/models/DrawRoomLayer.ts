@@ -32,6 +32,8 @@ export type DrawStroke = {
 	lock?: boolean;
 	// JUICE: 筆圧で何を変えるか。無ければ太さだけ(以前に描かれた線)。noneは変えない、opacityは濃さだけ、bothは太さと濃さ
 	pressure?: 'none' | 'opacity' | 'both';
+	// JUICE: 結合したレイヤーの中の、どのまとまり(DrawLayerMetaのgroupsのid)の線か。無ければレイヤーそのもの
+	g?: string;
 	points: string;
 };
 
@@ -49,7 +51,23 @@ export type DrawLayerMeta = {
 	private?: boolean;
 	// JUICE: 合成モード(乗算・焼き込みカラーなど)。無ければ通常
 	blend?: DrawLayerBlend;
+	// JUICE: 結合したレイヤーの中のまとまり(結合元のレイヤー)。サーバーだけが決める(一覧の置き換えでは前のものを引き継ぐ)
+	groups?: DrawLayerGroup[];
 };
+
+// JUICE: 結合したレイヤーの中のまとまり。まとまりの線(gがこのid)を作業用の絵に描いてから、濃さ・合成モードで
+// 親(parentのまとまり、無ければレイヤー)に重ねる。結合元の消しゴム・透明度ロックの線が、結合先の線に効かないように
+export type DrawLayerGroup = {
+	id: string;
+	parent?: string;
+	opacity: number;
+	blend?: DrawLayerBlend;
+};
+
+// JUICE: まとまりの入れ子の深さの上限(結合を重ねたとき)
+export const DRAW_LAYER_GROUP_MAX_DEPTH = 16;
+// JUICE: 1枚のレイヤーが持てるまとまりの数の上限
+export const DRAW_LAYER_MAX_GROUPS = 128;
 
 // レイヤーの一覧を持っていない人(以前に描かれた部屋を含む)は、最初のレイヤー1枚だけ
 export const DEFAULT_DRAW_LAYERS: DrawLayerMeta[] = [{ id: '0', name: '', visible: true, opacity: 1 }];

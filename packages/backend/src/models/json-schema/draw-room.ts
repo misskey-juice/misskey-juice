@@ -157,6 +157,11 @@ export const packedDrawStrokeSchema = {
 			optional: true, nullable: false,
 			enum: ['none', 'opacity', 'both'],
 		},
+		// JUICE: 結合したレイヤーの中の、どのまとまり(結合元のレイヤー。DrawLayerのgroupsのid)の線か。無ければレイヤーそのもの
+		g: {
+			type: 'string',
+			optional: true, nullable: false,
+		},
 		// 1点5バイト(x・yは1/8px単位のint16、筆圧は0〜255のuint8、リトルエンディアン)を並べてbase64にしたもの
 		points: {
 			type: 'string',
@@ -218,6 +223,36 @@ export const packedDrawLayerSchema = {
 			type: 'string',
 			optional: true, nullable: false,
 			enum: ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'],
+		},
+		// JUICE: 結合したレイヤーの中のまとまり(結合元のレイヤー)。まとまりの線を作業用の絵に描いてから、
+		// まとまりの濃さ・合成モードで親(parentのまとまり、無ければレイヤー)に重ねる
+		// (結合元の消しゴム・透明度ロックの線が、結合先の線に効かないように)
+		groups: {
+			type: 'array',
+			optional: true, nullable: false,
+			items: {
+				type: 'object',
+				optional: false, nullable: false,
+				properties: {
+					id: {
+						type: 'string',
+						optional: false, nullable: false,
+					},
+					parent: {
+						type: 'string',
+						optional: true, nullable: false,
+					},
+					opacity: {
+						type: 'number',
+						optional: false, nullable: false,
+					},
+					blend: {
+						type: 'string',
+						optional: true, nullable: false,
+						enum: ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'],
+					},
+				},
+			},
 		},
 	},
 } as const;

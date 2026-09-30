@@ -6676,6 +6676,7 @@ export type components = {
             lock?: boolean;
             /** @enum {string} */
             pressure?: 'none' | 'opacity' | 'both';
+            g?: string;
             points: string;
         };
         DrawLayer: {
@@ -6686,6 +6687,13 @@ export type components = {
             private?: boolean;
             /** @enum {string} */
             blend?: 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity' | 'lighter';
+            groups?: {
+                id: string;
+                parent?: string;
+                opacity: number;
+                /** @enum {string} */
+                blend?: 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'color-dodge' | 'color-burn' | 'hard-light' | 'soft-light' | 'difference' | 'exclusion' | 'hue' | 'saturation' | 'color' | 'luminosity' | 'lighter';
+            }[];
         };
         DrawRoomChatMessage: {
             id: string;

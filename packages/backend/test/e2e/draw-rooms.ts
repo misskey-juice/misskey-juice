@@ -402,6 +402,16 @@ describe('絵チャ', () => {
 		} finally {
 			await call('draw-rooms/end', { roomId: followersRoom.id }, alice);
 		}
+		// 部屋主が「見るのにログインが必要」にしていると見られない(ノートと同じ)
+		await call('i/update', { requireSigninToViewContents: true }, alice);
+		const signinRoom = await createRoom(alice, { visibility: 'local' });
+		try {
+			await vi.waitFor(async () => assert.strictEqual((await api('draw-rooms/show', { roomId: signinRoom.id })).status, 400), { timeout: 5000, interval: 200 });
+			assert.strictEqual((await fetch(new URL(`/draw/${signinRoom.id}/ogp.png`, `http://127.0.0.1:${port}`))).status, 404);
+		} finally {
+			await call('draw-rooms/end', { roomId: signinRoom.id }, alice);
+			await call('i/update', { requireSigninToViewContents: false }, alice);
+		}
 	});
 
 	test('保存した部屋は、ほかの人も一覧(saved)で見られる。開催中・保存しない部屋・見られない部屋は出ない', async () => {
@@ -967,17 +977,18 @@ describe('絵チャ', () => {
 		assert.deepStrictEqual((await view(alice))?.strokes.map(s => s.id), ['d1', 'p1']);
 	});
 
-	test('レイヤーを結合すると、結合元の線が重なり順を保って結合先に入り、結合元の濃さが焼き込まれる', async () => {
+	test('レイヤーを結合すると、結合元の線が重なり順を保って結合先に入り、結合元の濃さ・合成モードを持つまとまりになる', async () => {
 		const room = await createRoom(alice);
-		type Stroke = { id: string; layer?: string; opacity?: number };
+		type Stroke = { id: string; layer?: string; opacity?: number; g?: string };
+		type Group = { id: string; parent?: string; opacity: number; blend?: string };
 		const received: Record<string, any>[] = [];
 		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
-		const view = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: { id: string }[] } | undefined;
+		const view = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: { id: string; opacity: number; name: string; groups?: Group[] }[] } | undefined;
 		try {
 			sendToChannel(aliceWs, 'setLayers', { layers: [
 				{ id: '0', name: '下', visible: true, opacity: 1 },
-				{ id: 'top', name: '上', visible: true, opacity: 0.5 },
+				{ id: 'top', name: '上', visible: true, opacity: 0.5, blend: 'multiply' },
 				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
 			] });
 			await vi.waitFor(async () => assert.strictEqual((await view())?.layers.length, 3), { timeout: 5000, interval: 200 });
@@ -993,18 +1004,61 @@ describe('絵チャ', () => {
 			// 上のレイヤーを下のレイヤーに結合する: 上にあった線は、下のレイヤーの線の後ろ(上)に並ぶ
 			sendToChannel(aliceWs, 'mergeLayer', { from: 'top', into: '0' });
 			await vi.waitFor(async () => assert.deepStrictEqual((await view())?.layers.map(l => l.id), ['0', 'draft']), { timeout: 5000, interval: 200 });
-			const strokes = (await view())!.strokes;
+			const merged0 = (await view())!;
+			const strokes = merged0.strokes;
 			assert.deepStrictEqual(strokes.map(s => s.id), ['b1', 'b2', 't1', 't2']);
 			assert.ok(strokes.every(s => (s.layer ?? '0') === '0'));
-			// 結合元の濃さ(50%)を線に焼き込む
-			assert.deepStrictEqual(strokes.map(s => s.opacity ?? 1), [1, 1, 0.5, 0.4]);
+			// 線の濃さはそのまま(焼き込まない)。結合元の線は、結合元の濃さ(50%)・合成モードを持つまとまりの線になる
+			assert.deepStrictEqual(strokes.map(s => s.opacity ?? 1), [1, 1, 1, 0.8]);
+			const groups = merged0.layers[0].groups ?? [];
+			assert.strictEqual(groups.length, 1);
+			assert.deepStrictEqual({ opacity: groups[0].opacity, blend: groups[0].blend, parent: groups[0].parent }, { opacity: 0.5, blend: 'multiply', parent: undefined });
+			assert.deepStrictEqual(strokes.map(s => s.g ?? null), [null, null, groups[0].id, groups[0].id]);
+			// 結合したレイヤーの一覧を置き換えても(名前を変える)、まとまりはサーバーが引き継ぐ
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '結合', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			await vi.waitFor(async () => {
+				const layers = (await view())!.layers;
+				assert.strictEqual(layers[0].name, '結合');
+				assert.deepStrictEqual(layers[0].groups, groups);
+			}, { timeout: 5000, interval: 200 });
+
+			// 上へ結合する: 結合先の線もまとまりになる(結合先の消しゴムが、結合元の線に効かないように)。濃さは結合先のものを引き継ぐ
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '結合', visible: true, opacity: 1 },
+				{ id: 'up', name: '上2', visible: true, opacity: 0.6 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			await vi.waitFor(async () => assert.strictEqual((await view())?.layers.length, 3), { timeout: 5000, interval: 200 });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('u1'), layer: 'up' });
+			await vi.waitFor(async () => assert.strictEqual((await view())?.strokes.length, 5), { timeout: 5000, interval: 200 });
+			// レイヤーの操作は回数の上限があるので、少し待ってから結合する
+			await new Promise(resolve => setTimeout(resolve, 2100));
+			sendToChannel(aliceWs, 'mergeLayer', { from: '0', into: 'up' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await view())?.layers.map(l => l.id), ['up', 'draft']), { timeout: 5000, interval: 200 });
+			const up = (await view())!;
+			assert.deepStrictEqual(up.strokes.map(s => s.id), ['b1', 'b2', 't1', 't2', 'u1']);
+			assert.strictEqual(up.layers[0].opacity, 0.6);
+			const upGroups = new Map((up.layers[0].groups ?? []).map(g => [g.id, g]));
+			const gOf = (id: string) => upGroups.get(up.strokes.find(s => s.id === id)!.g!)!;
+			// 結合元(下)の線: 元のまとまりの無い線は新しいまとまり(濃さ100%)、元のまとまりはその下に入る
+			assert.strictEqual(gOf('b1').opacity, 1);
+			assert.strictEqual(gOf('t1').parent, gOf('b1').id);
+			assert.strictEqual(gOf('t1').opacity, 0.5);
+			// 結合先(上)の線: 濃さ100%のまとまり(レイヤーの濃さ60%がかかる)
+			assert.strictEqual(gOf('u1').opacity, 1);
+			assert.strictEqual(gOf('u1').parent, undefined);
+			// 下描きと皆に見えるレイヤーの結合は断られていた(下描きは残っている)
+			assert.ok(up.layers.some(l => l.id === 'draft'));
 			// ほかの人には、結合先のレイヤーの線が配り直される(下描きのレイヤーは流れない)
 			await vi.waitFor(() => {
-				const merged = received.find(m => m.type === 'layerMerged');
+				const merged = received.find(m => m.type === 'layerMerged' && m.body.layer === '0');
 				assert.strictEqual(merged?.body.layer, '0');
 				assert.deepStrictEqual(merged?.body.strokes.map((s: Stroke) => s.id), ['b1', 'b2', 't1', 't2']);
 			}, { timeout: 5000, interval: 100 });
-			assert.deepStrictEqual((await layersOf(room, bob)).find(l => l.userId === alice.id)?.strokes.map(s => s.id), ['b1', 'b2', 't1', 't2']);
+			assert.deepStrictEqual((await layersOf(room, bob)).find(l => l.userId === alice.id)?.strokes.map(s => s.id), ['b1', 'b2', 't1', 't2', 'u1']);
 		} finally {
 			aliceWs.close();
 			bobWs.close();
