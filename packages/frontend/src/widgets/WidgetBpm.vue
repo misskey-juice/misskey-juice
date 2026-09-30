@@ -243,6 +243,9 @@ function reset(): void {
 // 音を作りきれず画面が固まるので、決めきれない分は飛ばす(もう拍ではなく1つの音にしか聞こえない速さ)
 const METRONOME_MIN_BPM = 1;
 const METRONOME_MAX_BEATS_PER_SECOND = 10000;
+// 同時に鳴らす音の数の上限。音は最後まで鳴らし、速くてこれより多く重なるときだけ、古い音から止める
+// (重なる数に上限が無いと、速いときに何千もの音が同時に鳴って重くなるため)
+const METRONOME_MAX_VOICES = 32;
 // 光らせるのはこの間隔(秒)より拍が長いときだけ(速いときは、光ったままにする)
 const FLASH_MIN_INTERVAL_S = 0.05;
 // 先に決めておく時間(秒)。見ていないタブではタイマーが1秒に1回ほどになるので、それより長くする
@@ -258,9 +261,8 @@ let metronomeBuffer: AudioBuffer | null = null;
 // 次の拍の時刻(秒。clockの時計で)。止めたら・時計を替えたらnull
 let nextBeatAt: number | null = null;
 let clockKind: 'audio' | 'performance' | null = null;
-// 鳴らす予定の音(止めるときに、まだ鳴っていない分も止める)。前の拍の音は、次の拍で止める(速いときに重なり続けないように)
-const scheduledSources = new Set<AudioBufferSourceNode>();
-let lastSource: AudioBufferSourceNode | null = null;
+// 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
+const scheduledSources: AudioBufferSourceNode[] = [];
 // 光らせる予定のタイマー
 const flashTimers = new Set<number>();
 
@@ -301,16 +303,19 @@ function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null, withF
 	if (ctx == null || metronomeBuffer == null || masterVolume <= 0 || sound.isMute()) return;
 	const source = sound.createSourceNode(metronomeBuffer, { volume: masterVolume }).soundSource;
 	source.start(at);
-	try {
-		lastSource?.stop(at);
-	} catch {
-		// もう止まっている
+	// 重なりすぎるときは、一番古い音をこの拍で止める
+	if (scheduledSources.length >= METRONOME_MAX_VOICES) {
+		const oldest = scheduledSources.shift()!;
+		try {
+			oldest.stop(at);
+		} catch {
+			// もう止まっている
+		}
 	}
-	lastSource = source;
-	scheduledSources.add(source);
+	scheduledSources.push(source);
 	source.addEventListener('ended', () => {
-		scheduledSources.delete(source);
-		if (lastSource === source) lastSource = null;
+		const index = scheduledSources.indexOf(source);
+		if (index >= 0) scheduledSources.splice(index, 1);
 	}, { once: true });
 }
 
@@ -328,8 +333,7 @@ function stopMetronome(): void {
 			// 鳴らし始める前に止めた等(もう止まっている)
 		}
 	}
-	scheduledSources.clear();
-	lastSource = null;
+	scheduledSources.length = 0;
 }
 
 // 少し先までの拍を、その時のBPMで決めていく(BPMが変わっても、先に決めた分の後からすぐ付いていく)
