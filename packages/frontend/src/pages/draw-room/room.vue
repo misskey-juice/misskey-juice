@@ -719,7 +719,7 @@ import { pleaseLogin } from '@/utility/please-login.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { floodFillMask, enclosedFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
 import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, transformPoints, DRAW_STROKE_MAX_SIZE, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
-import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
+import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool, Rect } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
 
@@ -781,6 +781,8 @@ const connection = shallowRef<Misskey.IChannelConnection<Misskey.Channels['drawR
 
 // JUICE: スポイトは線を描かず、キャンバスの色を拾ってペンに戻る
 const tool = ref<DrawTool | 'eyedropper' | 'select' | 'lasso' | 'move' | 'hand' | 'bucket'>('pen');
+// JUICE: 移動ツールで描き直すときに使うWorker
+let regionRenderer: DrawRoomLayerRenderer | null = null;
 const color = ref('#000000');
 // JUICE: 太さはペンと消しゴムで別々に覚えておき、スライダーは今の道具の太さを変える
 const penSize = ref(6);
@@ -1315,6 +1317,13 @@ async function init(): Promise<void> {
 		}
 		e.myUserId = $i.id;
 		e.activeKey = activeKey.value;
+		// JUICE: 移動ツールで線の多い範囲を描き直すときは、Workerで描く(画面が固まらないように)。Workerは初めて使うときに作る
+		if (canRenderLayersInWorker()) {
+			e.regionRenderer = (width, height, strokes, groups) => {
+				regionRenderer ??= new DrawRoomLayerRenderer(1);
+				return regionRenderer.renderDecoded(width, height, strokes, groups);
+			};
+		}
 		e.myLayerOnTop = myLayerOnTop.value;
 		engine.value = e;
 		await nextTick();
@@ -1749,6 +1758,8 @@ function disposeRoom(): void {
 	connection.value = null;
 	engine.value?.dispose();
 	engine.value = null;
+	regionRenderer?.dispose();
+	regionRenderer = null;
 }
 
 function scrollChatToBottom(): void {
@@ -2531,10 +2542,11 @@ function onPointerDown(ev: PointerEvent): void {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		const [x, y] = toCanvasPoint(ev);
 		// 選んでいれば、選んだ形の境目で線を切ってから、囲んだ部分だけを動かす(選んでいなければレイヤー全体)
-		const prepared = strokeSelection.value.size > 0 ? prepareSelection() : null;
+		// JUICE: 切った線の描き直しは、動かさない線の絵を作るときにまとめて行う(線の多い絵で何度も描き直さないように)
+		const prepared = strokeSelection.value.size > 0 ? prepareSelection({ deferRedraw: true }) : null;
 		const ids = prepared?.ids ?? null;
 		moveDrag = { startX: x, startY: y, pointerId: ev.pointerId, ids, splits: prepared?.splits ?? [] };
-		engine.value.beginMove(activeKey.value, ids);
+		engine.value.beginMove(activeKey.value, ids, prepared?.staleRect ?? null, ids != null ? selectionShapes.value : undefined);
 		return;
 	}
 	// スポイト(またはAltを押しながらクリック)は、その位置の色を拾う
@@ -2955,14 +2967,15 @@ function clearStrokeSelection(): void {
  * 選んだ形の境目で線を切り(自分の画面にはすぐ反映する)、動かす・消す線のidを返す。
  * 切った内容は、動かす・消す操作と一緒にサーバーへ送る(サーバーが順に処理するように)
  */
-function prepareSelection(): { ids: Set<string>; splits: SelectionSplit[] } {
+function prepareSelection(options?: { deferRedraw?: boolean }): { ids: Set<string>; splits: SelectionSplit[]; staleRect: Rect | null } {
 	const e = engine.value;
-	if (!selectionNeedsSplit || e == null) return { ids: new Set(strokeSelection.value), splits: [] };
+	if (!selectionNeedsSplit || e == null) return { ids: new Set(strokeSelection.value), splits: [], staleRect: null };
 	const { selected, splits } = e.splitByShapes(activeKey.value, selectionShapes.value, newStrokeId);
-	e.replaceStrokes(activeKey.value, splits);
+	// deferRedraw なら描き直さず、描き直す範囲を返す(すぐ後の beginMove に渡すこと)
+	const staleRect = e.replaceStrokes(activeKey.value, splits, { redraw: !options?.deferRedraw });
 	strokeSelection.value = selected;
 	selectionNeedsSplit = false;
-	return { ids: new Set(selected), splits };
+	return { ids: new Set(selected), splits, staleRect };
 }
 
 function encodeSplits(splits: SelectionSplit[]): { id: string; pieces: Misskey.entities.DrawStroke[] }[] {
@@ -2991,8 +3004,9 @@ function finishMove(apply: boolean): void {
 	const dy = Math.round(moveOffset.y * POINT_SCALE) / POINT_SCALE;
 	moveOffset.x = 0;
 	moveOffset.y = 0;
-	e.endMove();
 	const moved = apply && (dx !== 0 || dy !== 0);
+	// 自分の画面には、ドラッグ中に作った絵を使ってすぐ反映する
+	e.endMove(moved ? { dx, dy } : undefined);
 	// 境目で線を切っただけでも(動かさなかった・取りやめた場合も)、切った内容はほかの人にも届ける
 	if (!moved && drag.splits.length === 0) return;
 	// 自分の画面にはすぐ反映し、ほかの人にはサーバー経由で届ける
@@ -3003,7 +3017,6 @@ function finishMove(apply: boolean): void {
 		if (drag.splits.length > 0) connection.value?.send('replaceStrokes', { replacements: encodeSplits(drag.splits) });
 		return;
 	}
-	if (moved) e.moveStrokes(activeKey.value, drag.ids, dx, dy);
 	connection.value?.send('moveStrokes', {
 		strokeIds,
 		dx: moved ? dx : 0,
