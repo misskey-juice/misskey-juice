@@ -20,7 +20,7 @@ import {
 } from '@/core/DrawRoomService.js';
 import type { MiDrawRoom } from '@/models/DrawRoom.js';
 import { DRAW_LAYER_BLENDS, type DrawLayerBlend, type DrawLayerMeta, type DrawStroke } from '@/models/DrawRoomLayer.js';
-import type { GlobalEvents } from '@/core/GlobalEventService.js';
+import type { DrawRoomEventTypes, GlobalEvents } from '@/core/GlobalEventService.js';
 import { isJsonObject } from '@/misc/json-value.js';
 import type { JsonObject, JsonValue } from '@/misc/json-value.js';
 import Channel, { type ChannelRequest } from '../channel.js';
@@ -28,6 +28,8 @@ import Channel, { type ChannelRequest } from '../channel.js';
 // JUICE: 接続したまま公開範囲から外れた(フォローを外された・ブロックされた)場合や、管理者が機能を
 // 無効にした場合に備えて、見られるかどうかをこの間隔で確認し直す
 const RECHECK_INTERVAL_MS = 1000 * 30;
+// JUICE: 配る出来事ごとの、本文のJSON(同じ出来事を部屋の全員へ流すとき、JSONにするのを1回で済ませる)
+const sharedBodyJson = new WeakMap<object, string>();
 
 /**
  * JUICE: 絵チャの部屋のストリーム。線・チャットの送信を受け付け、部屋の全員に配信する。
@@ -152,7 +154,43 @@ export class DrawRoomChannel extends Channel {
 				return;
 			}
 		}
-		this.send(data);
+		if (data.type === 'strokeParts') {
+			this.sendStrokeParts(data.body.parts, selfId);
+			return;
+		}
+		this.sendShared(data);
+	}
+
+	// JUICE: まとめて届いた描いている途中の線を流す。ほかの人の下描きの線だけを除く
+	// (無ければ、全員に同じ内容をそのまま流す)
+	private sendStrokeParts(parts: DrawRoomEventTypes['strokePart'][], selfId: string | null): void {
+		let hidden = false;
+		for (const part of parts) {
+			if (part.userId === selfId) continue;
+			if (part.private) {
+				hidden = true;
+				// 描いている途中で下描きに変わった線は、途中まで届いていた分をこの人の画面から消してもらう
+				if (this.forwardedPartIds.delete(part.strokeId)) this.send('strokeCancel', { userId: part.userId, strokeId: part.strokeId });
+			} else {
+				this.rememberForwardedPart(part.strokeId);
+			}
+		}
+		if (!hidden) {
+			this.sendShared({ type: 'strokeParts', body: { parts } });
+			return;
+		}
+		const visible = parts.filter(part => part.userId === selfId || !part.private);
+		if (visible.length > 0) this.send('strokeParts', { parts: visible });
+	}
+
+	// JUICE: 全員に同じ内容を流すときは、本文をJSONにするのを1回で済ませる(受け取った出来事ごとに覚えておく)
+	private sendShared(data: GlobalEvents['drawRoom']['payload']): void {
+		let body = sharedBodyJson.get(data);
+		if (body == null) {
+			body = JSON.stringify(data.body);
+			sharedBodyJson.set(data, body);
+		}
+		this.connection.sendRawToWs(`{"type":"channel","body":{"id":${JSON.stringify(this.id)},"type":${JSON.stringify(data.type)},"body":${body}}}`);
 	}
 
 	// JUICE: この接続に途中まで流した、ほかの人の描いている途中の線のid(下描きに変わったときに取り消してもらうため)。

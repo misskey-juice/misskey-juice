@@ -2018,6 +2018,15 @@ export type paths = {
          */
         post: operations['draw-rooms___join'];
     };
+    '/draw-rooms/keep': {
+        /**
+         * draw-rooms/keep
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:draw-rooms*
+         */
+        post: operations['draw-rooms___keep'];
+    };
     '/draw-rooms/kick': {
         /**
          * draw-rooms/kick
@@ -22938,6 +22947,81 @@ export interface operations {
             };
         };
     };
+    'draw-rooms___keep': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['DrawRoom'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'draw-rooms___kick': {
         requestBody: {
             content: {
@@ -33661,6 +33745,7 @@ export interface operations {
                         microsoftOauthEnabled: boolean;
                         midiPlayerMaxSize: number;
                         drawRoomEnabled: boolean;
+                        drawRoomMaxRoomMegabytes: number;
                     };
                 };
             };

@@ -70,6 +70,7 @@ const juicePublicSettings = ref<Misskey.entities.JuicePublicSettingsResponse>({
 	microsoftOauthEnabled: false,
 	midiPlayerMaxSize: 500 * 1024,
 	drawRoomEnabled: true,
+	drawRoomMaxRoomMegabytes: 256,
 });
 misskeyApi('juice/public-settings').then(res => {
 	juicePublicSettings.value = res;

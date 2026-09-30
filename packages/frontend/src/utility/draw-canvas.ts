@@ -39,8 +39,10 @@ export function clampCanvasSize(value: number | null | undefined, fallback: numb
 	return Math.min(upper, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, v));
 }
 
-// JUICE: 太さの上限(サーバーの DRAW_STROKE_MAX_SIZE と同じ)と、標準の大きさ(1600px)のキャンバスでの太さ
-export const DRAW_STROKE_MAX_SIZE = 200;
+// JUICE: 太さの上限(サーバーの DRAW_STROKE_MAX_SIZE と同じ)と、標準の大きさ(1600px)のキャンバスでの太さ。
+// 太さの割合は250%まで選べ、100%の太さ(BRUSH_MAX_SIZE_AT_100)の2.5倍まで太くできる
+export const DRAW_STROKE_MAX_SIZE = 500;
+const BRUSH_MAX_SIZE_AT_100 = 200;
 const BASE_CANVAS_SIZE = 1600;
 const BASE_MAX_BRUSH_SIZE = 60;
 const BASE_DEFAULT_BRUSH_SIZE = 6;
@@ -52,7 +54,7 @@ const BASE_DEFAULT_BRUSH_SIZE = 6;
 export function brushSizeRange(width: number, height: number): { max: number; initial: number } {
 	const ratio = Math.max(1, Math.max(width, height) / BASE_CANVAS_SIZE);
 	return {
-		max: Math.min(DRAW_STROKE_MAX_SIZE, Math.round(BASE_MAX_BRUSH_SIZE * ratio)),
+		max: Math.min(BRUSH_MAX_SIZE_AT_100, Math.round(BASE_MAX_BRUSH_SIZE * ratio)),
 		initial: Math.round(BASE_DEFAULT_BRUSH_SIZE * ratio),
 	};
 }
@@ -1286,16 +1288,19 @@ export class DrawCanvasEngine {
 	public stats = { lastRedrawMs: 0, lastRedrawFull: false, lastRenderMs: 0 };
 
 	/**
-	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数
+	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数。
+	 * estimateBytesを渡すと、全員の線のデータ量の見積もりも数える
 	 */
-	public debugSummary(): { layers: number; strokes: number; pending: number } {
+	public debugSummary(estimateBytes?: (stroke: CanvasStroke) => number): { layers: number; strokes: number; pending: number; bytes: number } {
 		let strokes = 0;
 		let pending = 0;
+		let bytes = 0;
 		for (const layer of this.layers.values()) {
 			strokes += layer.strokes.length;
 			pending += layer.pending.size;
+			if (estimateBytes != null) for (const stroke of layer.strokes) bytes += estimateBytes(stroke);
 		}
-		return { layers: this.layers.size, strokes, pending };
+		return { layers: this.layers.size, strokes, pending, bytes };
 	}
 
 	/**

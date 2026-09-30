@@ -39,6 +39,9 @@ type ReversiUpdateSettings<K extends ReversiUpdateKey> = {
 	value: ReversiGameDetailed[K];
 };
 
+// JUICE: 絵チャの、描いている途中の線(保存しない。受信側は同じstrokeIdの点を順につなげて表示する)
+export type DrawRoomStrokePart = { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; };
+
 // JUICE: 絵チャの取り消し・やり直しで行う手順
 export type DrawStrokesPatchStep =
 	| { t: 'del'; ids: string[]; }
@@ -309,7 +312,9 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; }) => void;
+			strokePart: (payload: DrawRoomStrokePart) => void;
+			// JUICE: 描いている途中の線を、サーバーが一定間隔でまとめて送ってくる(届いた順)
+			strokeParts: (payload: { parts: DrawRoomStrokePart[]; }) => void;
 			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; pet?: boolean; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
 			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;

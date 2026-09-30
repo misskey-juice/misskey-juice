@@ -6,6 +6,7 @@
 import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { DataSource, In, LessThan } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { DrawRoomMembersRepository, DrawRoomLayersRepository, DrawRoomsRepository } from '@/models/_.js';
@@ -17,6 +18,7 @@ import type { Packed } from '@/misc/json-schema.js';
 import { IdService } from '@/core/IdService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
+import type { DrawRoomEventTypes } from '@/core/GlobalEventService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DEFAULT_POLICIES, RoleService } from '@/core/RoleService.js';
@@ -44,7 +46,8 @@ export const DRAW_ROOM_MAX_MEMBERS = 512;
 export const DRAW_STROKE_MAX_POINTS = 5000;
 // 描いている途中の線を分割送信するときの、1回あたりの点の最大数
 export const DRAW_STROKE_PART_MAX_POINTS = 500;
-export const DRAW_STROKE_MAX_SIZE = 200;
+// JUICE: 太さの割合を250%まで選べるようにしたので、500pxまで受け付ける(100%の太さはキャンバスに合わせて最大200px)
+export const DRAW_STROKE_MAX_SIZE = 500;
 
 // JUICE: 線の点の形式。1点5バイトで、x・yはキャンバス座標を8倍したint16(1/8px単位)、筆圧は0〜255のuint8(リトルエンディアン)。
 // これを並べたバイト列をbase64にして送り・保存する(数値のJSON配列の約3分の1の大きさ)
@@ -765,6 +768,8 @@ return 1
  */
 // JUICE: カーソルをまとめて配る間隔。人数が増えても、1人が受け取る数はこの間隔ごとに1通で済む
 const CURSOR_FLUSH_INTERVAL_MS = 100;
+// JUICE: 描いている途中の線をまとめて配る間隔。見ている人が多い部屋でも、1人が受け取る数はこの間隔ごとに1通で済む
+const STROKE_PART_FLUSH_INTERVAL_MS = 50;
 // JUICE: 部屋を離れた人をオフラインとして配るまで待つ時間(つなぎ直しでちらつかないように)
 const PRESENCE_LEAVE_DELAY_MS = 3000;
 
@@ -773,6 +778,9 @@ export class DrawRoomService implements OnApplicationShutdown {
 	// 部屋ごとの、まだ配っていないカーソルの位置(ユーザーごとに最新の位置だけを持つ)
 	private cursorBuffers = new Map<MiDrawRoom['id'], Map<MiUser['id'], { x: number | null; y: number | null; pet: boolean }>>();
 	private cursorFlushTimers = new Map<MiDrawRoom['id'], NodeJS.Timeout>();
+	// 部屋ごとの、まだ配っていない描いている途中の線(届いた順)
+	private strokePartBuffers = new Map<MiDrawRoom['id'], DrawRoomEventTypes['strokePart'][]>();
+	private strokePartFlushTimers = new Map<MiDrawRoom['id'], NodeJS.Timeout>();
 	private presencePublishTimers = new Map<MiDrawRoom['id'], NodeJS.Timeout>();
 
 	constructor(
@@ -1059,7 +1067,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			return true;
 		});
 		if (!joined) return;
-		this.globalEventService.publishDrawRoomStream(room.id, 'memberJoined', {
+		this.publishStream(room.id, 'memberJoined', {
 			user: await this.userEntityService.pack(me.id, null),
 		});
 	}
@@ -1069,7 +1077,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// JUICE: 部屋主も描く人から抜けて観戦できる(部屋主のままで、部屋の管理は続けられる。また参加し直すこともできる)
 		const result = await this.drawRoomMembersRepository.delete({ roomId: room.id, userId: me.id });
 		if (result.affected === 0) return;
-		this.globalEventService.publishDrawRoomStream(room.id, 'memberLeft', { userId: me.id, kicked: false });
+		this.publishStream(room.id, 'memberLeft', { userId: me.id, kicked: false });
 	}
 
 	/**
@@ -1087,7 +1095,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			.sadd(this.kickedKey(room.id), userId)
 			.expire(this.kickedKey(room.id), REDIS_KEY_TTL_SEC)
 			.exec();
-		this.globalEventService.publishDrawRoomStream(room.id, 'memberLeft', { userId, kicked: true });
+		this.publishStream(room.id, 'memberLeft', { userId, kicked: true });
 	}
 
 	/**
@@ -1122,7 +1130,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		});
 		if (result.affected === 0) throw new DrawRoomError('ended');
 		const updated = await this.drawRoomsRepository.findOneByOrFail({ id: room.id });
-		this.globalEventService.publishDrawRoomStream(room.id, 'updated', { room: await this.pack(updated, null) });
+		this.publishStream(room.id, 'updated', { room: await this.pack(updated, null) });
 		return updated;
 	}
 
@@ -1153,21 +1161,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 
 				const endedAt = new Date();
 				if (locked.keepAfterEnd) {
-					// JUICE: 下描き(本人だけに見える)のレイヤーと線もそのまま残す(描いた本人は後から見られる)。
-					// ほかの人には、読み出すとき(getLayers)に除く
-					// JUICE: 全員分を一度に読み込まず、1人ずつ読み込んで保存する(大きな部屋でメモリを使いすぎないように)
-					const drawers = await this.redisClient.smembers(this.drawersKey(room.id));
-					for (const userId of drawers) {
-						const strokes = (await this.redisClient.lrange(this.strokesKey(room.id, userId), 0, -1)).map(x => JSON.parse(x) as DrawStroke);
-						if (strokes.length === 0) continue;
-						await em.insert(MiDrawRoomLayer, {
-							id: this.idService.gen(),
-							roomId: room.id,
-							userId,
-							strokes,
-							layers: await this.getUserLayers(room.id, userId),
-						});
-					}
+					await this.saveRedisDataToDb(em, room.id);
 					await em.update(MiDrawRoom, room.id, { isEnded: true, endedAt, chatLog: await this.getChatFromRedis(room.id) });
 				} else {
 					await em.update(MiDrawRoom, room.id, { isEnded: true, endedAt });
@@ -1185,8 +1179,55 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// 保存した部屋はRedisのデータを消す。保存しない部屋は、猶予の間の画像保存のためにcleanupまで残す
 		if (ended.keepAfterEnd) await this.deleteRedisData(room.id);
 
-		this.globalEventService.publishDrawRoomStream(room.id, 'ended', { room: await this.pack(ended, null) });
+		this.publishStream(room.id, 'ended', { room: await this.pack(ended, null) });
 		return ended;
+	}
+
+	/**
+	 * 線(レイヤー)をRedisからDBへ移す(終了後も保存する部屋)。
+	 * 下描き(本人だけに見える)のレイヤーと線もそのまま残す(描いた本人は後から見られる。ほかの人には、読み出すとき(getLayers)に除く)。
+	 * 全員分を一度に読み込まず、1人ずつ読み込んで保存する(大きな部屋でメモリを使いすぎないように)
+	 */
+	@bindThis
+	private async saveRedisDataToDb(em: EntityManager, roomId: MiDrawRoom['id']): Promise<void> {
+		const drawers = await this.redisClient.smembers(this.drawersKey(roomId));
+		for (const userId of drawers) {
+			const strokes = (await this.redisClient.lrange(this.strokesKey(roomId, userId), 0, -1)).map(x => JSON.parse(x) as DrawStroke);
+			if (strokes.length === 0) continue;
+			await em.insert(MiDrawRoomLayer, {
+				id: this.idService.gen(),
+				roomId,
+				userId,
+				strokes,
+				layers: await this.getUserLayers(roomId, userId),
+			});
+		}
+	}
+
+	/**
+	 * JUICE: 保存しないで終了した部屋を、削除される前(UNKEPT_ROOM_RETENTION_MSの間)に部屋主が保存する設定に変える。
+	 * 終了時に保存する場合と同じく、線とチャットをDBへ移してからRedisのデータを消す
+	 */
+	@bindThis
+	public async keepEnded(room: MiDrawRoom, me: MiUser): Promise<MiDrawRoom> {
+		if (room.ownerId !== me.id) throw new DrawRoomError('notOwner');
+		if (!room.isEnded) throw new DrawRoomError('notEnded');
+		const kept = await this.db.transaction(async em => {
+			const locked = await em.createQueryBuilder(MiDrawRoom, 'room')
+				.setLock('pessimistic_write')
+				.where('room.id = :id', { id: room.id })
+				.getOne();
+			if (locked == null) throw new DrawRoomError('noSuchRoom');
+			if (locked.keepAfterEnd) return locked;
+			// 削除の時間を過ぎていたら(掃除がまだでも)、もう保存できない
+			if (locked.endedAt == null || Date.now() - locked.endedAt.getTime() >= UNKEPT_ROOM_RETENTION_MS) throw new DrawRoomError('noSuchRoom');
+			await this.saveRedisDataToDb(em, room.id);
+			const chatLog = await this.getChatFromRedis(room.id);
+			await em.update(MiDrawRoom, room.id, { keepAfterEnd: true, chatLog });
+			return { ...locked, keepAfterEnd: true, chatLog };
+		});
+		await this.deleteRedisData(room.id);
+		return kept;
 	}
 
 	/**
@@ -1208,7 +1249,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// deleteRedisDataは終了の印も消すので、削除の知らせが届くまでの間に書き込まれないよう、しばらく印を残す
 		await this.redisClient.set(this.endedKey(room.id), '1', 'EX', 60 * 60);
 		// 部屋を開いている人には、部屋が消えたことを知らせる
-		this.globalEventService.publishDrawRoomStream(room.id, 'deleted', { byModerator });
+		this.publishStream(room.id, 'deleted', { byModerator });
 		if (byModerator) {
 			const owner = await this.cacheService.findUserById(room.ownerId).catch(() => null);
 			this.moderationLogService.log(me, 'deleteDrawRoom', {
@@ -1327,13 +1368,13 @@ export class DrawRoomService implements OnApplicationShutdown {
 		const before = this.parseLayers(beforeRaw);
 		await this.touch(roomId);
 		// ほかの人のストリームでは、下描きのレイヤーは除いて流す(channels/draw-room.ts)
-		this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers });
+		this.publishStream(roomId, 'layersUpdated', { userId, layers });
 		// JUICE: 下描きから皆に見せるようにしたレイヤーは、今の線をまとめて配る(ほかの人はまだ持っていないため)
 		const published = layers.filter(layer => !layer.private && before.some(old => old.id === layer.id && old.private));
 		if (published.length > 0) {
 			const strokes = (await this.redisClient.lrange(this.strokesKey(roomId, userId), 0, -1)).map(x => JSON.parse(x) as DrawStroke);
 			for (const layer of published) {
-				this.globalEventService.publishDrawRoomStream(roomId, 'layerPublished', { userId, layer: layer.id, strokes: strokes.filter(stroke => (stroke.layer ?? '0') === layer.id) });
+				this.publishStream(roomId, 'layerPublished', { userId, layer: layer.id, strokes: strokes.filter(stroke => (stroke.layer ?? '0') === layer.id) });
 			}
 		}
 		return true;
@@ -1364,11 +1405,11 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (result !== 1) return false;
 		await this.touch(roomId);
 		// 先に一覧を配って結合元のレイヤーを消してもらい、結合先のレイヤーの線を配り直す(ほかの人のストリームでは、下描きは流さない)
-		this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers: next });
+		this.publishStream(roomId, 'layersUpdated', { userId, layers: next });
 		const strokes = (await this.redisClient.lrange(this.strokesKey(roomId, userId), 0, -1))
 			.map(x => JSON.parse(x) as DrawStroke)
 			.filter(stroke => (stroke.layer ?? '0') === into);
-		this.globalEventService.publishDrawRoomStream(roomId, 'layerMerged', { userId, layer: into, strokes, ...(intoLayer.private ? { private: true } : {}) });
+		this.publishStream(roomId, 'layerMerged', { userId, layer: into, strokes, ...(intoLayer.private ? { private: true } : {}) });
 		return true;
 	}
 
@@ -1480,7 +1521,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (result === -4) return 'room';
 		// 下描きのレイヤーかどうかは、線を入れたのと同じ処理の中で決めている(3)
 		if (result !== 1 && result !== 3) return 'rejected';
-		this.globalEventService.publishDrawRoomStream(roomId, 'stroke', { userId, stroke, ...(result === 3 ? { private: true } : {}) });
+		this.publishStream(roomId, 'stroke', { userId, stroke, ...(result === 3 ? { private: true } : {}) });
 		return 'added';
 	}
 
@@ -1490,7 +1531,50 @@ export class DrawRoomService implements OnApplicationShutdown {
 	@bindThis
 	public async publishStrokePart(roomId: MiDrawRoom['id'], userId: MiUser['id'], part: Omit<DrawStroke, 'id'> & { strokeId: string }): Promise<void> {
 		const isPrivate = (await this.privateLayerIds(roomId, userId)).has(part.layer ?? '0');
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokePart', { userId, ...part, ...(isPrivate ? { private: true } : {}) });
+		// JUICE: 部屋ごとにまとめて、一定間隔で1通にして配る
+		let buffer = this.strokePartBuffers.get(roomId);
+		if (buffer == null) {
+			buffer = [];
+			this.strokePartBuffers.set(roomId, buffer);
+		}
+		buffer.push({ userId, ...part, ...(isPrivate ? { private: true } : {}) });
+		if (!this.strokePartFlushTimers.has(roomId)) {
+			this.strokePartFlushTimers.set(roomId, setTimeout(() => this.flushStrokeParts(roomId), STROKE_PART_FLUSH_INTERVAL_MS));
+		}
+	}
+
+	@bindThis
+	private flushStrokeParts(roomId: MiDrawRoom['id']): void {
+		const timer = this.strokePartFlushTimers.get(roomId);
+		if (timer != null) clearTimeout(timer);
+		this.strokePartFlushTimers.delete(roomId);
+		const parts = this.strokePartBuffers.get(roomId);
+		this.strokePartBuffers.delete(roomId);
+		if (parts == null || parts.length === 0) return;
+		this.globalEventService.publishDrawRoomStream(roomId, 'strokeParts', { parts });
+	}
+
+	/**
+	 * JUICE: 部屋のストリームへ配る。まだ配っていない描いている途中の線との順番を守る:
+	 * - 線の確定・取りやめは、その線のまだ配っていない途中の分を捨てる(確定した線に全部の点があるため。
+	 *   途中の分を先に配ると、人数が多い部屋では確定のたびにまとめが崩れて配信が増える)
+	 * - その人の線やレイヤーを変える操作は、その人の途中の線が残っていれば先に配る(部屋全体の出来事も先に配る)
+	 * - カーソル・チャット・オンラインの一覧・参加と退出は、線と順番が前後しても困らないので待たない
+	 */
+	@bindThis
+	private publishStream<K extends keyof DrawRoomEventTypes>(roomId: MiDrawRoom['id'], type: K, value: DrawRoomEventTypes[K]): void {
+		const buffer = this.strokePartBuffers.get(roomId);
+		if (buffer != null && buffer.length > 0) {
+			const userId = 'userId' in value ? value.userId : null;
+			if (type === 'stroke' || type === 'strokeCancel') {
+				const strokeId = 'stroke' in value ? value.stroke.id : 'strokeId' in value ? value.strokeId : null;
+				const rest = buffer.filter(part => part.userId !== userId || part.strokeId !== strokeId);
+				if (rest.length !== buffer.length) this.strokePartBuffers.set(roomId, rest);
+			} else if (type !== 'cursors' && type !== 'chat' && type !== 'presence' && type !== 'memberJoined' && type !== 'memberLeft') {
+				if (userId == null || buffer.some(part => part.userId === userId)) this.flushStrokeParts(roomId);
+			}
+		}
+		this.globalEventService.publishDrawRoomStream(roomId, type, value);
 	}
 
 	/**
@@ -1559,7 +1643,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 
 	@bindThis
 	private async publishPresence(roomId: MiDrawRoom['id']): Promise<void> {
-		this.globalEventService.publishDrawRoomStream(roomId, 'presence', { userIds: await this.getOnlineUserIds(roomId) });
+		this.publishStream(roomId, 'presence', { userIds: await this.getOnlineUserIds(roomId) });
 	}
 	//#endregion
 
@@ -1584,13 +1668,16 @@ export class DrawRoomService implements OnApplicationShutdown {
 		this.cursorBuffers.delete(roomId);
 		if (buffer == null || buffer.size === 0) return;
 		const cursors = [...buffer].map(([userId, { x, y, pet }]) => ({ userId, x, y, ...(pet ? { pet: true } : {}) }));
-		this.globalEventService.publishDrawRoomStream(roomId, 'cursors', { cursors });
+		this.publishStream(roomId, 'cursors', { cursors });
 	}
 
 	@bindThis
 	public onApplicationShutdown(): void {
 		for (const timer of this.cursorFlushTimers.values()) clearTimeout(timer);
 		this.cursorFlushTimers.clear();
+		for (const timer of this.strokePartFlushTimers.values()) clearTimeout(timer);
+		this.strokePartFlushTimers.clear();
+		this.strokePartBuffers.clear();
 		for (const timer of this.presencePublishTimers.values()) clearTimeout(timer);
 		this.presencePublishTimers.clear();
 		this.cursorBuffers.clear();
@@ -1601,7 +1688,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 */
 	@bindThis
 	public publishStrokeCancel(roomId: MiDrawRoom['id'], userId: MiUser['id'], strokeId: string): void {
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokeCancel', { userId, strokeId });
+		this.publishStream(roomId, 'strokeCancel', { userId, strokeId });
 	}
 
 	/**
@@ -1621,7 +1708,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		await this.touch(roomId);
 		const layers = this.parseLayers(layersRaw);
 		// レイヤーを戻した・消したときは、線より先にレイヤーの一覧を配る(戻す線のレイヤーを先に用意してもらう)
-		if (layersChanged === 1) this.globalEventService.publishDrawRoomStream(roomId, 'layersUpdated', { userId, layers });
+		if (layersChanged === 1) this.publishStream(roomId, 'layersUpdated', { userId, layers });
 		if (stepsRaw === '') return true;
 		const steps = (JSON.parse(stepsRaw) as ({ t: 'del'; ids: string[] } | { t: 'mv'; ids: string[] | '*'; dx: number; dy: number } | { t: 'ins'; items: { a?: string; s: string }[] })[]).map(step => {
 			if (step.t === 'del') return { t: 'del' as const, ids: step.ids };
@@ -1631,7 +1718,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// 下描きのレイヤーの線は、ほかの人のストリームでは除いて流す(channels/draw-room.ts)。
 		// 下描きかは、戻したのと同じ処理の中で読んだ一覧で決める(直後に一覧が変わっても、古い判定で配らないように)
 		const privateLayers = layers.filter(layer => layer.private).map(layer => layer.id);
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokesPatched', { userId, steps, ...(privateLayers.length > 0 ? { privateLayers } : {}) });
+		this.publishStream(roomId, 'strokesPatched', { userId, steps, ...(privateLayers.length > 0 ? { privateLayers } : {}) });
 		return true;
 	}
 
@@ -1651,7 +1738,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (moved <= 0) return true;
 		await this.touch(roomId);
 		await this.touchLayers(roomId, userId);
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokesMoved', { userId, strokeIds, dx, dy });
+		this.publishStream(roomId, 'strokesMoved', { userId, strokeIds, dx, dy });
 		return true;
 	}
 
@@ -1673,7 +1760,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		await this.touchLayers(roomId, userId);
 		// 下描きのレイヤーの線は、ほかの人のストリームでは除いて流す(線ごとに。置き換えた時点の一覧で決める)
 		const privateLayers = this.parseLayers(layersRaw).filter(layer => layer.private).map(layer => layer.id);
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokesSplit', { userId, splits, ...(privateLayers.length > 0 ? { privateLayers } : {}) });
+		this.publishStream(roomId, 'strokesSplit', { userId, splits, ...(privateLayers.length > 0 ? { privateLayers } : {}) });
 		return { ok: true, recorded: recorded === 1 };
 	}
 
@@ -1690,7 +1777,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		if (removed <= 0) return;
 		await this.touch(roomId);
 		await this.touchLayers(roomId, userId);
-		this.globalEventService.publishDrawRoomStream(roomId, 'strokesDeleted', { userId, strokeIds });
+		this.publishStream(roomId, 'strokesDeleted', { userId, strokeIds });
 	}
 
 	/**
@@ -1711,7 +1798,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			) as [number, number];
 			if (removed > 0) {
 				await this.touchLayers(roomId, userId);
-				this.globalEventService.publishDrawRoomStream(roomId, 'clearLayer', { userId, layer, ...(isPrivate === 1 ? { private: true } : {}) });
+				this.publishStream(roomId, 'clearLayer', { userId, layer, ...(isPrivate === 1 ? { private: true } : {}) });
 			}
 			return;
 		}
@@ -1720,7 +1807,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			this.endedKey(roomId), this.strokesKey(roomId, userId), this.bytesKey(roomId, userId), ...this.historyKeys(roomId, userId),
 		) as number;
 		if (result !== 1) return;
-		this.globalEventService.publishDrawRoomStream(roomId, 'clearLayer', { userId });
+		this.publishStream(roomId, 'clearLayer', { userId });
 	}
 	//#endregion
 
@@ -1753,7 +1840,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			JSON.stringify(message), CHAT_LOG_LENGTH.toString(), Date.now().toString(), REDIS_KEY_TTL_SEC.toString(),
 		) as number;
 		if (result !== 1) return;
-		this.globalEventService.publishDrawRoomStream(roomId, 'chat', {
+		this.publishStream(roomId, 'chat', {
 			message,
 			user: await this.userEntityService.pack(me.id, null),
 		});
@@ -1782,7 +1869,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 			await this.deleteRedisData(room.id);
 		}
 		if (expired.length > 0) {
-			await this.drawRoomsRepository.delete({ id: In(expired.map(room => room.id)) });
+			// JUICE: 探してから消すまでの間に、部屋主が保存する設定に変えた部屋は消さない
+			await this.drawRoomsRepository.delete({ id: In(expired.map(room => room.id)), keepAfterEnd: false });
 		}
 	}
 }

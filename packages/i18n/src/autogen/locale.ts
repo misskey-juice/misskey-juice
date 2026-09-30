@@ -9806,6 +9806,38 @@ export interface Locale extends ILocale {
          */
         "shortBucket": string;
         /**
+         * 普通
+         */
+        "shortBrushNormal": string;
+        /**
+         * にじみ
+         */
+        "shortBrushSoft": string;
+        /**
+         * ドット
+         */
+        "shortBrushDot": string;
+        /**
+         * 線の中
+         */
+        "shortClipToLines": string;
+        /**
+         * 筆圧太さ
+         */
+        "shortPressureSize": string;
+        /**
+         * 筆圧濃さ
+         */
+        "shortPressureOpacity": string;
+        /**
+         * 透明ロック
+         */
+        "shortAlphaLock": string;
+        /**
+         * パレット
+         */
+        "shortPalette": string;
+        /**
          * 戻す
          */
         "shortUndo": string;
@@ -9865,6 +9897,10 @@ export interface Locale extends ILocale {
          * 部屋の線(全員)
          */
         "debugRoomStrokes": string;
+        /**
+         * 部屋全体のデータ量
+         */
+        "debugRoomBytes": string;
         /**
          * レイヤー
          */
@@ -10121,6 +10157,10 @@ export interface Locale extends ILocale {
          * キャンバスを読み込み中
          */
         "loadingCanvas": string;
+        /**
+         * 全体
+         */
+        "loadingOverall": string;
         /**
          * 囲って塗る
          */
@@ -10397,6 +10437,10 @@ export interface Locale extends ILocale {
          * この部屋を今すぐ削除しますか？(削除される時間を待たずに消えます。絵とチャットは元に戻せません)
          */
         "deleteRoomNowConfirm": string;
+        /**
+         * サーバーに保存する
+         */
+        "keepEndedRoom": string;
         /**
          * 描く人から外す
          */

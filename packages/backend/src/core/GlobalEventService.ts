@@ -280,6 +280,11 @@ export interface DrawRoomEventTypes {
 		// JUICE: 下描き(本人だけに見える)のレイヤーの線。ほかの人のストリームには流さない
 		private?: boolean;
 	};
+	// JUICE: 描いている途中の線を、部屋ごとに一定間隔でまとめたもの(届いた順)。
+	// 1件ずつ配ると、描く人数×見ている人数で配信が増えるため
+	strokeParts: {
+		parts: DrawRoomEventTypes['strokePart'][];
+	};
 	// カーソルの位置(保存しない)。一定間隔でまとめて配る。x・yがnullならキャンバスの外に出た
 	cursors: {
 		cursors: {

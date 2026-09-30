@@ -331,6 +331,8 @@ import type {
 	DrawRoomsEndRequest,
 	DrawRoomsEndResponse,
 	DrawRoomsJoinRequest,
+	DrawRoomsKeepRequest,
+	DrawRoomsKeepResponse,
 	DrawRoomsKickRequest,
 	DrawRoomsLeaveRequest,
 	DrawRoomsListRequest,
@@ -980,6 +982,7 @@ export type Endpoints = {
 	'draw-rooms/delete': { req: DrawRoomsDeleteRequest; res: EmptyResponse };
 	'draw-rooms/end': { req: DrawRoomsEndRequest; res: DrawRoomsEndResponse };
 	'draw-rooms/join': { req: DrawRoomsJoinRequest; res: EmptyResponse };
+	'draw-rooms/keep': { req: DrawRoomsKeepRequest; res: DrawRoomsKeepResponse };
 	'draw-rooms/kick': { req: DrawRoomsKickRequest; res: EmptyResponse };
 	'draw-rooms/leave': { req: DrawRoomsLeaveRequest; res: EmptyResponse };
 	'draw-rooms/list': { req: DrawRoomsListRequest; res: DrawRoomsListResponse };

@@ -1089,20 +1089,9 @@ export type Channels = {
             roomId: string;
         };
         events: {
-            strokePart: (payload: {
-                userId: User['id'];
-                strokeId: string;
-                tool: DrawStroke['tool'];
-                color: string;
-                size: number;
-                opacity?: number;
-                brush?: DrawStroke['brush'];
-                clip?: string;
-                layer?: string;
-                lock?: boolean;
-                pressure?: DrawStroke['pressure'];
-                points: string;
-                private?: boolean;
+            strokePart: (payload: DrawRoomStrokePart) => void;
+            strokeParts: (payload: {
+                parts: DrawRoomStrokePart[];
             }) => void;
             cursors: (payload: {
                 cursors: {
@@ -1688,6 +1677,12 @@ type DrawRoomsEndResponse = operations['draw-rooms___end']['responses']['200']['
 
 // @public (undocumented)
 type DrawRoomsJoinRequest = operations['draw-rooms___join']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawRoomsKeepRequest = operations['draw-rooms___keep']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawRoomsKeepResponse = operations['draw-rooms___keep']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type DrawRoomsKickRequest = operations['draw-rooms___kick']['requestBody']['content']['application/json'];
@@ -2358,6 +2353,8 @@ declare namespace entities {
         DrawRoomsEndRequest,
         DrawRoomsEndResponse,
         DrawRoomsJoinRequest,
+        DrawRoomsKeepRequest,
+        DrawRoomsKeepResponse,
         DrawRoomsKickRequest,
         DrawRoomsLeaveRequest,
         DrawRoomsListRequest,
@@ -4448,9 +4445,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:287:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:302:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:317:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:290:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:305:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:315:4 - (ae-forgotten-export) The symbol "DrawRoomStrokePart" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:322:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
