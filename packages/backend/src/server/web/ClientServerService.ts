@@ -33,6 +33,7 @@ import type {
 	NotesRepository,
 	PagesRepository,
 	ReversiGamesRepository,
+	DrawRoomsRepository,
 	UserProfilesRepository,
 	UsersRepository,
 } from '@/models/_.js';
@@ -42,6 +43,7 @@ import { htmlSafeJsonStringify } from '@/misc/json-stringify-html-safe.js';
 import { bindThis } from '@/decorators.js';
 import { FlashEntityService } from '@/core/entities/FlashEntityService.js';
 import { ReversiGameEntityService } from '@/core/entities/ReversiGameEntityService.js';
+import { DrawRoomService } from '@/core/DrawRoomService.js';
 import { AnnouncementEntityService } from '@/core/entities/AnnouncementEntityService.js';
 import { FeedService } from './FeedService.js';
 import { UrlPreviewService } from './UrlPreviewService.js';
@@ -57,6 +59,7 @@ import { FlashPage } from './views/flash.js';
 import { GalleryPostPage } from './views/gallery-post.js';
 import { ChannelPage } from './views/channel.js';
 import { ReversiGamePage } from './views/reversi-game.js';
+import { DrawRoomPage } from './views/draw-room.js';
 import { AnnouncementPage } from './views/announcement.js';
 import { BaseEmbed } from './views/base-embed.js';
 import { InfoCardPage } from './views/info-card.js';
@@ -113,6 +116,9 @@ export class ClientServerService {
 		@Inject(DI.reversiGamesRepository)
 		private reversiGamesRepository: ReversiGamesRepository,
 
+		@Inject(DI.drawRoomsRepository)
+		private drawRoomsRepository: DrawRoomsRepository,
+
 		@Inject(DI.announcementsRepository)
 		private announcementsRepository: AnnouncementsRepository,
 
@@ -124,6 +130,7 @@ export class ClientServerService {
 		private clipEntityService: ClipEntityService,
 		private channelEntityService: ChannelEntityService,
 		private reversiGameEntityService: ReversiGameEntityService,
+		private drawRoomService: DrawRoomService,
 		private announcementEntityService: AnnouncementEntityService,
 		private urlPreviewService: UrlPreviewService,
 		private feedService: FeedService,
@@ -767,6 +774,53 @@ export class ClientServerService {
 			} else {
 				return await renderBase(reply);
 			}
+		});
+
+		// JUICE: 絵チャの部屋。ログインしていない人も見られる部屋(ローカル全体・NSFWでない)だけ、OGPを付ける
+		const publicDrawRoom = async (roomId: string) => {
+			if (!await this.drawRoomService.isEnabled()) return null;
+			const room = await this.drawRoomsRepository.findOneBy({ id: roomId });
+			if (room == null || !await this.drawRoomService.isPublicToAnonymous(room)) return null;
+			return room;
+		};
+
+		fastify.get<{ Params: { roomId: string; } }>('/draw/:roomId', async (request, reply) => {
+			const room = await publicDrawRoom(request.params.roomId);
+			if (room == null) return await renderBase(reply);
+			const packed = await this.drawRoomService.pack(room, null);
+			// OGPの画像は、線の大きさを横1200×縦630に収めた大きさ(renderDrawRoomThumbnailと同じ)
+			const scale = Math.min(1200 / room.canvasWidth, 630 / room.canvasHeight, 1);
+			reply.header('Cache-Control', 'public, max-age=300');
+			return await HtmlTemplateService.replyHtml(reply, DrawRoomPage({
+				room: {
+					id: room.id,
+					title: room.title,
+					cw: room.cw,
+					ownerName: packed.owner.name ?? packed.owner.username,
+					ownerUsername: packed.owner.username,
+					drawerCount: packed.members.length,
+					isEnded: room.isEnded,
+				},
+				image: room.cw != null ? null : {
+					url: `${this.config.url}/draw/${room.id}/ogp.png`,
+					width: Math.max(1, Math.round(room.canvasWidth * scale)),
+					height: Math.max(1, Math.round(room.canvasHeight * scale)),
+				},
+				...(await this.htmlTemplateService.getCommonData()),
+			}));
+		});
+
+		// JUICE: 絵チャの部屋のOGPの画像(今の絵。注意書き(CW)の部屋では出さない)
+		fastify.get<{ Params: { roomId: string; } }>('/draw/:roomId/ogp.png', async (request, reply) => {
+			const room = await publicDrawRoom(request.params.roomId);
+			if (room == null || room.cw != null) {
+				reply.code(404);
+				return;
+			}
+			const png = await this.drawRoomService.getThumbnail(room);
+			reply.header('Content-Type', 'image/png');
+			reply.header('Cache-Control', 'public, max-age=300');
+			return reply.send(png);
 		});
 
 		// 個別お知らせページ

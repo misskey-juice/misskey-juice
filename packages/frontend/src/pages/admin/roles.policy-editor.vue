@@ -454,6 +454,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</XFolder>
 
+		<XFolder v-if="matchQuery([i18n.ts._role._options.drawRoomMaxActiveRooms, 'drawRoomMaxActiveRooms'])" v-model:policyMeta="policyMetaModel.drawRoomMaxActiveRooms" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.drawRoomMaxActiveRooms }}<span class="_juice">JUICE</span></template>
+			<template #valueText>{{ valuesModel.drawRoomMaxActiveRooms }}</template>
+			<template #default="{ disabled }">
+				<MkInput v-model="valuesModel.drawRoomMaxActiveRooms" type="number" :disabled="disabled" :min="1" :max="100">
+					<template #caption>{{ i18n.ts._role._options.drawRoomMaxActiveRoomsCaption }}</template>
+				</MkInput>
+			</template>
+		</XFolder>
+
 		<XFolder v-if="matchQuery([i18n.ts._role._options.drawRoomMaxCanvasSize, 'drawRoomMaxCanvasSize'])" v-model:policyMeta="policyMetaModel.drawRoomMaxCanvasSize" :isBaseRole="isBaseRole" :readonly="readonly">
 			<template #label>{{ i18n.ts._role._options.drawRoomMaxCanvasSize }}<span class="_juice">JUICE</span></template>
 			<template #valueText>{{ valuesModel.drawRoomMaxCanvasSize }}px</template>

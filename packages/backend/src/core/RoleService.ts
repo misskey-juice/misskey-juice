@@ -82,6 +82,8 @@ export type RolePolicies = {
 	announcementReactionTypeLimit: number;
 	// JUICE: 絵チャの部屋を作れるか(見学・参加は作れなくてもできる)
 	canCreateDrawRoom: boolean;
+	// JUICE: 絵チャで1人が同時に開催できる部屋の数
+	drawRoomMaxActiveRooms: number;
 	// JUICE: 絵チャで作れる(途中で変えられる)キャンバスの幅・高さの上限(px)
 	drawRoomMaxCanvasSize: number;
 	// JUICE: 絵チャで1人が1つの部屋に置ける線の本数と、線のデータ量(MB)の上限
@@ -145,6 +147,7 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	avatarDecorationRequestDailyLimit: 5,
 	announcementReactionTypeLimit: 20,
 	canCreateDrawRoom: true,
+	drawRoomMaxActiveRooms: 5,
 	drawRoomMaxCanvasSize: 3840,
 	drawRoomMaxStrokes: 30000,
 	drawRoomMaxStrokeMegabytes: 64,
@@ -489,6 +492,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			avatarDecorationRequestDailyLimit: calc('avatarDecorationRequestDailyLimit', vs => Math.max(...vs)),
 			announcementReactionTypeLimit: calc('announcementReactionTypeLimit', vs => Math.max(...vs)),
 			canCreateDrawRoom: calc('canCreateDrawRoom', vs => vs.some(v => v === true)),
+			drawRoomMaxActiveRooms: calc('drawRoomMaxActiveRooms', vs => Math.max(...vs)),
 			drawRoomMaxCanvasSize: calc('drawRoomMaxCanvasSize', vs => Math.max(...vs)),
 			drawRoomMaxStrokes: calc('drawRoomMaxStrokes', vs => Math.max(...vs)),
 			drawRoomMaxStrokeMegabytes: calc('drawRoomMaxStrokeMegabytes', vs => Math.max(...vs)),

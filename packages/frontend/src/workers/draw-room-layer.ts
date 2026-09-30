@@ -10,20 +10,24 @@
 // 線が多い部屋でも画面を固めずに、複数のWorkerで同時に描けるようにする。
 // GPUのキャンバスより、CPUで描く方がこの用途(細かい線をたくさん描く)では速いので、willReadFrequentlyでCPUに描かせる
 
-import { decodeStroke, drawStroke } from '@/utility/draw-canvas.js';
-import type { DrawStroke } from '@/utility/draw-canvas.js';
+import { decodeStroke, drawStrokesInGroups } from '@/utility/draw-canvas.js';
+import type { DrawLayerGroup, DrawStroke } from '@/utility/draw-canvas.js';
 
 let canvas: OffscreenCanvas | null = null;
+// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(使い回す)
+const groupPool: HTMLCanvasElement[] = [];
 
-onmessage = (event: MessageEvent<{ id: number; width: number; height: number; strokes: DrawStroke[] }>) => {
-	const { id, width, height, strokes } = event.data;
+onmessage = (event: MessageEvent<{ id: number; width: number; height: number; strokes: DrawStroke[]; groups?: DrawLayerGroup[] }>) => {
+	const { id, width, height, strokes, groups } = event.data;
 	try {
 		if (canvas == null || canvas.width !== width || canvas.height !== height) canvas = new OffscreenCanvas(width, height);
 		const ctx = canvas.getContext('2d', { willReadFrequently: true });
 		if (ctx == null) throw new Error('no 2d context');
 		ctx.clearRect(0, 0, width, height);
 		// 描く関数はcanvas要素の2Dコンテキスト向けの型だが、ここで使う機能はOffscreenCanvasでも同じ
-		for (const stroke of strokes) drawStroke(ctx as unknown as CanvasRenderingContext2D, decodeStroke(stroke));
+		// JUICE: 結合したレイヤーの線は、まとまりごとに重ねる
+		const groupMap = groups != null && groups.length > 0 ? new Map(groups.map(group => [group.id, group])) : null;
+		drawStrokesInGroups(ctx as unknown as CanvasRenderingContext2D, strokes.map(decodeStroke), groupMap, groupPool);
 		const bitmap = canvas.transferToImageBitmap();
 		self.postMessage({ id, bitmap }, [bitmap]);
 	} catch {

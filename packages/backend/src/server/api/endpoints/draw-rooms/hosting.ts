@@ -3,46 +3,49 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import ms from 'ms';
 import { Injectable } from '@nestjs/common';
+import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DrawRoomService } from '@/core/DrawRoomService.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
 
-// JUICE: 絵チャの部屋の情報
+// JUICE: 自分が開催中の絵チャの部屋の数と、同時に開催できる部屋の数の上限(ロールで決まる)
 export const meta = {
 	tags: ['draw-rooms'],
 
-	// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見られる(見るだけ)
-	requireCredential: false,
+	requireCredential: true,
 
 	kind: 'read:draw-rooms',
 
-	// JUICE: メンバー全員の情報を返すので、回数を制限する
 	limit: {
 		duration: ms('1minute'),
-		max: 120,
+		max: 60,
 	},
 
 	res: {
 		type: 'object',
 		optional: false, nullable: false,
-		ref: 'DrawRoom',
+		properties: {
+			count: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
+			max: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
+		},
 	},
 
 	errors: {
 		disabled: drawRoomErrors.disabled,
-		noSuchRoom: drawRoomErrors.noSuchRoom,
-		forbidden: drawRoomErrors.forbidden,
 	},
 } as const;
 
 export const paramDef = {
 	type: 'object',
-	properties: {
-		roomId: { type: 'string', format: 'misskey:id' },
-	},
-	required: ['roomId'],
+	properties: {},
+	required: [],
 } as const;
 
 @Injectable()
@@ -52,8 +55,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			try {
-				const room = await this.drawRoomService.getRoom(ps.roomId, me);
-				return await this.drawRoomService.pack(room, me);
+				return await this.drawRoomService.hostingStatus(me);
 			} catch (err) {
 				rethrowDrawRoomError(err);
 			}

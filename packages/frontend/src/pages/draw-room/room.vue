@@ -21,6 +21,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton small @click="postImage()"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</MkButton>
 						<MkButton small @click="downloadImage()"><i class="ti ti-download"></i> {{ i18n.ts._drawRoom.downloadImage }}</MkButton>
 						<MkButton small @click="startSelecting"><i class="ti ti-crop"></i> {{ i18n.ts._drawRoom.selectArea }}</MkButton>
+						<!-- JUICE: 保存しないで終了した部屋を、削除される前なら部屋主が保存する設定に変えられる(チェックを入れ忘れたとき用) -->
+						<MkButton v-if="isOwner && !room.keepAfterEnd && room.deletesAt != null" small primary @click="keepRoom"><i class="ti ti-device-floppy"></i> {{ i18n.ts._drawRoom.keepEndedRoom }}</MkButton>
 						<!-- JUICE: 保存しないで終了した部屋も、削除される時間を待たずに部屋主が消せる -->
 						<MkButton v-if="isOwner" small danger @click="deleteRoom(room.keepAfterEnd ? undefined : i18n.ts._drawRoom.deleteRoomNowConfirm)"><i class="ti ti-trash"></i> {{ i18n.ts._drawRoom.deleteRoom }}</MkButton>
 					</div>
@@ -28,6 +30,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<!-- JUICE: モデレーターが公開範囲の外から確認のために開いている(見るだけ) -->
 				<template v-else-if="room.viewOnly">
 					<div :class="$style.statusText"><i class="ti ti-shield"></i> {{ i18n.ts._drawRoom.viewingAsModerator }}</div>
+				</template>
+				<!-- JUICE: ログインしていない人は見るだけ。描くにはログインしてもらう -->
+				<template v-else-if="isGuest">
+					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.spectatingAsGuest }}</div>
+					<MkButton small primary @click="pleaseLogin()"><i class="ti ti-login-2"></i> {{ i18n.ts._drawRoom.loginToJoin }}</MkButton>
 				</template>
 				<template v-else-if="!room.isMember">
 					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ isFull ? i18n.ts._drawRoom.full : i18n.ts._drawRoom.spectating }}</div>
@@ -78,12 +85,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="$style.colorButton"
 							:aria-label="`${i18n.ts._drawRoom.colorPalette}: ${color}`"
 							@click="openColorPicker"
-						><span :class="$style.colorButtonSwatch" :style="{ background: color }"></span><i class="ti ti-palette"></i></button>
+						><span :class="$style.colorButtonInner"><span :class="$style.colorButtonSwatch" :style="{ background: color }"></span><i class="ti ti-palette"></i></span><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortPalette }}</span></button>
 						<!-- JUICE: 太さ・濃さ・筆の種類は、それを使う道具のときだけ出す(スポイト・選択・移動などでは出さない) -->
 						<span v-if="usesBrushSize || usesOpacity" :class="$style.toolSeparator"></span>
 						<label v-if="usesBrushSize" :class="$style.sizeLabel">
 							<i class="ti ti-line-dashed"></i>
-							<input v-model.number="sizePercent" type="range" min="1" max="100" step="1" :aria-label="i18n.ts._drawRoom.size" :aria-valuetext="`${sizePercent}% (${Math.round(size * 10) / 10}px)`"/>
+							<input v-model.number="sizePercent" type="range" min="1" :max="SIZE_PERCENT_MAX" step="1" :aria-label="i18n.ts._drawRoom.size" :aria-valuetext="`${sizePercent}% (${Math.round(size * 10) / 10}px)`"/>
 							<span v-tooltip="`${Math.round(size * 10) / 10}px`" :class="$style.sizeValue">{{ sizePercent }}%</span>
 						</label>
 						<label v-if="usesOpacity" v-tooltip="i18n.ts._drawRoom.opacity" :class="$style.sizeLabel">
@@ -94,11 +101,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<!-- JUICE: 筆の種類(普通・にじみ・ドット・囲って塗る)と、線の中だけ塗る(はみ出し防止) -->
 						<template v-if="usesBrushSize">
 						<span :class="$style.toolSeparator"></span>
-						<button v-tooltip="i18n.ts._drawRoom.brushNormal" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'normal' }]" :aria-label="i18n.ts._drawRoom.brushNormal" :aria-pressed="brushType === 'normal'" @click="brushType = 'normal'"><i class="ti ti-brush"></i></button>
-						<button v-tooltip="i18n.ts._drawRoom.brushSoft" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'soft' }]" :aria-label="i18n.ts._drawRoom.brushSoft" :aria-pressed="brushType === 'soft'" @click="brushType = 'soft'"><i class="ti ti-droplet"></i></button>
-						<button v-tooltip="i18n.ts._drawRoom.brushDot" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'dot' }]" :aria-label="i18n.ts._drawRoom.brushDot" :aria-pressed="brushType === 'dot'" @click="brushType = 'dot'"><i class="ti ti-grid-dots"></i></button>
-						<button v-tooltip="i18n.ts._drawRoom.brushAreaHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'area' }]" :aria-label="i18n.ts._drawRoom.lassoFill" :aria-pressed="brushType === 'area'" @click="brushType = 'area'"><i class="ti ti-lasso-polygon"></i></button>
-						<button v-tooltip="i18n.ts._drawRoom.clipToLinesHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: clipToLines }]" :aria-label="i18n.ts._drawRoom.clipToLines" :aria-pressed="clipToLines" @click="clipToLines = !clipToLines"><i class="ti ti-shape"></i></button>
+						<button v-tooltip="i18n.ts._drawRoom.brushNormal" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'normal' }]" :aria-label="i18n.ts._drawRoom.brushNormal" :aria-pressed="brushType === 'normal'" @click="brushType = 'normal'"><i class="ti ti-brush"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortBrushNormal }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.brushSoft" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'soft' }]" :aria-label="i18n.ts._drawRoom.brushSoft" :aria-pressed="brushType === 'soft'" @click="brushType = 'soft'"><i class="ti ti-droplet"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortBrushSoft }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.brushDot" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'dot' }]" :aria-label="i18n.ts._drawRoom.brushDot" :aria-pressed="brushType === 'dot'" @click="brushType = 'dot'"><i class="ti ti-grid-dots"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortBrushDot }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.brushAreaHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: brushType === 'area' }]" :aria-label="i18n.ts._drawRoom.lassoFill" :aria-pressed="brushType === 'area'" @click="brushType = 'area'"><i class="ti ti-lasso-polygon"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortLassoFill }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.clipToLinesHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: clipToLines }]" :aria-label="i18n.ts._drawRoom.clipToLines" :aria-pressed="clipToLines" @click="clipToLines = !clipToLines"><i class="ti ti-shape"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortClipToLines }}</span></button>
 						</template>
 						<!-- JUICE: 筆圧で太さ・濃さを変えるか(ペン・消しゴム。囲って塗るときは使わない) -->
 						<template v-if="usesBrushSize && brushType !== 'area'">
@@ -109,7 +116,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._drawRoom.pressureSize"
 							:aria-pressed="pressureSize"
 							@click="pressureSize = !pressureSize"
-						><i class="ti ti-line-height"></i></button>
+						><i class="ti ti-line-height"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortPressureSize }}</span></button>
 						<button
 							v-if="brushType !== 'dot'"
 							v-tooltip="i18n.ts._drawRoom.pressureOpacityHint"
@@ -118,7 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._drawRoom.pressureOpacity"
 							:aria-pressed="pressureOpacity"
 							@click="pressureOpacity = !pressureOpacity"
-						><i class="ti ti-droplet-half-2"></i></button>
+						><i class="ti ti-droplet-half-2"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortPressureOpacity }}</span></button>
 						</template>
 						<!-- JUICE: 透明度ロック(ペン・塗りつぶしのとき。消しゴムには効かない) -->
 						<button
@@ -129,7 +136,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._drawRoom.alphaLock"
 							:aria-pressed="alphaLock"
 							@click="alphaLock = !alphaLock"
-						><i class="ti ti-lock-square"></i></button>
+						><i class="ti ti-lock-square"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortAlphaLock }}</span></button>
 						<!-- JUICE: 隙間閉じ(塗りつぶしと、線の中だけ塗るとき) -->
 						<template v-if="tool === 'bucket' || (usesBrushSize && clipToLines)">
 						<span v-if="!usesBrushSize" :class="$style.toolSeparator"></span>
@@ -152,6 +159,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 				<!-- JUICE: スマホでは、レイヤーとチャットを下から出すパネルにする -->
 				<div :class="$style.statusEnd">
+				<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える)。見つけやすいよう、画像の保存の横に名前付きで置く -->
+				<button
+					v-if="canPet"
+					v-tooltip="i18n.ts._drawRoom.petToolHint"
+					class="_button"
+					:class="[$style.petButton, { [$style.petButtonActive]: petting }]"
+					:aria-label="i18n.ts._drawRoom.petTool"
+					:aria-pressed="petting"
+					@click="petting = !petting"
+				><i class="ti ti-hand-stop"></i><span>{{ i18n.ts._drawRoom.petTool }}</span></button>
 				<!-- JUICE: 開催中・終了後どちらでも、全体または選んだ範囲を画像(PNG)にして保存・投稿できる -->
 				<button
 					v-tooltip="i18n.ts._drawRoom.imageMenu"
@@ -202,11 +219,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="room.cw != null" :class="$style.contentGateCw">{{ room.cw }}</div>
 					<div v-else :class="$style.contentGateText">{{ i18n.ts._drawRoom.roomSensitiveGate }}</div>
 					<MkButton primary rounded @click="acceptContent"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.openRoomContent }}</MkButton>
+					<!-- JUICE: 開く前に、サーバーのルールの「絵チャでのNSFWについて」を読んでもらう -->
+					<a :href="DRAW_ROOM_NSFW_RULES_URL" target="_blank" rel="noopener" class="_link" :class="$style.contentGateRules"><i class="ti ti-external-link"></i> {{ i18n.ts._drawRoom.nsfwRulesLink }}</a>
 				</div>
 				<!-- JUICE: 線の読み込み中(線が多い部屋では時間がかかる)は、キャンバスの上に進み具合を出す -->
-				<div v-if="canvasLoading != null" :class="$style.canvasLoading" role="status">
-					<MkLoading/>
-					<div>{{ i18n.ts._drawRoom.loadingCanvas }}<template v-if="canvasLoading.total > 0"> ({{ canvasLoading.done }} / {{ canvasLoading.total }})</template></div>
+				<!-- JUICE: 読み込んでいるレイヤー(ユーザー)の名前と、そのレイヤー・全体の進み具合(データ量で数える)を出す -->
+				<!-- 読み上げは「読み込み中」の文だけ(進み具合は細かく変わるので、読み上げ続けないように進捗バーで伝える) -->
+				<div v-if="canvasLoading != null" :class="$style.canvasLoading" aria-busy="true">
+					<MkLoading v-if="canvasLoading.total === 0"/>
+					<div role="status">{{ i18n.ts._drawRoom.loadingCanvas }}</div>
+					<template v-if="canvasLoading.total > 0">
+						<div v-if="canvasLoading.current != null" :class="$style.loadingItem">
+							<div :class="$style.loadingLabel">
+								<span :class="$style.loadingName"><MkUserName v-if="userMap.get(canvasLoading.current.userId)" :user="userMap.get(canvasLoading.current.userId)!"/> · {{ canvasLoading.current.layerName }}</span>
+								<span>{{ Math.floor(canvasLoading.current.fraction * 100) }}%</span>
+							</div>
+							<div :class="$style.loadingTrack" role="progressbar" :aria-valuenow="Math.floor(canvasLoading.current.fraction * 100)" aria-valuemin="0" aria-valuemax="100" :aria-label="canvasLoading.current.layerName">
+								<div :class="$style.loadingFill" :style="{ width: `${canvasLoading.current.fraction * 100}%` }"></div>
+							</div>
+						</div>
+						<div :class="$style.loadingItem">
+							<div :class="$style.loadingLabel">
+								<span>{{ i18n.ts._drawRoom.loadingOverall }} ({{ canvasLoading.doneLayers }} / {{ canvasLoading.total }})</span>
+								<span>{{ Math.floor(canvasLoading.overall * 100) }}% · {{ formatLoadBytes(canvasLoading.doneBytes) }} / {{ formatLoadBytes(canvasLoading.totalBytes) }}</span>
+							</div>
+							<div :class="$style.loadingTrack" role="progressbar" :aria-valuenow="Math.floor(canvasLoading.overall * 100)" aria-valuemin="0" aria-valuemax="100" :aria-label="i18n.ts._drawRoom.loadingOverall">
+								<div :class="$style.loadingFill" :style="{ width: `${canvasLoading.overall * 100}%` }"></div>
+							</div>
+						</div>
+					</template>
 				</div>
 				<!-- JUICE: 表示用のキャンバスの上に、描いている途中のペンの線を描くキャンバス(不透明・半透明)を重ねる -->
 				<div :class="[$style.canvasStack, { [$style.canvasStackPixelated]: dotView }]" :style="{ '--px': `${1 / view.scale}`, transform: `translate(${view.x}px, ${view.y}px) rotate(${view.rotation}rad) scale(${view.scale})` }">
@@ -227,10 +268,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<path :d="pixelGridPath" :class="$style.pixelGrid" :stroke-opacity="pixelGridOpacity"/>
 					</svg>
 					<!-- JUICE: 選んでいる線の範囲と、投げ縄・範囲選択の途中の線 -->
-					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || (selecting && selection != null))" :class="$style.canvasOverlay" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
+					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
 						<!-- 選んだときに囲んだ形(範囲・投げ縄)のまま表示し、移動ツールでずらしている間は一緒に動かす -->
+						<!-- 拡大縮小の途中は、形の座標を拡大して描く(まとめて拡大すると、枠の線・つまみも大きくなるため) -->
 						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0})`">
-							<polygon v-for="(shape, i) in selectionShapes" :key="i" :points="toSvgPoints(shape)" :class="$style.selectionOutline"/>
+							<polygon v-for="(shape, i) in displayedSelectionShapes" :key="i" :points="toSvgPoints(shape)" :class="$style.selectionOutline"/>
 							<!-- JUICE: ドラッグして選んだ部分を回転するつまみ -->
 							<template v-if="selectionBox != null && canDraw">
 								<line :x1="selectionBox.cx" :y1="selectionBox.minY" :x2="selectionBox.cx" :y2="selectionBox.minY - 28 / view.scale" :class="$style.selectionOutline"/>
@@ -243,6 +285,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 									@pointermove.stop="onRotateHandleMove"
 									@pointerup.stop="onRotateHandleUp"
 									@pointercancel.stop="onRotateHandleUp"
+									@lostpointercapture.stop="onRotateHandleUp"
+								/>
+								<!-- JUICE: ドラッグして選んだ部分を拡大縮小するつまみ(右下の角。真ん中を中心に、縦横同じ倍率で) -->
+								<rect
+									:x="selectionBox.maxX - 8 / view.scale"
+									:y="selectionBox.maxY - 8 / view.scale"
+									:width="16 / view.scale"
+									:height="16 / view.scale"
+									:class="$style.scaleHandle"
+									@pointerdown.stop.prevent="onScaleHandleDown"
+									@pointermove.stop="onScaleHandleMove"
+									@pointerup.stop="onScaleHandleUp"
+									@pointercancel.stop="onScaleHandleUp"
+									@lostpointercapture.stop="onScaleHandleUp"
 								/>
 							</template>
 						</g>
@@ -261,6 +317,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-for="(layer, i) in debugInfo.layers" :key="i">&nbsp;&nbsp;{{ layer.name }}: {{ layer.strokes }}</div>
 					</template>
 					<div>{{ i18n.ts._drawRoom.debugRoomStrokes }}: {{ debugInfo.roomStrokes }} ({{ debugInfo.roomLayers }} {{ i18n.ts._drawRoom.debugLayers }})</div>
+					<!-- JUICE: 部屋全体の線のデータ量(この画面に届いている分からの見積もり。ほかの人の下描きは入らない)と上限 -->
+					<div>{{ i18n.ts._drawRoom.debugRoomBytes }}: ≈{{ formatMegabytes(debugInfo.roomBytes) }}<template v-if="roomMegabytesLimit != null"> / {{ roomMegabytesLimit }}MB</template></div>
 					<div>{{ i18n.ts._drawRoom.debugPending }}: {{ debugInfo.pending }}</div>
 					<div>{{ i18n.ts._drawRoom.debugCanvas }}: {{ room.canvasWidth }}×{{ room.canvasHeight }} / {{ Math.round(view.scale * 100) }}% / {{ rotationDegrees }}°</div>
 					<div>{{ i18n.ts._drawRoom.debugRedraw }}: {{ debugInfo.lastRedrawMs.toFixed(1) }}ms ({{ debugInfo.lastRedrawFull ? i18n.ts._drawRoom.debugRedrawFull : i18n.ts._drawRoom.debugRedrawRegion }})</div>
@@ -282,6 +340,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkAvatar v-if="userMap.get(userId)" :class="$style.cursorAvatar" :user="userMap.get(userId)!"/>
 				</div>
 				</template>
+				<!-- JUICE: 自分がなでているところにも手を出す(ほかの人の画面と同じ見た目。指・マウスにぴったりついてくる) -->
+				<div
+					v-if="myPetAt != null"
+					:class="[$style.cursor, $style.cursorSelf]"
+					:style="{ transform: `translate(${canvasToView(myPetAt.x, myPetAt.y)[0]}px, ${canvasToView(myPetAt.x, myPetAt.y)[1]}px)` }"
+				>
+					<i class="ti ti-hand-stop" :class="$style.cursorHand"></i>
+				</div>
 				<!-- JUICE: なでたところに出るハート(自分のなでた分も出す) -->
 				<i
 					v-for="heart in petHearts"
@@ -297,6 +363,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<button class="_button" :class="$style.selectionAction" @click="tool = 'move'"><i class="ti ti-arrows-move"></i> {{ i18n.ts._drawRoom.moveTool }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionLeft" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionLeft" @click="rotateSelection(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionRight" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionRight" @click="rotateSelection(ROTATE_STEP)"><i class="ti ti-rotate-clockwise-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateRight }}</span></button>
+					<!-- JUICE: 選んだ部分を拡大・縮小する(つまみを使えないとき用) -->
+					<button v-tooltip="i18n.ts._drawRoom.enlargeSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.enlargeSelection" @click="scaleSelection(SELECTION_SCALE_STEP)"><i class="ti ti-arrows-maximize"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortEnlarge }}</span></button>
+					<button v-tooltip="i18n.ts._drawRoom.shrinkSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.shrinkSelection" @click="scaleSelection(1 / SELECTION_SCALE_STEP)"><i class="ti ti-arrows-minimize"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortShrink }}</span></button>
+					<!-- JUICE: 選んだ部分を左右反転する(選んだ形の真ん中を軸に) -->
+					<button v-tooltip="i18n.ts._drawRoom.flipSelectionHorizontal" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionHorizontal" @click="flipSelectionHorizontal"><i class="ti ti-flip-vertical"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipHorizontal }}</span></button>
+					<!-- JUICE: 選んだ部分を上下反転する(選んだ形の真ん中を軸に) -->
+					<button v-tooltip="i18n.ts._drawRoom.flipSelectionVertical" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionVertical" @click="flipSelectionVertical"><i class="ti ti-flip-horizontal"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipVertical }}</span></button>
 					<button class="_button" :class="$style.selectionAction" @click="deleteSelectedStrokes"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.clearSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.clearSelection" @click="clearStrokeSelection"><i class="ti ti-x"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortDeselect }}</span></button>
 				</div>
@@ -308,8 +381,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<select v-model="imageFormat" :class="$style.selectionFormat" :aria-label="i18n.ts._drawRoom.imageFormat">
 							<option v-for="option in imageFormatOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
 						</select>
-						<button class="_button" :class="$style.selectionAction" @click="saveImageToDrive(selection)"><i class="ti ti-cloud-upload"></i> {{ i18n.ts._drawRoom.saveImage }}</button>
-						<button class="_button" :class="$style.selectionAction" @click="postImage(selection)"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</button>
+						<template v-if="!isGuest">
+							<button class="_button" :class="$style.selectionAction" @click="saveImageToDrive(selection)"><i class="ti ti-cloud-upload"></i> {{ i18n.ts._drawRoom.saveImage }}</button>
+							<button class="_button" :class="$style.selectionAction" @click="postImage(selection)"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</button>
+						</template>
 						<button class="_button" :class="$style.selectionAction" @click="downloadImage(selection)"><i class="ti ti-download"></i> {{ i18n.ts._drawRoom.downloadImage }}</button>
 					</template>
 					<button v-tooltip="i18n.ts.cancel" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts.cancel" @click="cancelSelecting"><i class="ti ti-x"></i></button>
@@ -333,16 +408,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</svg>
 					</div>
 					<div :class="$style.minimapBar">
-						<!-- JUICE: なでるツール(見学者も使える。絵は変わらず、なでているのがほかの人に見える) -->
-						<button
-							v-if="canPet"
-							v-tooltip="i18n.ts._drawRoom.petToolHint"
-							class="_button"
-							:class="[$style.minimapToggle, { [$style.minimapToggleActive]: petting }]"
-							:aria-label="i18n.ts._drawRoom.petTool"
-							:aria-pressed="petting"
-							@click="petting = !petting"
-						><i class="ti ti-hand-stop"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.petTool }}</span></button>
 						<!-- JUICE: キャンバスの回転(PC向け。スマホ・タブレットは2本指で回せる) -->
 						<button v-tooltip="i18n.ts._drawRoom.rotateLeft" class="_button" :class="$style.minimapToggle" :aria-label="i18n.ts._drawRoom.rotateLeft" @click="rotateBy(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
 						<button v-if="rotationDegrees !== 0" v-tooltip="i18n.ts._drawRoom.resetRotation" class="_button" :class="$style.zoomLevel" :aria-label="i18n.ts._drawRoom.resetRotation" @click="resetRotation">{{ rotationDegrees }}°</button>
@@ -424,7 +489,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="[$style.layerRow, { [$style.layerRowOffline]: !room.isEnded && !onlineUserIds.has(userId) }]">
 					<!-- JUICE: 今この部屋を開いている人は緑の点、閉じている人は薄く表示する -->
 					<span :class="$style.layerAvatarWrap">
-						<MkAvatar v-if="userMap.get(userId)" :class="$style.layerAvatar" :user="userMap.get(userId)!"/>
+						<!-- JUICE: アイコン・名前からプロフィールを開ける(マウスを乗せると簡単なプロフィール) -->
+						<MkAvatar v-if="userMap.get(userId)" :class="$style.layerAvatar" :user="userMap.get(userId)!" link preview/>
 						<span
 							v-if="!room.isEnded"
 							v-tooltip="onlineUserIds.has(userId) ? i18n.ts._drawRoom.online : i18n.ts._drawRoom.offline"
@@ -435,7 +501,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</span>
 					<!-- JUICE: 名前が長くても、部屋主・描く人のアイコンは省略せずに出す -->
 					<span :class="$style.layerIdentity">
-						<span :class="$style.layerName"><MkUserName v-if="userMap.get(userId)" :user="userMap.get(userId)!"/></span>
+						<span :class="$style.layerName"><MkA v-if="userMap.get(userId)" v-user-preview="userId" :to="userPage(userMap.get(userId)!)" :class="$style.userLink"><MkUserName :user="userMap.get(userId)!"/></MkA></span>
 						<i v-if="userId === room.ownerId" v-tooltip="i18n.ts._drawRoom.owner" class="ti ti-crown" :class="$style.ownerIcon" role="img" :aria-label="i18n.ts._drawRoom.owner"></i>
 						<i v-if="!room.isEnded && room.members.some(m => m.id === userId)" v-tooltip="i18n.ts._drawRoom.members" class="ti ti-brush" :class="$style.drawingIcon" role="img" :aria-label="i18n.ts._drawRoom.members"></i>
 					</span>
@@ -573,10 +639,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div ref="chatListEl" :class="$style.chatList">
 					<div v-for="item in chatMessages" :key="item.message.id" :class="$style.chatItem">
-						<MkAvatar :class="$style.chatAvatar" :user="item.user"/>
+						<!-- JUICE: アイコン・名前からプロフィールを開ける(マウスを乗せると簡単なプロフィール) -->
+						<MkAvatar :class="$style.chatAvatar" :user="item.user" link preview/>
 						<div :class="$style.chatBody">
 							<div :class="$style.chatName">
-								<MkUserName :user="item.user"/>
+								<MkA v-user-preview="item.user.id" :to="userPage(item.user)" :class="$style.userLink"><MkUserName :user="item.user"/></MkA>
 								<!-- JUICE: 発言した時刻(「◯分前」。マウスを乗せると日時) -->
 								<MkTime :time="item.message.createdAt" :class="$style.chatTime"/>
 							</div>
@@ -585,7 +652,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 						<!-- JUICE: ほかの人の発言は通報できる -->
 						<button
-							v-if="item.user.id !== $i.id && !room.viewOnly"
+							v-if="item.user.id !== $i.id && !room.viewOnly && !isGuest"
 							v-tooltip="i18n.ts.menu"
 							class="_button"
 							:class="$style.chatMenuButton"
@@ -594,7 +661,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						><i class="ti ti-dots"></i></button>
 					</div>
 				</div>
-				<form v-if="!room.isEnded && !room.viewOnly" :class="$style.chatForm" @submit.prevent="sendChat">
+				<form v-if="!room.isEnded && !room.viewOnly && !isGuest" :class="$style.chatForm" @submit.prevent="sendChat">
 					<input ref="chatInputEl" v-model="chatText" :class="$style.chatInput" type="text" maxlength="500" :placeholder="i18n.ts._drawRoom.chatPlaceholder" :aria-label="i18n.ts._drawRoom.chatPlaceholder"/>
 					<button v-tooltip="i18n.ts.emoji" class="_button" :class="$style.chatSend" type="button" :aria-label="i18n.ts.emoji" @click="insertChatEmoji"><i class="ti ti-mood-happy"></i></button>
 					<button v-tooltip="i18n.ts.send" class="_button" :class="$style.chatSend" type="submit" :disabled="chatText.trim().length === 0" :aria-label="i18n.ts.send"><i class="ti ti-send"></i></button>
@@ -603,6 +670,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 	</div>
+<!-- JUICE: 長押しでスポイトの手応え。押している間は0.5秒で満ちる輪、スポイトになったら指の上に拾った色を出す -->
+<Teleport to="body">
+	<div
+		v-if="longPressIndicator != null"
+		:class="[$style.longPress, { [$style.longPressPicking]: longPressIndicator.picking }]"
+		:style="{ left: `${longPressIndicator.x}px`, top: `${longPressIndicator.y}px`, '--juice-long-press-color': longPressIndicator.color, '--juice-long-press-ms': `${LONG_PRESS_MS}ms` }"
+		aria-hidden="true"
+	>
+		<svg v-if="!longPressIndicator.picking" viewBox="0 0 56 56" :class="$style.longPressRing"><circle cx="28" cy="28" r="24"/></svg>
+		<div v-else :class="$style.longPressSwatch"></div>
+	</div>
+</Teleport>
 </PageWithHeader>
 </template>
 
@@ -621,6 +700,10 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { url } from '@@/js/config.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
+import { haptic } from '@/utility/haptic.js';
+import { juicePublicSettingsCache } from '@/cache.js';
+import { userPage } from '@/filters/user.js';
+import type { MenuItem } from '@/types/menu.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { uploadFile } from '@/utility/drive.js';
@@ -631,10 +714,11 @@ import { useStream } from '@/stream.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
-import { ensureSignin, iAmModerator } from '@/i.js';
+import { $i as signedInUser, iAmModerator } from '@/i.js';
+import { pleaseLogin } from '@/utility/please-login.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { floodFillMask, enclosedFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
-import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, rotatePoints, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
+import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, transformPoints, DRAW_STROKE_MAX_SIZE, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
 import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -643,7 +727,10 @@ const props = defineProps<{
 	roomId: string;
 }>();
 
-const $i = ensureSignin();
+// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見るだけで開ける。そのときは誰とも一致しないidで扱い、
+// 描く・チャットを書く・なでる・通報・ドライブへの保存・投稿は出さない(ロールの値は使わない所だけで使うので、仮の値にしておく)
+const isGuest = signedInUser == null;
+const $i = signedInUser ?? { id: '', policies: { drawRoomMaxStrokes: 30000, drawRoomMaxStrokeMegabytes: 64, drawRoomMaxCanvasSize: 0 } };
 const router = useRouter();
 
 // JUICE: よく使う色。これ以外はカラーピッカーで選ぶ
@@ -714,14 +801,19 @@ const sizeMax = ref(60);
 let brushSizeInitialized = false;
 
 // JUICE: 太さは、1%を1px・100%をそのキャンバスで一番太い筆とした割合で選ぶ。細い筆を細かく選べるよう、割合の2乗で太さにする
-// (太さは小数のまま持ち、割合との行き来でつまみが戻らないようにする)
+// (太さは小数のまま持ち、割合との行き来でつまみが戻らないようにする)。100%より上(250%まで)は、100%の太さに割合を掛ける
+const SIZE_PERCENT_MAX = 250;
+
 function sizeToPercent(value: number, max: number): number {
+	if (value > max && max > 0) return Math.min(SIZE_PERCENT_MAX, Math.round(value / max * 100));
 	const t = max > 1 ? Math.max(0, value - 1) / (max - 1) : 1;
 	return Math.max(1, Math.min(100, Math.round(1 + Math.sqrt(t) * 99)));
 }
 
 function percentToSize(percent: number, max: number): number {
-	const t = ((Math.max(1, Math.min(100, percent)) - 1) / 99) ** 2;
+	const p = Math.max(1, Math.min(SIZE_PERCENT_MAX, percent));
+	if (p > 100) return Math.round(max * p) / 100;
+	const t = ((p - 1) / 99) ** 2;
 	return Math.round((1 + t * (max - 1)) * 100) / 100;
 }
 
@@ -961,6 +1053,37 @@ async function deleteAllMyLayers(): Promise<void> {
 	activeLayerId.value = id;
 }
 
+// JUICE: レイヤーの結合。上(+1)・下(-1)のとなりのレイヤーに結合する(下描きどうし・皆に見えるレイヤーどうしだけ)
+function mergeMenuItems(meta: LayerMeta, index: number): MenuItem[] {
+	const items: MenuItem[] = [];
+	for (const direction of [1, -1] as const) {
+		const target = myLayers.value[index + direction] as LayerMeta | undefined;
+		if (target == null || (target.private === true) !== (meta.private === true)) continue;
+		items.push({
+			text: direction === 1 ? i18n.ts._drawRoom.mergeLayerUp : i18n.ts._drawRoom.mergeLayerDown,
+			icon: direction === 1 ? 'ti ti-layers-selected' : 'ti ti-layers-selected-bottom',
+			action: () => mergeMyLayer(meta, target),
+		});
+	}
+	return items.length > 0 ? [{ type: 'divider' }, ...items] : [];
+}
+
+async function mergeMyLayer(meta: LayerMeta, target: LayerMeta): Promise<void> {
+	const text = [i18n.tsx._drawRoom.mergeLayerConfirm({ from: layerName($i.id, meta), into: layerName($i.id, target) })];
+	// JUICE: 結合しても、結合元の線は結合元の濃さ・合成モードのまま残る(消しゴムもそれぞれの中だけに効く)。
+	// 合成モードは下のレイヤーとの重ね方なので、ひとつのレイヤーにまとめると同じ見た目にならないことがある
+	for (const layer of [meta, target]) {
+		if (layer.blend != null) text.push(i18n.tsx._drawRoom.mergeLayerBlendLost({ name: layerName($i.id, layer) }));
+	}
+	const { canceled } = await os.confirm({ type: 'warning', text: text.join('\n') });
+	if (canceled) return;
+	// 名前の無いレイヤーは並びの番号で表示するので、1枚減って番号がずれないよう、先に今の名前を付けておく
+	if (myLayers.value.some(layer => layer.name === '')) sendMyLayers(withFixedNames(myLayers.value));
+	clearStrokeSelection();
+	activeLayerId.value = target.id;
+	connection.value?.send('mergeLayer', { from: meta.id, into: target.id });
+}
+
 function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 	const index = myLayers.value.findIndex(layer => layer.id === meta.id);
 	os.popupMenu([{
@@ -991,7 +1114,7 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.moveLayerDown,
 		icon: 'ti ti-arrow-down',
 		action: () => moveMyLayer(meta.id, -1),
-	}] : []), ...(myLayers.value.length > 1 ? [{ type: 'divider' as const }, {
+	}] : []), ...mergeMenuItems(meta, index), ...(myLayers.value.length > 1 ? [{ type: 'divider' as const }, {
 		text: i18n.ts._drawRoom.deleteLayer,
 		icon: 'ti ti-trash',
 		danger: true,
@@ -1002,7 +1125,21 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 // レイヤー一覧の表示順(描いたことのある人+今のメンバー)
 const layerUserIds = ref<string[]>([]);
 // JUICE: 部屋を開いたときの線の読み込みの進み具合(読み込み中でなければnull)
-const canvasLoading = ref<{ done: number; total: number } | null>(null);
+// JUICE: 読み込みの進み具合。totalが0の間はサーバーから線を受け取っている(量がまだ分からない)。
+// currentは読み込んでいるレイヤー(fractionは0〜1。形に直すのが前半、描くのが後半)。全体はデータ量で数える
+const canvasLoading = ref<{
+	total: number;
+	doneLayers: number;
+	totalBytes: number;
+	doneBytes: number;
+	overall: number;
+	current: { userId: string; layerName: string; fraction: number } | null;
+} | null>(null);
+
+function formatLoadBytes(bytes: number): string {
+	return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)}KB` : `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
 // JUICE: 今この部屋を開いている人(オンライン)。レイヤー一覧には、描いていない見学中の人もオンラインの間は出す
 const onlineUserIds = ref(new Set<string>());
 // JUICE: 終了後は、線が残っている人のレイヤーだけを出す(見学していた人・描いていない参加者は出さない)
@@ -1043,7 +1180,7 @@ const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: numb
 // JUICE: なでるツール。オンの間は、ドラッグしても描かず・表示も動かさず、なでている位置を送る
 const petting = ref(false);
 // なでられるのは開催中の部屋だけ(終了した部屋・確認のために開いている部屋では、ボタンも出さない)
-const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly);
+const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly && !isGuest);
 watch(canPet, (value) => {
 	if (!value) petting.value = false;
 });
@@ -1052,6 +1189,8 @@ watch(canPet, (value) => {
 const PET_STALE_MS = 800;
 const petStaleTimers = new Map<string, number>();
 let petPointerId: number | null = null;
+// 自分がなでているところ(キャンバス座標)。なでていなければnull
+const myPetAt = ref<{ x: number; y: number } | null>(null);
 // なでたところに出るハート(キャンバス座標)。しばらくしたら消す
 const petHearts = ref<{ id: number; x: number; y: number; drift: number }[]>([]);
 let petHeartSeq = 0;
@@ -1083,6 +1222,9 @@ const contentAccepted = ref(acceptedRoomIds.has(props.roomId));
 watch(() => props.roomId, (roomId) => {
 	contentAccepted.value = acceptedRoomIds.has(roomId);
 });
+// JUICE: サーバーのルールの「絵チャでのNSFWについて」
+const DRAW_ROOM_NSFW_RULES_URL = 'https://docs.mk-juice.dev/service/rules#%E7%B5%B5%E3%83%81%E3%83%A3%E3%81%A6%E3%82%99%E3%81%AEnsfw%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6';
+
 const contentGated = computed(() => {
 	const r = room.value;
 	if (r == null || isOwner.value || contentAccepted.value) return false;
@@ -1181,7 +1323,7 @@ async function init(): Promise<void> {
 		e.onThumbnailChange = updateMinimap;
 		fitToScreen();
 
-		canvasLoading.value = { done: 0, total: 0 };
+		canvasLoading.value = { total: 0, doneLayers: 0, totalBytes: 0, doneBytes: 0, overall: 0, current: null };
 		await syncState(generation);
 	} catch (err) {
 		if (generation === initGeneration) error.value = err;
@@ -1218,40 +1360,71 @@ async function syncState(generation: number): Promise<void> {
 		rememberUsers(chat.map(item => item.user));
 		// JUICE: 線が多いと描くのに時間がかかる。使えれば複数のWorkerで同時にレイヤーを描いて画像で受け取り、
 		// 使えなければ少しずつ(1回あたりLOAD_SLICE_MSまで)描いて合間に画面を更新する(固まって見えないように)
-		const jobs: { key: string; encoded: DrawStroke[] }[] = [];
+		type Job = { key: string; encoded: DrawStroke[]; userId: string; layerName: string; bytes: number; groups: LayerMeta['groups'] };
+		const jobs: Job[] = [];
 		for (const layer of layers) {
 			// レイヤーの一覧を反映してから、線をそれぞれのレイヤーに入れる(線の無いレイヤーも空にし直す)
 			applyUserLayers(layer.userId, layer.layers);
 			const byKey = new Map<string, DrawStroke[]>(layer.layers.map(meta => [drawLayerKey(layer.userId, meta.id), []]));
 			for (const stroke of layer.strokes) byKey.get(keyFor(layer.userId, stroke.layer))?.push(stroke);
-			for (const [key, encoded] of byKey) jobs.push({ key, encoded });
+			for (const meta of layer.layers) {
+				const key = drawLayerKey(layer.userId, meta.id);
+				const encoded = byKey.get(key) ?? [];
+				// 受け取ったデータの量(JSONの大きさのおおよそ)
+				const bytes = encoded.reduce((sum, stroke) => sum + 140 + stroke.points.length + (stroke.clip?.length ?? 0), 0);
+				jobs.push({ key, encoded, userId: layer.userId, layerName: layerName(layer.userId, meta), bytes, groups: meta.groups });
+			}
 		}
 		for (const job of jobs) e.beginLoadLayer(job.key);
-		if (canvasLoading.value != null) canvasLoading.value = { done: 0, total: jobs.length };
-		const progress = () => {
-			if (canvasLoading.value != null) canvasLoading.value = { done: canvasLoading.value.done + 1, total: jobs.length };
+		// 進み具合(データ量で数える)。読み込んでいるレイヤーの進み具合は、形に直すのが前半・描くのが後半
+		const totalBytes = jobs.reduce((sum, job) => sum + job.bytes, 0);
+		let doneBytes = 0;
+		let doneLayers = 0;
+		let current: { job: Job; fraction: number } | null = null;
+		const report = () => {
+			if (canvasLoading.value == null) return;
+			const partial = current != null ? current.job.bytes * current.fraction : 0;
+			canvasLoading.value = {
+				total: jobs.length,
+				doneLayers,
+				totalBytes,
+				doneBytes: doneBytes + partial,
+				overall: totalBytes > 0 ? Math.min(1, (doneBytes + partial) / totalBytes) : doneLayers / Math.max(1, jobs.length),
+				current: current != null ? { userId: current.job.userId, layerName: current.job.layerName, fraction: current.fraction } : null,
+			};
 		};
+		const progress = (job: Job) => {
+			doneBytes += job.bytes;
+			doneLayers++;
+			current = null;
+			report();
+		};
+		report();
 		let deadline = performance.now() + LOAD_SLICE_MS;
 		const yieldIfNeeded = async () => {
 			if (performance.now() < deadline) return true;
+			report();
 			await nextFrame();
 			deadline = performance.now() + LOAD_SLICE_MS;
 			return generation === initGeneration;
 		};
 		// 画面を固めないよう、線を描画用の形にするのも少しずつ
-		const decodeAll = async (encoded: DrawStroke[]) => {
+		const decodeAll = async (job: Job) => {
 			const strokes: CanvasStroke[] = [];
-			for (const stroke of encoded) {
+			current = { job, fraction: 0 };
+			for (const stroke of job.encoded) {
 				strokes.push(decodeStroke(stroke));
+				current.fraction = 0.5 * strokes.length / job.encoded.length;
 				if (!await yieldIfNeeded()) return null;
 			}
 			return strokes;
 		};
-		const drawOnMainThread = async (key: string, strokes: CanvasStroke[]) => {
-			e.beginLoadLayer(key);
+		const drawOnMainThread = async (job: Job, strokes: CanvasStroke[]) => {
+			e.beginLoadLayer(job.key);
 			let i = 0;
 			while (i < strokes.length) {
-				i += e.loadStrokes(key, strokes, i, deadline);
+				i += e.loadStrokes(job.key, strokes, i, deadline);
+				if (current != null) current.fraction = 0.5 + 0.5 * i / strokes.length;
 				if (!await yieldIfNeeded()) return false;
 			}
 			return true;
@@ -1260,19 +1433,21 @@ async function syncState(generation: number): Promise<void> {
 		try {
 			// 線の多いレイヤーから先に頼む(Workerの待ち時間を減らす)。受け取る順も同じにし、同時に頼むのは
 			// Workerの数+1までにする(描き終えた大きな画像を、受け取るまで溜め込まないように)
-			for (const job of jobs) if (job.encoded.length === 0) progress();
+			for (const job of jobs) if (job.encoded.length === 0) progress(job);
 			const ordered = jobs.filter(job => job.encoded.length > 0).sort((a, b) => b.encoded.length - a.encoded.length);
 			const inflight: Promise<ImageBitmap | null>[] = [];
 			let requested = 0;
 			const requestNext = () => {
 				if (renderer == null || requested >= ordered.length) return;
-				inflight.push(renderer.render(r.canvasWidth, r.canvasHeight, ordered[requested++].encoded));
+				const job = ordered[requested++];
+				inflight.push(renderer.render(r.canvasWidth, r.canvasHeight, job.encoded, job.groups));
 			};
 			for (let i = 0; i < (renderer?.concurrency ?? 0) + 1; i++) requestNext();
 			try {
 				for (const job of ordered) {
-					const strokes = await decodeAll(job.encoded);
+					const strokes = await decodeAll(job);
 					if (strokes == null) return;
+					report();
 					const image = renderer != null ? await inflight.shift()! : null;
 					requestNext();
 					if (generation !== initGeneration) {
@@ -1280,8 +1455,8 @@ async function syncState(generation: number): Promise<void> {
 						return;
 					}
 					if (image != null) e.loadLayerImage(job.key, strokes, image);
-					else if (!await drawOnMainThread(job.key, strokes)) return;
-					progress();
+					else if (!await drawOnMainThread(job, strokes)) return;
+					progress(job);
 				}
 			} finally {
 				// 途中でやめたときに、受け取らなかった画像を閉じる
@@ -1305,7 +1480,13 @@ async function syncState(generation: number): Promise<void> {
 function connect(): void {
 	const c = markRaw(useStream().useChannel('drawRoom', { roomId: props.roomId }));
 	connection.value = c;
-	c.on('strokePart', payload => applyEvent(() => {
+	// JUICE: 描いている途中の線は、サーバーが一定間隔でまとめて送ってくる
+	c.on('strokeParts', payload => applyEvent(() => {
+		for (const part of payload.parts) applyStrokePart(part);
+	}));
+	c.on('strokePart', payload => applyEvent(() => applyStrokePart(payload)));
+
+	function applyStrokePart(payload: Parameters<Misskey.Channels['drawRoom']['events']['strokePart']>[0]): void {
 		// 自分の線はローカルで描いているので、自分宛てに戻ってきた分は無視する
 		if (payload.userId === $i.id) return;
 		engine.value?.addStrokePart(keyFor(payload.userId, payload.layer), {
@@ -1322,7 +1503,8 @@ function connect(): void {
 			points: decodePoints(payload.points),
 		});
 		if (!layerUserIds.value.includes(payload.userId)) refreshLayerList();
-	}));
+	}
+
 	// JUICE: カーソルはサーバーが一定間隔で全員分をまとめて送ってくる
 	c.on('cursors', payload => {
 		const now = Date.now();
@@ -1434,6 +1616,16 @@ function connect(): void {
 		e.beginLoadLayer(key);
 		e.loadStrokes(key, payload.strokes.map(decodeStroke), 0, Infinity);
 		e.finishLoad([key]);
+	}));
+	// JUICE: レイヤーを結合した(結合元のレイヤーは直前のlayersUpdatedで消えているので、結合先のレイヤーの線を入れ直す)
+	c.on('layerMerged', payload => applyEvent(() => {
+		const e = engine.value;
+		if (e == null) return;
+		const key = keyFor(payload.userId, payload.layer);
+		e.beginLoadLayer(key);
+		e.loadStrokes(key, payload.strokes.map(decodeStroke), 0, Infinity);
+		e.finishLoad([key]);
+		if (payload.userId === $i.id) pruneStrokeSelection();
 	}));
 	c.on('strokesDeleted', payload => applyEvent(() => {
 		if (payload.userId === $i.id) return;
@@ -1718,6 +1910,9 @@ function resetRotation(): void {
 }
 
 const ROTATE_STEP = Math.PI / 12; // 15°
+// JUICE: 点の形式(1/8px単位のint16)で表せる座標の範囲
+const POINT_MIN = -32768 / POINT_SCALE;
+const POINT_MAX = 32767 / POINT_SCALE;
 // バケツで「似た色」とみなす差(0〜255)
 const BUCKET_TOLERANCE = 48;
 
@@ -1797,12 +1992,21 @@ type DebugInfo = {
 	layers: { name: string; strokes: number }[];
 	roomStrokes: number;
 	roomLayers: number;
+	roomBytes: number;
 	pending: number;
 	lastRedrawMs: number;
 	lastRedrawFull: boolean;
 	lastRenderMs: number;
 };
 const debugInfo = ref<DebugInfo | null>(null);
+
+// JUICE: 部屋全体の線のデータ量の上限(MB。JUICEの設定)。デバッグ情報を出すときに読む
+const roomMegabytesLimit = ref<number | null>(null);
+watch(showDebugInfo, (value) => {
+	if (value && roomMegabytesLimit.value == null) {
+		juicePublicSettingsCache.fetch().then(settings => { roomMegabytesLimit.value = settings.drawRoomMaxRoomMegabytes; }).catch(() => {});
+	}
+}, { immediate: true });
 
 // 上限に達した知らせを最後に出した時刻
 let lastLimitToastAt = 0;
@@ -1833,13 +2037,14 @@ function updateDebugInfo(): void {
 		for (const stroke of strokes) myBytes += estimateStrokeBytes(stroke);
 		return { name: layerName($i.id, meta), strokes: strokes.length };
 	});
-	const summary = e.debugSummary();
+	const summary = e.debugSummary(estimateStrokeBytes);
 	debugInfo.value = {
 		myStrokes,
 		myBytes,
 		layers,
 		roomStrokes: summary.strokes,
 		roomLayers: summary.layers,
+		roomBytes: summary.bytes,
 		pending: summary.pending,
 		lastRedrawMs: e.stats.lastRedrawMs,
 		lastRedrawFull: e.stats.lastRedrawFull,
@@ -1900,7 +2105,10 @@ function dragHandle(ev: PointerEvent, onMove: (e: PointerEvent) => void): void {
 	ev.preventDefault();
 	const handle = ev.currentTarget as HTMLElement;
 	handle.setPointerCapture(ev.pointerId);
+	// JUICE: ドラッグしている間は、つまみの色を変えたままにする(CSSのdata-dragging)
+	handle.dataset.dragging = '';
 	const end = () => {
+		delete handle.dataset.dragging;
 		handle.removeEventListener('pointermove', onMove);
 		handle.removeEventListener('pointerup', end);
 		handle.removeEventListener('pointercancel', end);
@@ -2038,6 +2246,11 @@ let activeStroke: ActiveStroke | null = null;
 let sendTimer: number | null = null;
 // タッチ操作中の指(2本指での拡大縮小・移動用)
 const touches = new Map<number, { x: number; y: number }>();
+// JUICE: 2本指でタップしたら取り消し、3本指でタップしたらやり直し(指を動かさずに、すぐ離したとき)。
+// 最初の指が触れてから全ての指が離れるまでを1回として見る
+const MULTI_TAP_MS = 350;
+const MULTI_TAP_MOVE_PX = 12;
+let multiTap: { startAt: number; maxTouches: number; moved: boolean; starts: Map<number, { x: number; y: number }> } | null = null;
 let pinch: { distance: number; centerX: number; centerY: number; angle: number; twist: number; rotating: boolean } | null = null;
 // JUICE: 2本指で拡大縮小するだけのつもりで少しひねれてしまっても回らないよう、これ以上ひねったら回し始める
 const PINCH_ROTATE_START = (15 * Math.PI) / 180;
@@ -2245,11 +2458,17 @@ function onPointerDown(ev: PointerEvent): void {
 	brushPanelOpen.value = false;
 	if (ev.pointerType === 'touch') {
 		touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+		if (touches.size === 1 || multiTap == null) {
+			multiTap = { startAt: Date.now(), maxTouches: touches.size, moved: false, starts: new Map([[ev.pointerId, { x: ev.clientX, y: ev.clientY }]]) };
+		} else {
+			multiTap.starts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+			multiTap.maxTouches = Math.max(multiTap.maxTouches, touches.size);
+		}
 		// 2本目の指が触れたら、描きかけの線は取り消して拡大縮小・移動に切り替える
 		if (touches.size >= 2) {
 			// 1本目の指で始めた操作(線・範囲選択・囲って塗る・移動・表示の移動など)は取りやめる
 			cancelLongPress();
-			pickingPointerId = null;
+			endLongPressPicking();
 			cancelStroke();
 			selectFrom = null;
 			selectGesture.value = null;
@@ -2266,6 +2485,8 @@ function onPointerDown(ev: PointerEvent): void {
 	if (petting.value && canPet.value && !spaceHeld.value && ev.button === 0 && !selecting.value) {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		petPointerId = ev.pointerId;
+		const [x, y] = toCanvasPoint(ev);
+		myPetAt.value = { x, y };
 		sendCursor(ev, true);
 		return;
 	}
@@ -2334,6 +2555,8 @@ const LONG_PRESS_MOVE_PX = 10;
 let longPress: { pointerId: number; startX: number; startY: number; moved: number; last: PointerEvent; timer: number } | null = null;
 // 長押しでスポイトにした指。離すまで、動かした先の色を拾い続ける
 let pickingPointerId: number | null = null;
+// 長押しの手応えの表示(画面の座標)。pickingは、スポイトになって色を拾っているか
+const longPressIndicator = ref<{ x: number; y: number; picking: boolean; color: string } | null>(null);
 
 function startLongPress(ev: PointerEvent): void {
 	cancelLongPress();
@@ -2352,14 +2575,24 @@ function startLongPress(ev: PointerEvent): void {
 			if (activeStroke != null && activeStroke.pointerId === pointerId) cancelStroke();
 			pickingPointerId = pointerId;
 			pickColorAt(press.last);
+			haptic();
+			longPressIndicator.value = { x: press.last.clientX, y: press.last.clientY, picking: true, color: color.value };
 		}, LONG_PRESS_MS),
 	};
+	longPressIndicator.value = { x: ev.clientX, y: ev.clientY, picking: false, color: color.value };
 }
 
 function cancelLongPress(): void {
 	if (longPress == null) return;
 	window.clearTimeout(longPress.timer);
 	longPress = null;
+	if (longPressIndicator.value != null && !longPressIndicator.value.picking) longPressIndicator.value = null;
+}
+
+// 長押しのスポイトをやめる(指を離した・2本目の指が触れた)
+function endLongPressPicking(): void {
+	pickingPointerId = null;
+	longPressIndicator.value = null;
 }
 //#endregion
 
@@ -2406,8 +2639,14 @@ function onPointerLeave(): void {
 
 function onPointerMove(ev: PointerEvent): void {
 	if (touches.size < 2) sendCursor(ev);
+	if (petPointerId != null && petPointerId === ev.pointerId) {
+		const [x, y] = toCanvasPoint(ev);
+		myPetAt.value = { x, y };
+	}
 	if (ev.pointerType === 'touch' && touches.has(ev.pointerId)) {
 		touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+		const start = multiTap?.starts.get(ev.pointerId);
+		if (multiTap != null && start != null && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) > MULTI_TAP_MOVE_PX) multiTap.moved = true;
 		if (pinch != null && touches.size >= 2) {
 			const [a, b] = [...touches.values()];
 			const distance = Math.hypot(a.x - b.x, a.y - b.y);
@@ -2436,6 +2675,7 @@ function onPointerMove(ev: PointerEvent): void {
 	}
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
 		pickColorAt(ev);
+		longPressIndicator.value = { x: ev.clientX, y: ev.clientY, picking: true, color: color.value };
 		return;
 	}
 	if (panFrom != null && panFrom.pointerId === ev.pointerId) {
@@ -2503,6 +2743,16 @@ function splitActiveStroke(): void {
 function onPointerUp(ev: PointerEvent): void {
 	if (ev.pointerType === 'touch') {
 		touches.delete(ev.pointerId);
+		// 全ての指が離れたら、2本指・3本指のタップだったかを見る(取りやめられた操作はタップにしない)
+		if (multiTap != null && ev.type === 'pointercancel') multiTap.moved = true;
+		if (touches.size === 0 && multiTap != null) {
+			const tap = multiTap;
+			multiTap = null;
+			if (!tap.moved && Date.now() - tap.startAt <= MULTI_TAP_MS) {
+				if (tap.maxTouches === 2) undo();
+				else if (tap.maxTouches === 3) redo();
+			}
+		}
 		if (touches.size < 2 && pinch != null) {
 			pinch = null;
 			snapRotation();
@@ -2510,11 +2760,12 @@ function onPointerUp(ev: PointerEvent): void {
 	}
 	if (longPress != null && longPress.pointerId === ev.pointerId) cancelLongPress();
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
-		pickingPointerId = null;
+		endLongPressPicking();
 		return;
 	}
 	if (petPointerId != null && petPointerId === ev.pointerId) {
 		petPointerId = null;
+		myPetAt.value = null;
 		// なで終わったことを送る(カーソルの表示を普通に戻す)
 		sendCursor(ev, true);
 		return;
@@ -2693,6 +2944,8 @@ function finishSelectGesture(gesture: { kind: 'select' | 'lasso'; points: number
 }
 
 function clearStrokeSelection(): void {
+	// JUICE: つまみを動かしている途中なら取りやめる(つまみが消えて、離したことが届かなくなるため)
+	cancelRotateDrag();
 	strokeSelection.value = new Set();
 	selectionShapes.value = [];
 	selectionNeedsSplit = false;
@@ -2786,14 +3039,22 @@ watch(tool, (value) => {
 });
 
 //#region 選んだ部分の回転(JUICE)
+// 表示する選んだ形(拡大縮小のつまみをドラッグしている間は、その倍率で真ん中から拡大縮小したもの)
+const displayedSelectionShapes = computed(() => {
+	const factor = scaleDragFactor.value;
+	const pivot = scaleDragPivot.value;
+	if (factor === 1 || pivot == null) return selectionShapes.value;
+	return selectionShapes.value.map(shape => shape.map((v, i) => (i % 2 === 0 ? pivot.x + (v - pivot.x) * factor : pivot.y + (v - pivot.y) * factor)));
+});
+
 // 選んだ形の外枠(回転の中心と、つまみの位置に使う)
 const selectionBox = computed(() => {
-	if (selectionShapes.value.length === 0) return null;
+	if (displayedSelectionShapes.value.length === 0) return null;
 	let minX = Infinity;
 	let minY = Infinity;
 	let maxX = -Infinity;
 	let maxY = -Infinity;
-	for (const shape of selectionShapes.value) {
+	for (const shape of displayedSelectionShapes.value) {
 		for (let i = 0; i + 1 < shape.length; i += 2) {
 			minX = Math.min(minX, shape[i]);
 			maxX = Math.max(maxX, shape[i]);
@@ -2801,17 +3062,24 @@ const selectionBox = computed(() => {
 			maxY = Math.max(maxY, shape[i + 1]);
 		}
 	}
-	return { minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+	return { minY, maxX, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
 });
 const selectionPivot = computed(() => (selectionBox.value == null ? null : { x: selectionBox.value.cx, y: selectionBox.value.cy }));
-// つまみをドラッグしている間の回転の角度(表示だけ。離したときに線を回転する)
+// つまみをドラッグしている間の回転の角度・拡大縮小の倍率(表示だけ。離したときに線を変形する)
 const rotateDragAngle = ref(0);
+const scaleDragFactor = ref(1);
+// 拡大縮小の中心(つまみをドラッグしている間だけ)
+const scaleDragPivot = ref<{ x: number; y: number } | null>(null);
+// JUICE: 拡大縮小の倍率の範囲(1回のドラッグで)
+const SELECTION_SCALE_MIN = 0.05;
+const SELECTION_SCALE_MAX = 20;
 let rotateDrag: { pointerId: number; startAngle: number; pivotX: number; pivotY: number; prepared: { ids: Set<string>; splits: SelectionSplit[] } } | null = null;
 
 function onRotateHandleDown(ev: PointerEvent): void {
 	const pivot = selectionPivot.value;
 	const e = engine.value;
-	if (pivot == null || e == null || !canDraw.value) return;
+	// 拡大縮小・回転のつまみは、同時に1つだけ動かせる
+	if (pivot == null || e == null || !canDraw.value || rotateDrag != null || scaleDrag != null) return;
 	(ev.currentTarget as Element).setPointerCapture(ev.pointerId);
 	const [x, y] = toCanvasPoint(ev);
 	const prepared = prepareSelection();
@@ -2829,68 +3097,162 @@ function onRotateHandleMove(ev: PointerEvent): void {
 	engine.value?.updateRotate(angle, rotateDrag.pivotX, rotateDrag.pivotY);
 }
 
-// 回転のつまみを動かしている途中で、ページを離れた・部屋が終わったときに取りやめる
+// 回転・拡大縮小のつまみを動かしている途中で、ページを離れた・部屋が終わった・選択が外れたときに取りやめる。
+// つまみを押したときに境目で切った線は自分の画面では切れているので、切った内容だけはサーバーへ送る
 function cancelRotateDrag(): void {
-	if (rotateDrag == null) return;
+	const drag = rotateDrag ?? scaleDrag;
+	if (drag == null) return;
 	rotateDrag = null;
+	scaleDrag = null;
 	rotateDragAngle.value = 0;
+	scaleDragFactor.value = 1;
+	scaleDragPivot.value = null;
 	engine.value?.endMove();
+	commitTransform(drag.prepared, { angle: 0, scaleX: 1, scaleY: 1 }, drag.pivotX, drag.pivotY);
 }
 
 function onRotateHandleUp(ev: PointerEvent): void {
 	if (rotateDrag == null || rotateDrag.pointerId !== ev.pointerId) return;
 	const drag = rotateDrag;
 	rotateDrag = null;
-	const angle = ev.type === 'pointercancel' ? 0 : rotateDragAngle.value;
+	// 離した(pointerup)とき以外(取りやめ・つかんでいたのが外れた)は変形しない
+	const angle = ev.type === 'pointerup' ? rotateDragAngle.value : 0;
 	rotateDragAngle.value = 0;
 	engine.value?.endMove();
-	commitRotation(drag.prepared, angle, drag.pivotX, drag.pivotY);
+	commitTransform(drag.prepared, { angle, scaleX: 1, scaleY: 1 }, drag.pivotX, drag.pivotY);
 }
 
 // ボタンで回す(選んだ形の真ん中を中心に)
 function rotateSelection(angle: number): void {
 	const pivot = selectionPivot.value;
 	if (pivot == null || !canDraw.value) return;
-	commitRotation(prepareSelection(), angle, pivot.x, pivot.y);
+	commitTransform(prepareSelection(), { angle, scaleX: 1, scaleY: 1 }, pivot.x, pivot.y);
+}
+
+// JUICE: 左右反転(選んだ形の真ん中を軸に)
+function flipSelectionHorizontal(): void {
+	const pivot = selectionPivot.value;
+	if (pivot == null || !canDraw.value) return;
+	commitTransform(prepareSelection(), { angle: 0, scaleX: -1, scaleY: 1 }, pivot.x, pivot.y);
+}
+
+// JUICE: ボタンで拡大・縮小する(選んだ形の真ん中を中心に。つまみを使えないとき用)
+const SELECTION_SCALE_STEP = 1.25;
+
+function scaleSelection(factor: number): void {
+	const pivot = selectionPivot.value;
+	if (pivot == null || !canDraw.value) return;
+	commitTransform(prepareSelection(), { angle: 0, scaleX: factor, scaleY: factor }, pivot.x, pivot.y);
+}
+
+// JUICE: 上下反転(選んだ形の真ん中を軸に)
+function flipSelectionVertical(): void {
+	const pivot = selectionPivot.value;
+	if (pivot == null || !canDraw.value) return;
+	commitTransform(prepareSelection(), { angle: 0, scaleX: 1, scaleY: -1 }, pivot.x, pivot.y);
+}
+
+// JUICE: 右下のつまみで拡大縮小する(真ん中からの距離の比を倍率にする)
+let scaleDrag: { pointerId: number; startDistance: number; pivotX: number; pivotY: number; prepared: { ids: Set<string>; splits: SelectionSplit[] } } | null = null;
+
+function onScaleHandleDown(ev: PointerEvent): void {
+	const pivot = selectionPivot.value;
+	const e = engine.value;
+	// 拡大縮小・回転のつまみは、同時に1つだけ動かせる
+	if (pivot == null || e == null || !canDraw.value || rotateDrag != null || scaleDrag != null) return;
+	(ev.currentTarget as Element).setPointerCapture(ev.pointerId);
+	const [x, y] = toCanvasPoint(ev);
+	const prepared = prepareSelection();
+	scaleDrag = { pointerId: ev.pointerId, startDistance: Math.max(1, Math.hypot(x - pivot.x, y - pivot.y)), pivotX: pivot.x, pivotY: pivot.y, prepared };
+	scaleDragPivot.value = { x: pivot.x, y: pivot.y };
+	e.beginMove(activeKey.value, prepared.ids);
+}
+
+function onScaleHandleMove(ev: PointerEvent): void {
+	if (scaleDrag == null || scaleDrag.pointerId !== ev.pointerId) return;
+	const [x, y] = toCanvasPoint(ev);
+	let factor = Math.hypot(x - scaleDrag.pivotX, y - scaleDrag.pivotY) / scaleDrag.startDistance;
+	// Shiftを押していれば10%ずつ
+	if (ev.shiftKey) factor = Math.round(factor * 10) / 10;
+	factor = Math.min(SELECTION_SCALE_MAX, Math.max(SELECTION_SCALE_MIN, factor));
+	scaleDragFactor.value = factor;
+	engine.value?.updateTransform(0, factor, factor, scaleDrag.pivotX, scaleDrag.pivotY);
+}
+
+function onScaleHandleUp(ev: PointerEvent): void {
+	if (scaleDrag == null || scaleDrag.pointerId !== ev.pointerId) return;
+	const drag = scaleDrag;
+	scaleDrag = null;
+	// 離した(pointerup)とき以外(取りやめ・つかんでいたのが外れた)は変形しない
+	const factor = ev.type === 'pointerup' ? scaleDragFactor.value : 1;
+	scaleDragFactor.value = 1;
+	scaleDragPivot.value = null;
+	engine.value?.endMove();
+	commitTransform(drag.prepared, { angle: 0, scaleX: factor, scaleY: factor }, drag.pivotX, drag.pivotY);
 }
 
 /**
- * 選んだ線を回転した線に置き換える(自分の画面にはすぐ反映し、ほかの人にはサーバー経由で届ける)。
- * 選んだ直後で境目で線を切ったばかりなら、切った内容と回転をまとめて1回で送る
+ * 選んだ線を、(pivotX, pivotY)を中心に拡大縮小(負なら反転)・回転した線に置き換える
+ * (自分の画面にはすぐ反映し、ほかの人にはサーバー経由で届ける)。
+ * 選んだ直後で境目で線を切ったばかりなら、切った内容と変形をまとめて1回で送る
  */
-function commitRotation(prepared: { ids: Set<string>; splits: SelectionSplit[] }, angle: number, pivotX: number, pivotY: number): void {
+function commitTransform(prepared: { ids: Set<string>; splits: SelectionSplit[] }, t: { angle: number; scaleX: number; scaleY: number }, pivotX: number, pivotY: number): void {
 	const e = engine.value;
-	if (e == null) return;
-	const rotated = new Map<string, CanvasStroke>();
-	if (angle !== 0) {
+	const r = room.value;
+	if (e == null || r == null) return;
+	const transformed = new Map<string, CanvasStroke>();
+	if (t.angle !== 0 || t.scaleX !== 1 || t.scaleY !== 1) {
+		// JUICE: 線の太さも同じ倍率にする(反転だけなら変えない)
+		const sizeFactor = Math.sqrt(Math.abs(t.scaleX * t.scaleY));
+		// サーバーが受け付ける座標の範囲(キャンバスの外は、線を置き換えるときは広めに許す)と、点の形式で表せる範囲
+		const margin = Math.max(r.canvasWidth, r.canvasHeight);
+		const inRange = (points: number[]) => {
+			for (let i = 0; i + 1 < points.length; i += 3) {
+				const x = points[i];
+				const y = points[i + 1];
+				if (x < Math.max(-margin, POINT_MIN) || x > Math.min(r.canvasWidth + margin, POINT_MAX) || y < Math.max(-margin, POINT_MIN) || y > Math.min(r.canvasHeight + margin, POINT_MAX)) return false;
+			}
+			return true;
+		};
 		for (const stroke of e.strokesOf(activeKey.value)) {
 			if (!prepared.ids.has(stroke.id)) continue;
-			rotated.set(stroke.id, {
+			const points = transformPoints(stroke.points, t.angle, t.scaleX, t.scaleY, pivotX, pivotY);
+			const clip = stroke.clip != null ? transformPoints(stroke.clip, t.angle, t.scaleX, t.scaleY, pivotX, pivotY) : undefined;
+			let size = Math.min(DRAW_STROKE_MAX_SIZE, Math.max(0.5, stroke.size * sizeFactor));
+			// ドットは画素単位の太さ
+			if (stroke.brush === 'dot') size = Math.min(DRAW_STROKE_MAX_SIZE, Math.max(1, Math.round(size)));
+			transformed.set(stroke.id, {
 				...stroke,
 				id: newStrokeId(),
-				points: rotatePoints(stroke.points, angle, pivotX, pivotY),
-				...(stroke.clip != null ? { clip: rotatePoints(stroke.clip, angle, pivotX, pivotY) } : {}),
+				size,
+				points,
+				...(clip != null ? { clip } : {}),
 			});
 		}
+		// キャンバスから大きくはみ出す変形は行わない(サーバーに断られるため)。境目で切った内容だけは送る
+		if ([...transformed.values()].some(stroke => !inRange(stroke.points) || (stroke.clip != null && !inRange(stroke.clip)))) {
+			transformed.clear();
+			os.toast(i18n.ts._drawRoom.transformOutOfRange);
+		}
 	}
-	// 自分の画面: 選んだ線(切った後の線)を、回転した線に置き換える
-	if (rotated.size > 0) e.replaceStrokes(activeKey.value, [...rotated].map(([id, stroke]) => ({ id, pieces: [stroke] })));
+	// 自分の画面: 選んだ線(切った後の線)を、変形した線に置き換える
+	if (transformed.size > 0) e.replaceStrokes(activeKey.value, [...transformed].map(([id, stroke]) => ({ id, pieces: [stroke] })));
 	// サーバー: 切ったばかりなら元の線からの置き換え、そうでなければ今の線からの置き換え
 	const replacements: SelectionSplit[] = prepared.splits.length > 0
 		? [
-			...prepared.splits.map(split => ({ id: split.id, pieces: split.pieces.map(piece => rotated.get(piece.id) ?? piece) })),
-			...[...rotated].filter(([id]) => !prepared.splits.some(split => split.pieces.some(piece => piece.id === id))).map(([id, stroke]) => ({ id, pieces: [stroke] })),
+			...prepared.splits.map(split => ({ id: split.id, pieces: split.pieces.map(piece => transformed.get(piece.id) ?? piece) })),
+			...[...transformed].filter(([id]) => !prepared.splits.some(split => split.pieces.some(piece => piece.id === id))).map(([id, stroke]) => ({ id, pieces: [stroke] })),
 		]
-		: [...rotated].map(([id, stroke]) => ({ id, pieces: [stroke] }));
+		: [...transformed].map(([id, stroke]) => ({ id, pieces: [stroke] }));
 	if (replacements.length > 0) connection.value?.send('replaceStrokes', { replacements: encodeSplits(replacements) });
-	if (rotated.size === 0) return;
-	// 選択も回転した線に移し、選んだ形も一緒に回す
-	strokeSelection.value = new Set([...rotated.values()].map(stroke => stroke.id));
-	const cos = Math.cos(angle);
-	const sin = Math.sin(angle);
+	if (transformed.size === 0) return;
+	// 選択も変形した線に移し、選んだ形も一緒に変形する
+	strokeSelection.value = new Set([...transformed.values()].map(stroke => stroke.id));
+	const cos = Math.cos(t.angle);
+	const sin = Math.sin(t.angle);
 	selectionShapes.value = selectionShapes.value.map(shape => shape.map((v, i) => {
-		const x = (i % 2 === 0 ? v : shape[i - 1]) - pivotX;
-		const y = (i % 2 === 0 ? shape[i + 1] : v) - pivotY;
+		const x = ((i % 2 === 0 ? v : shape[i - 1]) - pivotX) * t.scaleX;
+		const y = ((i % 2 === 0 ? shape[i + 1] : v) - pivotY) * t.scaleY;
 		return i % 2 === 0 ? pivotX + x * cos - y * sin : pivotY + x * sin + y * cos;
 	}));
 }
@@ -3122,6 +3484,15 @@ async function deleteRoom(confirmText: string = i18n.ts._drawRoom.deleteRoomConf
 	router.push('/draw');
 }
 
+// JUICE: 保存しないで終了した部屋を、保存する設定に変える(削除されなくなる)
+async function keepRoom(): Promise<void> {
+	const r = room.value;
+	if (r == null) return;
+	const kept = await os.apiWithDialog('draw-rooms/keep', { roomId: r.id }).catch(() => null);
+	if (kept == null || room.value == null) return;
+	room.value = { ...kept, isMember: room.value.isMember, viewOnly: room.value.viewOnly };
+}
+
 function deleteRoomAsModerator(): void {
 	deleteRoom(i18n.ts._drawRoom.deleteRoomAsModeratorConfirm);
 }
@@ -3288,7 +3659,7 @@ async function downloadImage(area?: ImageArea | null): Promise<void> {
 }
 
 function openImageMenu(ev: MouseEvent): void {
-	os.popupMenu([{
+	os.popupMenu([...(isGuest ? [] : [{
 		text: i18n.ts._drawRoom.saveImage,
 		icon: 'ti ti-cloud-upload',
 		action: () => saveImageToDrive(),
@@ -3296,7 +3667,7 @@ function openImageMenu(ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.postImage,
 		icon: 'ti ti-pencil',
 		action: () => postImage(),
-	}, {
+	}]), {
 		text: i18n.ts._drawRoom.downloadImage,
 		icon: 'ti ti-download',
 		action: () => downloadImage(),
@@ -3414,7 +3785,7 @@ const headerActions = computed(() => {
 		});
 	}
 	// JUICE: 部屋主以外は部屋を通報できる。モデレーターは(開催中でも)部屋を削除できる
-	if (!isOwner.value && room.value != null && !room.value.viewOnly) {
+	if (!isOwner.value && room.value != null && !room.value.viewOnly && !isGuest) {
 		actions.push({
 			icon: 'ti ti-exclamation-circle',
 			text: i18n.ts._drawRoom.reportRoom,
@@ -3729,35 +4100,53 @@ definePage(() => ({
 }
 
 .toolButton {
-	padding: 6px 8px;
+	// JUICE: タッチ操作(スマホ・タブレット)ではツールチップが出ないので、画面の広さにかかわらず、アイコンの下に短い名前を出す
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 1px;
+	min-width: 44px;
+	padding: 4px 4px 2px;
 	border-radius: 6px;
 	font-size: 1.1em;
 
 	&:hover {
 		background: var(--MI_THEME-buttonHoverBg);
 	}
-
-	// JUICE: 狭い画面(スマホ等)ではツールチップが出ないので、アイコンの下に短い名前を出す
-	@container drawRoom (max-width: 800px) {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: center;
-		flex-shrink: 0;
-		gap: 1px;
-		min-width: 44px;
-		padding: 4px 4px 2px;
-	}
 }
 
 .toolLabel {
-	display: none;
+	display: block;
+	font-size: 9px;
+	line-height: 1.2;
+	white-space: nowrap;
+	opacity: 0.8;
+}
 
-	@container drawRoom (max-width: 800px) {
-		display: block;
-		font-size: 9px;
-		line-height: 1.2;
-		white-space: nowrap;
-		opacity: 0.8;
+.petButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 0.9em;
+	font-weight: bold;
+	white-space: nowrap;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent), transparent 85%);
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-accent), transparent 75%);
+	}
+}
+
+.petButtonActive {
+	color: var(--MI_THEME-fgOnAccent);
+	background: var(--MI_THEME-accent);
+
+	&:hover {
+		background: var(--MI_THEME-accent);
 	}
 }
 
@@ -3786,6 +4175,15 @@ definePage(() => ({
 }
 
 .colorButton {
+	// JUICE: ほかの道具ボタンと同じく、下に名前を出す
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 1px;
+}
+
+.colorButtonInner {
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
@@ -3862,6 +4260,44 @@ definePage(() => ({
 	opacity: 0.8;
 }
 
+.contentGateRules {
+	font-size: 0.9em;
+}
+
+.loadingItem {
+	width: min(360px, 100%);
+}
+
+.loadingLabel {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 4px;
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+}
+
+.loadingName {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.loadingTrack {
+	height: 6px;
+	border-radius: 3px;
+	overflow: hidden;
+	background: var(--MI_THEME-divider);
+}
+
+.loadingFill {
+	height: 100%;
+	border-radius: 3px;
+	background: var(--MI_THEME-accent);
+	transition: width 0.1s linear;
+}
+
 .canvasLoading {
 	position: absolute;
 	inset: 0;
@@ -3870,7 +4306,8 @@ definePage(() => ({
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 8px;
+	padding: 16px;
 	background: color(from var(--MI_THEME-bg) srgb r g b / 0.8);
 	font-size: 0.9em;
 }
@@ -3927,6 +4364,11 @@ definePage(() => ({
 	pointer-events: none;
 }
 
+.selectionLayer {
+	// JUICE: 選んだ範囲の枠・つまみは、キャンバスの外に出ても表示してつかめるようにする(外へ拡大・移動したものを戻せるように)
+	overflow: visible;
+}
+
 .canvasDrawable {
 	cursor: crosshair;
 }
@@ -3954,6 +4396,15 @@ definePage(() => ({
 	stroke-width: calc(var(--px) * 2px);
 	pointer-events: all;
 	cursor: grab;
+	touch-action: none;
+}
+
+.scaleHandle {
+	fill: var(--MI_THEME-panel);
+	stroke: var(--MI_THEME-accent);
+	stroke-width: calc(var(--px) * 2px);
+	pointer-events: all;
+	cursor: nwse-resize;
 	touch-action: none;
 }
 
@@ -4047,34 +4498,26 @@ definePage(() => ({
 	font-variant-numeric: tabular-nums;
 }
 
-// JUICE: 狭い画面(スマホ等)ではツールチップが出ないので、下のバーのアイコンの下にも小さく名前を出す
+// JUICE: タッチ操作(スマホ・タブレット)ではツールチップが出ないので、画面の広さにかかわらず、下のバーのアイコンの下に小さく名前を出す
 .minimapToggle,
 .selectionAction {
-	@container drawRoom (max-width: 800px) {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1px;
-	}
+	display: inline-flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1px;
 }
 
 .minimapToggle {
-	@container drawRoom (max-width: 800px) {
-		padding: 3px 6px 2px;
-		border-radius: 8px;
-	}
+	padding: 3px 6px 2px;
+	border-radius: 8px;
 }
 
 .barLabel {
-	display: none;
-
-	@container drawRoom (max-width: 800px) {
-		display: block;
-		font-size: 9px;
-		line-height: 1.2;
-		white-space: nowrap;
-		opacity: 0.8;
-	}
+	display: block;
+	font-size: 9px;
+	line-height: 1.2;
+	white-space: nowrap;
+	opacity: 0.8;
 }
 
 .cursor {
@@ -4100,6 +4543,12 @@ definePage(() => ({
 	line-height: 1.5;
 	pointer-events: none;
 	white-space: nowrap;
+}
+
+.cursorSelf {
+	// 自分の手は、指・マウスにぴったりついてくるよう、なめらかに動かさない
+	transition: none;
+	z-index: 1;
 }
 
 .cursorHand {
@@ -4216,20 +4665,36 @@ definePage(() => ({
 
 // JUICE: パネルの幅を変えるつまみ(パネルの左端)と、レイヤーとチャットの高さを変えるつまみ(間)
 .sideResizer {
+	// JUICE: つかみやすいよう当たり判定を広めにし、真ん中に縦の棒をいつも薄く出す(幅を変えられることに気付けるように)
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: -9px;
+	left: -14px;
 	z-index: 1;
-	width: 6px;
-	border-radius: 3px;
+	width: 16px;
 	cursor: col-resize;
 	touch-action: none;
 
-	&:hover,
-	&:focus-visible {
+	&::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 4px;
+		height: 40px;
+		border-radius: 2px;
+		background: var(--MI_THEME-fg);
+		opacity: 0.2;
+		transform: translate(-50%, -50%);
+		transition: height 0.15s, opacity 0.15s;
+	}
+
+	&:hover::after,
+	&:focus-visible::after,
+	&[data-dragging]::after {
+		height: 64px;
 		background: var(--MI_THEME-accent);
-		opacity: 0.5;
+		opacity: 0.8;
 	}
 
 	@container drawRoom (max-width: 800px) {
@@ -4238,7 +4703,7 @@ definePage(() => ({
 }
 
 .splitResizer {
-	flex: 0 0 12px;
+	flex: 0 0 16px;
 	position: relative;
 	cursor: row-resize;
 	touch-action: none;
@@ -4246,18 +4711,21 @@ definePage(() => ({
 	&::after {
 		content: '';
 		position: absolute;
-		top: 4px;
+		top: 50%;
 		left: 50%;
 		width: 40px;
 		height: 4px;
 		border-radius: 2px;
 		background: var(--MI_THEME-fg);
-		opacity: 0.15;
-		transform: translateX(-50%);
+		opacity: 0.2;
+		transform: translate(-50%, -50%);
+		transition: width 0.15s, opacity 0.15s;
 	}
 
 	&:hover::after,
-	&:focus-visible::after {
+	&:focus-visible::after,
+	&[data-dragging]::after {
+		width: 64px;
 		background: var(--MI_THEME-accent);
 		opacity: 0.8;
 	}
@@ -4610,6 +5078,15 @@ definePage(() => ({
 	margin-top: 8px;
 }
 
+.userLink {
+	color: inherit;
+	min-width: 0;
+
+	&:hover {
+		text-decoration: underline;
+	}
+}
+
 .chatInput {
 	flex: 1;
 	min-width: 0;
@@ -4629,5 +5106,63 @@ definePage(() => ({
 	&:disabled {
 		opacity: 0.4;
 	}
+}
+
+// JUICE: 長押しでスポイトの手応え(指の位置に出す。指で色が隠れないよう、拾った色は指の上に出す)
+.longPress {
+	position: fixed;
+	z-index: 10000;
+	width: 56px;
+	height: 56px;
+	margin: -28px 0 0 -28px;
+	pointer-events: none;
+	// 普通に線を描くときに毎回ちらつかないよう、少し押し続けてから見せる
+	opacity: 0;
+	animation: juice-long-press-show 0s 150ms forwards;
+}
+
+@keyframes juice-long-press-show {
+	to {
+		opacity: 1;
+	}
+}
+
+.longPressRing {
+	width: 100%;
+	height: 100%;
+	transform: rotate(-90deg);
+
+	> circle {
+		fill: none;
+		stroke: var(--MI_THEME-accent);
+		stroke-width: 4;
+		stroke-linecap: round;
+		stroke-dasharray: 151;
+		stroke-dashoffset: 151;
+		animation: juice-long-press-fill var(--juice-long-press-ms) linear forwards;
+	}
+}
+
+@keyframes juice-long-press-fill {
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+
+.longPressPicking {
+	transform: translateY(-64px);
+	opacity: 1;
+	animation: none;
+}
+
+.longPressSwatch {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	background: var(--juice-long-press-color);
+	// 拾った色がどんな色でも見分けられるよう、パネルの色の縁と、その外側に文字の色の細い線を付ける
+	border: 3px solid var(--MI_THEME-panel);
+	box-shadow: 0 0 0 1px var(--MI_THEME-fg), 0 4px 12px var(--MI_THEME-shadow);
+	box-sizing: border-box;
 }
 </style>

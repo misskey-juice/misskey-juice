@@ -280,6 +280,15 @@ export default class Connection {
 	}
 
 	/**
+	 * JUICE: 組み立て済みのJSONの文字列を、そのままクライアントへ送る
+	 * (大人数に同じ内容を配るとき、JSONにするのを1回で済ませるため)
+	 */
+	@bindThis
+	public sendRawToWs(json: string) {
+		this.wsConnection.send(json);
+	}
+
+	/**
 	 * チャンネルに接続
 	 */
 	@bindThis

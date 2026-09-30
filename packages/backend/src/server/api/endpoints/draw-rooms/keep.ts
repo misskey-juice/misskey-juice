@@ -3,25 +3,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import ms from 'ms';
 import { Injectable } from '@nestjs/common';
+import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DrawRoomService } from '@/core/DrawRoomService.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
 
-// JUICE: 絵チャの部屋の情報
+// JUICE: 部屋主が、保存しないで終了した絵チャを、削除される前に保存する設定に変える
 export const meta = {
 	tags: ['draw-rooms'],
 
-	// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見られる(見るだけ)
-	requireCredential: false,
+	requireCredential: true,
 
-	kind: 'read:draw-rooms',
+	kind: 'write:draw-rooms',
 
-	// JUICE: メンバー全員の情報を返すので、回数を制限する
 	limit: {
 		duration: ms('1minute'),
-		max: 120,
+		max: 60,
 	},
 
 	res: {
@@ -34,6 +32,8 @@ export const meta = {
 		disabled: drawRoomErrors.disabled,
 		noSuchRoom: drawRoomErrors.noSuchRoom,
 		forbidden: drawRoomErrors.forbidden,
+		notOwner: drawRoomErrors.notOwner,
+		notEnded: drawRoomErrors.notEnded,
 	},
 } as const;
 
@@ -53,7 +53,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			try {
 				const room = await this.drawRoomService.getRoom(ps.roomId, me);
-				return await this.drawRoomService.pack(room, me);
+				const kept = await this.drawRoomService.keepEnded(room, me);
+				return await this.drawRoomService.pack(kept, me);
 			} catch (err) {
 				rethrowDrawRoomError(err);
 			}

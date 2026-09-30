@@ -37,7 +37,7 @@ export const drawRoomErrors = {
 		id: '80512214-91b6-40c3-b5ba-fb2d0d43d505',
 	},
 	alreadyHosting: {
-		message: 'You are already hosting another room.',
+		message: 'You are already hosting the maximum number of rooms.',
 		code: 'ALREADY_HOSTING',
 		id: '1c5ff310-dfa1-40a9-93a9-650bdbb9ee79',
 	},
@@ -57,7 +57,7 @@ export const drawRoomErrors = {
 		id: '4591aa2b-28d2-4073-8b89-61ab90df10cf',
 	},
 	notEnded: {
-		message: 'End the room before deleting it.',
+		message: 'The room has not ended yet.',
 		code: 'ROOM_NOT_ENDED',
 		id: 'ade63663-3dcc-46c8-a3b7-85951300f295',
 	},

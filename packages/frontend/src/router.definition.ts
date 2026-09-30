@@ -690,7 +690,8 @@ export const ROUTE_DEF = [{
 }, {
 	path: '/draw/:roomId',
 	component: page(() => import('@/pages/draw-room/room.vue')),
-	loginRequired: true,
+	// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見るだけで開ける(見られない部屋はサーバーが断る)
+	loginRequired: false,
 }, {
 	// JUICE: 小説エディターと、その下書きのプレビュー(小説ビューワーをノート無しで開く)
 	path: '/novel-editor',

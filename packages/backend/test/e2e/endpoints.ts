@@ -2783,6 +2783,7 @@ describe('Endpoints', () => {
 				microsoftOauthEnabled: false,
 				midiPlayerMaxSize: 500 * 1024,
 				drawRoomEnabled: true,
+				drawRoomMaxRoomMegabytes: 256,
 			});
 		});
 

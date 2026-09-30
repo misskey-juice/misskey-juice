@@ -39,6 +39,9 @@ type ReversiUpdateSettings<K extends ReversiUpdateKey> = {
 	value: ReversiGameDetailed[K];
 };
 
+// JUICE: 絵チャの、描いている途中の線(保存しない。受信側は同じstrokeIdの点を順につなげて表示する)
+export type DrawRoomStrokePart = { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; };
+
 // JUICE: 絵チャの取り消し・やり直しで行う手順
 export type DrawStrokesPatchStep =
 	| { t: 'del'; ids: string[]; }
@@ -309,7 +312,9 @@ export type Channels = {
 			roomId: string;
 		};
 		events: {
-			strokePart: (payload: { userId: User['id']; strokeId: string; tool: DrawStroke['tool']; color: string; size: number; opacity?: number; brush?: DrawStroke['brush']; clip?: string; layer?: string; lock?: boolean; pressure?: DrawStroke['pressure']; points: string; private?: boolean; }) => void;
+			strokePart: (payload: DrawRoomStrokePart) => void;
+			// JUICE: 描いている途中の線を、サーバーが一定間隔でまとめて送ってくる(届いた順)
+			strokeParts: (payload: { parts: DrawRoomStrokePart[]; }) => void;
 			cursors: (payload: { cursors: { userId: User['id']; x: number | null; y: number | null; pet?: boolean; }[]; }) => void;
 			strokeCancel: (payload: { userId: User['id']; strokeId: string; }) => void;
 			stroke: (payload: { userId: User['id']; stroke: DrawStroke; private?: boolean; }) => void;
@@ -323,6 +328,8 @@ export type Channels = {
 			strokesSplit: (payload: { userId: User['id']; splits: { id: string; pieces: DrawStroke[]; }[]; privateLayers?: string[]; }) => void;
 			// JUICE: 下描きのレイヤーを皆に見せるようにした(そのレイヤーの今の線)
 			layerPublished: (payload: { userId: User['id']; layer: string; strokes: DrawStroke[]; }) => void;
+			// JUICE: レイヤーを結合した(結合先のレイヤーの今の線。結合元のレイヤーは直前のlayersUpdatedで消えている)
+			layerMerged: (payload: { userId: User['id']; layer: string; strokes: DrawStroke[]; private?: boolean; }) => void;
 			// JUICE: 自分が送った線の移動・削除・置き換えが断られた(本人にだけ届く。線を取り直してサーバーの状態に合わせる)
 			operationRejected: (payload: Record<string, never>) => void;
 			// JUICE: 線の本数・データ量の上限に達して、送った線を受け付けなかった(本人にだけ届く)
@@ -346,6 +353,8 @@ export type Channels = {
 			clearLayer: null | Record<string, never> | { layer: string; };
 			// JUICE: 自分のレイヤーの一覧を置き換える
 			setLayers: { layers: DrawLayer[]; };
+			// JUICE: 自分のレイヤー(from)を、となりのレイヤー(into)に結合する
+			mergeLayer: { from: string; into: string; };
 			moveStrokes: { strokeIds: string[] | null; dx: number; dy: number; splits?: { id: string; pieces: DrawStroke[]; }[]; };
 			deleteStrokes: { strokeIds: string[]; splits?: { id: string; pieces: DrawStroke[]; }[]; };
 			replaceStrokes: { replacements: { id: string; pieces: DrawStroke[]; }[]; };

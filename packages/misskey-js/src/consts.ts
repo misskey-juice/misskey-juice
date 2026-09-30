@@ -279,6 +279,7 @@ export const rolePolicies = [
 	'avatarDecorationRequestLimit',
 	'announcementReactionTypeLimit',
 	'canCreateDrawRoom',
+	'drawRoomMaxActiveRooms',
 	'drawRoomMaxCanvasSize',
 	'drawRoomMaxStrokes',
 	'drawRoomMaxStrokeMegabytes',

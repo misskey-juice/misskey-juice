@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -154,6 +154,11 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			// JUICE: 絵チャの部屋の全員の線のデータ量の合計の上限(MB。絵チャのデバッグ情報に出す)
+			drawRoomMaxRoomMegabytes: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
 		},
 	},
 } as const;
@@ -196,6 +201,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				microsoftOauthEnabled,
 				...resolveMidiPlayerSettings(settings),
 				...resolveDrawRoomSettings(settings),
+				...resolveDrawRoomLimitSettings(settings),
 			};
 		});
 	}

@@ -39,8 +39,10 @@ export function clampCanvasSize(value: number | null | undefined, fallback: numb
 	return Math.min(upper, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, v));
 }
 
-// JUICE: 太さの上限(サーバーの DRAW_STROKE_MAX_SIZE と同じ)と、標準の大きさ(1600px)のキャンバスでの太さ
-export const DRAW_STROKE_MAX_SIZE = 200;
+// JUICE: 太さの上限(サーバーの DRAW_STROKE_MAX_SIZE と同じ)と、標準の大きさ(1600px)のキャンバスでの太さ。
+// 太さの割合は250%まで選べ、100%の太さ(BRUSH_MAX_SIZE_AT_100)の2.5倍まで太くできる
+export const DRAW_STROKE_MAX_SIZE = 500;
+const BRUSH_MAX_SIZE_AT_100 = 200;
 const BASE_CANVAS_SIZE = 1600;
 const BASE_MAX_BRUSH_SIZE = 60;
 const BASE_DEFAULT_BRUSH_SIZE = 6;
@@ -52,7 +54,7 @@ const BASE_DEFAULT_BRUSH_SIZE = 6;
 export function brushSizeRange(width: number, height: number): { max: number; initial: number } {
 	const ratio = Math.max(1, Math.max(width, height) / BASE_CANVAS_SIZE);
 	return {
-		max: Math.min(DRAW_STROKE_MAX_SIZE, Math.round(BASE_MAX_BRUSH_SIZE * ratio)),
+		max: Math.min(BRUSH_MAX_SIZE_AT_100, Math.round(BASE_MAX_BRUSH_SIZE * ratio)),
 		initial: Math.round(BASE_DEFAULT_BRUSH_SIZE * ratio),
 	};
 }
@@ -201,6 +203,11 @@ function isOverlayStroke(stroke: { tool: DrawTool; lock?: boolean; pressure?: St
 export const DRAW_LAYER_BLENDS = ['multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'color-burn', 'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity', 'lighter'] as const;
 export type DrawLayerBlend = typeof DRAW_LAYER_BLENDS[number];
 
+// JUICE: 結合したレイヤーの中のまとまり(結合元のレイヤー)。線のgがまとまりのidを指す
+export type DrawLayerGroup = NonNullable<Misskey.entities.DrawLayer['groups']>[number];
+// JUICE: まとまりの入れ子の深さの上限(サーバーの DRAW_LAYER_GROUP_MAX_DEPTH と同じ)
+const DRAW_LAYER_GROUP_MAX_DEPTH = 16;
+
 // JUICE: 描いている途中の線が、この時間続きも確定も届かなければ消す(描いていた人の切断などで
 // 取りやめの知らせが届かなかった場合に、途中までの線がいつまでも残らないように)
 const PENDING_STROKE_TIMEOUT_MS = 20 * 1000;
@@ -238,7 +245,18 @@ type Layer = {
 	private: boolean;
 	// JUICE: 合成モード(下のレイヤーとの重ね方)
 	blend: GlobalCompositeOperation;
+	// JUICE: 結合したレイヤーの中のまとまり(id→まとまり)。無ければ空
+	groups: Map<string, DrawLayerGroup>;
 };
+
+// JUICE: 結合したレイヤーのまとまりが、持っているものと同じか
+function sameGroups(current: ReadonlyMap<string, DrawLayerGroup>, next: readonly DrawLayerGroup[]): boolean {
+	if (current.size !== next.length) return false;
+	return next.every(group => {
+		const old = current.get(group.id);
+		return old != null && old.parent === group.parent && old.opacity === group.opacity && old.blend === group.blend;
+	});
+}
 
 // JUICE: レイヤーを、その濃さ・合成モードで重ねる
 function setLayerComposite(ctx: CanvasRenderingContext2D, layer: Layer): void {
@@ -497,6 +515,79 @@ function drawPressureOpacityStroke(ctx: CanvasRenderingContext2D, stroke: Stroke
 	}
 }
 
+/**
+ * JUICE: 線を順に描く。結合したレイヤーの線(gがまとまりを指す)は、まとまりごとに作業用の絵へ描いてから、
+ * まとまりの濃さ・合成モードで親(親のまとまり、無ければctx)に重ねる。結合元の消しゴム・透明度ロックの線が、
+ * 結合先の線に効かないように(結合する前と同じ見た目になるように)するため。
+ * regionを渡すと、その範囲だけを描く(描く範囲は、呼び出し側のclipでも絞っておくこと)。
+ * poolは作業用の絵の置き場(入れ子の深さごと。呼び出し側で持ち、使い回す)
+ */
+export function drawStrokesInGroups(ctx: CanvasRenderingContext2D, strokes: readonly (StrokeShape & { g?: string })[], groups: ReadonlyMap<string, DrawLayerGroup> | null, pool: HTMLCanvasElement[], region?: Rect): void {
+	if (groups == null || groups.size === 0 || !strokes.some(stroke => stroke.g != null && groups.has(stroke.g))) {
+		for (const stroke of strokes) drawStroke(ctx, stroke, region);
+		return;
+	}
+	const width = ctx.canvas.width;
+	const height = ctx.canvas.height;
+	const rx = region == null ? 0 : Math.max(0, Math.floor(region.x0));
+	const ry = region == null ? 0 : Math.max(0, Math.floor(region.y0));
+	const rw = (region == null ? width : Math.min(width, Math.ceil(region.x1))) - rx;
+	const rh = (region == null ? height : Math.min(height, Math.ceil(region.y1))) - ry;
+	if (rw <= 0 || rh <= 0) return;
+	const paths = new Map<string, string[]>();
+	const pathOf = (g: string | undefined): string[] => {
+		if (g == null || !groups.has(g)) return [];
+		let path = paths.get(g);
+		if (path == null) {
+			path = [];
+			for (let group = groups.get(g); group != null && path.length < DRAW_LAYER_GROUP_MAX_DEPTH && !path.includes(group.id); group = group.parent != null ? groups.get(group.parent) : undefined) {
+				path.unshift(group.id);
+			}
+			paths.set(g, path);
+		}
+		return path;
+	};
+	const stack: { id: string | null; ctx: CanvasRenderingContext2D }[] = [{ id: null, ctx }];
+	const open = (id: string) => {
+		const depth = stack.length - 1;
+		const canvas = pool[depth] ??= createScratch();
+		// 大きさを変えると中身が消えるので、足りないときだけ大きくする(大きい分は使わない)
+		if (canvas.width < width) canvas.width = width;
+		if (canvas.height < height) canvas.height = height;
+		const gctx = canvas.getContext('2d')!;
+		gctx.save();
+		gctx.setTransform(1, 0, 0, 1, 0, 0);
+		gctx.globalAlpha = 1;
+		gctx.globalCompositeOperation = 'source-over';
+		gctx.clearRect(rx, ry, rw, rh);
+		gctx.beginPath();
+		gctx.rect(rx, ry, rw, rh);
+		gctx.clip();
+		stack.push({ id, ctx: gctx });
+	};
+	const close = () => {
+		const top = stack.pop()!;
+		top.ctx.restore();
+		const group = groups.get(top.id!)!;
+		if (group.opacity <= 0) return;
+		const parent = stack[stack.length - 1].ctx;
+		parent.save();
+		parent.globalAlpha = Math.min(1, group.opacity);
+		parent.globalCompositeOperation = group.blend ?? 'source-over';
+		parent.drawImage(top.ctx.canvas, rx, ry, rw, rh, rx, ry, rw, rh);
+		parent.restore();
+	};
+	for (const stroke of strokes) {
+		const path = pathOf(stroke.g);
+		let common = 0;
+		while (common < path.length && common + 1 < stack.length && stack[common + 1].id === path[common]) common++;
+		while (stack.length - 1 > common) close();
+		for (let i = stack.length - 1; i < path.length; i++) open(path[i]);
+		drawStroke(stack[stack.length - 1].ctx, stroke, region);
+	}
+	while (stack.length > 1) close();
+}
+
 // JUICE: 透明度ロックの線を、作業用キャンバスに普通に描いてから、レイヤーの描いてある所にだけ重ねる
 let lockScratch: HTMLCanvasElement | null = null;
 
@@ -735,12 +826,20 @@ function drawBrushLines(ctx: CanvasRenderingContext2D, stroke: StrokeShape, from
 
 // JUICE: 点の列を(px, py)を中心にangleだけ回転する(筆圧・輪郭の印はそのまま)
 export function rotatePoints(points: number[], angle: number, px: number, py: number): number[] {
+	return transformPoints(points, angle, 1, 1, px, py);
+}
+
+/**
+ * JUICE: 点の列を(px, py)を中心に、拡大縮小(scaleX, scaleY。負なら反転)してから回転する。筆圧(3つ目の値)はそのまま。
+ * 表示用のキャンバスの変形(translate → rotate → scale → translate)と同じ順番
+ */
+export function transformPoints(points: number[], angle: number, scaleX: number, scaleY: number, px: number, py: number): number[] {
 	const cos = Math.cos(angle);
 	const sin = Math.sin(angle);
 	return points.map((v, i) => {
 		if (i % 3 === 2) return v;
-		const x = points[i - (i % 3)] - px;
-		const y = points[i - (i % 3) + 1] - py;
+		const x = (points[i - (i % 3)] - px) * scaleX;
+		const y = (points[i - (i % 3) + 1] - py) * scaleY;
 		return i % 3 === 0 ? px + x * cos - y * sin : py + x * sin + y * cos;
 	});
 }
@@ -1081,6 +1180,7 @@ export class DrawCanvasEngine {
 				visible: true,
 				private: false,
 				blend: 'source-over',
+				groups: new Map(),
 			};
 			this.layers.set(userId, layer);
 			this.order.push(userId);
@@ -1142,7 +1242,7 @@ export class DrawCanvasEngine {
 	 * JUICE: その人のレイヤーの一覧(重なり順は下から)に合わせて、レイヤーを作る・消す・並べ替える・表示と濃さを変える。
 	 * その人のレイヤーは、今の重なり順の中の同じ位置にまとめて置く
 	 */
-	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number; private?: boolean; blend?: DrawLayerBlend }[]): void {
+	public setUserLayers(userId: string, metas: { id: string; visible: boolean; opacity: number; private?: boolean; blend?: DrawLayerBlend; groups?: DrawLayerGroup[] }[]): void {
 		const keys = metas.map(meta => drawLayerKey(userId, meta.id));
 		const old = [...this.order];
 		for (const key of old) {
@@ -1161,6 +1261,12 @@ export class DrawCanvasEngine {
 			// 合成モードが変わると、描いている途中の線の描き方(重ね描き用か、レイヤーか)も変わるので描き直す
 			if (layer.blend !== blend) this.invalidateLive(layer);
 			layer.blend = blend;
+			// JUICE: 結合したレイヤーの中のまとまりが変わったら(結合したとき)、描き直す
+			const groups = meta.groups ?? [];
+			if (!sameGroups(layer.groups, groups)) {
+				layer.groups = new Map(groups.map(group => [group.id, group]));
+				if (layer.strokes.length > 0) this.redrawCommitted(layer);
+			}
 		}
 		const others = old.filter(key => ownerOfLayerKey(key) !== userId);
 		const first = old.findIndex(key => ownerOfLayerKey(key) === userId);
@@ -1221,6 +1327,13 @@ export class DrawCanvasEngine {
 		const layer = this.layers.get(key);
 		if (layer == null) return strokes.length - from;
 		const ctx = layer.committed.getContext('2d')!;
+		// JUICE: 結合したレイヤー(まとまりがある)は、まとまりごとに重ねるので、途中で区切らずに一度に描く
+		if (layer.groups.size > 0 && from === 0) {
+			layer.strokes.push(...strokes);
+			drawStrokesInGroups(ctx, strokes, layer.groups, this.groupPool);
+			this.releaseGroupPoolLater();
+			return strokes.length;
+		}
 		let i = from;
 		while (i < strokes.length) {
 			layer.strokes.push(strokes[i]);
@@ -1274,7 +1387,8 @@ export class DrawCanvasEngine {
 			this.invalidateLive(layer);
 			const ctx = layer.committed.getContext('2d')!;
 			ctx.clearRect(0, 0, this.width, this.height);
-			for (const stroke of layer.strokes) drawStroke(ctx, stroke);
+			drawStrokesInGroups(ctx, layer.strokes, layer.groups, this.groupPool);
+			this.releaseGroupPoolLater();
 			this.redrawThumb(layer);
 			this.committedChanged();
 		}
@@ -1286,16 +1400,19 @@ export class DrawCanvasEngine {
 	public stats = { lastRedrawMs: 0, lastRedrawFull: false, lastRenderMs: 0 };
 
 	/**
-	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数
+	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数。
+	 * estimateBytesを渡すと、全員の線のデータ量の見積もりも数える
 	 */
-	public debugSummary(): { layers: number; strokes: number; pending: number } {
+	public debugSummary(estimateBytes?: (stroke: CanvasStroke) => number): { layers: number; strokes: number; pending: number; bytes: number } {
 		let strokes = 0;
 		let pending = 0;
+		let bytes = 0;
 		for (const layer of this.layers.values()) {
 			strokes += layer.strokes.length;
 			pending += layer.pending.size;
+			if (estimateBytes != null) for (const stroke of layer.strokes) bytes += estimateBytes(stroke);
 		}
-		return { layers: this.layers.size, strokes, pending };
+		return { layers: this.layers.size, strokes, pending, bytes };
 	}
 
 	/**
@@ -1329,7 +1446,8 @@ export class DrawCanvasEngine {
 			ctx.rect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
 			ctx.clip();
 			ctx.clearRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
-			for (const stroke of strokes) drawStroke(ctx, stroke);
+			drawStrokesInGroups(ctx, strokes, layer.groups, this.groupPool, r);
+			this.releaseGroupPoolLater();
 			ctx.restore();
 		};
 		redraw(layer.committed.getContext('2d')!, rect);
@@ -1347,11 +1465,16 @@ export class DrawCanvasEngine {
 		const pendingEntry = layer.pending.get(stroke.id);
 		const wasPending = layer.pending.delete(stroke.id);
 		layer.strokes.push(stroke);
-		drawStroke(layer.committed.getContext('2d')!, stroke);
-		this.redrawThumb(layer, strokeRect(stroke));
-		this.invalidateLive(layer, strokeRect(stroke));
-		this.appendToGroup(layer, stroke);
 		const rect = strokeRect(stroke);
+		if (stroke.g != null && layer.groups.has(stroke.g)) {
+			// JUICE: 結合したレイヤーのまとまりの線は、まとまりごとに重ね直す必要があるので、線の範囲を描き直す
+			if (rect != null) this.redrawCommittedRegion(layer, rect);
+		} else {
+			drawStroke(layer.committed.getContext('2d')!, stroke);
+			this.redrawThumb(layer, rect);
+			this.invalidateLive(layer, rect);
+			this.appendToGroup(layer, stroke);
+		}
 		if (wasPending) this.pendingChanged(unionRect(rect, pendingRect(pendingEntry!)));
 		else this.requestRender(rect);
 		this.committedChanged();
@@ -1661,6 +1784,9 @@ export class DrawCanvasEngine {
 		dx: number;
 		dy: number;
 		angle: number;
+		// JUICE: 拡大縮小(負なら反転)。中心はpivot
+		scaleX: number;
+		scaleY: number;
 		pivotX: number;
 		pivotY: number;
 		// 前に表示した、動かす線の範囲(nullなら全体を描き直す)
@@ -1674,7 +1800,7 @@ export class DrawCanvasEngine {
 			// レイヤー全体: 描き終わった絵をそのまま動かす
 			const moving = createCanvas(this.width, this.height);
 			moving.getContext('2d')!.drawImage(layer.committed, 0, 0);
-			this.moving = { userId, still: null, moving, originX: 0, originY: 0, dx: 0, dy: 0, angle: 0, pivotX: 0, pivotY: 0, lastRect: null };
+			this.moving = { userId, still: null, moving, originX: 0, originY: 0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
 			this.requestRender();
 			return;
 		}
@@ -1702,22 +1828,25 @@ export class DrawCanvasEngine {
 		stillCtx.rect(x0, y0, moving.width, moving.height);
 		stillCtx.clip();
 		stillCtx.clearRect(x0, y0, moving.width, moving.height);
-		for (const stroke of layer.strokes) {
-			if (ids.has(stroke.id)) {
-				// 小さいキャンバスの左上に合わせて、線の点をずらして描く(キャンバスを移動して描くと、半透明・透明度ロックの線の
-				// 描く範囲の計算がキャンバスの大きさに合わず、消えたり切れたりするため)。ずらす量は整数なので、ドットもずれない
-				drawStroke(movingCtx, {
-					...stroke,
-					points: shiftPoints(stroke.points, -x0, -y0),
-					...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, -x0, -y0) } : {}),
-				});
-			} else {
-				const sr = strokeRect(stroke);
-				if (sr != null && rectsIntersect(sr, r)) drawStroke(stillCtx, stroke);
-			}
-		}
+		// 小さいキャンバスの左上に合わせて、線の点をずらして描く(キャンバスを移動して描くと、半透明・透明度ロックの線の
+		// 描く範囲の計算がキャンバスの大きさに合わず、消えたり切れたりするため)。ずらす量は整数なので、ドットもずれない
+		// JUICE: 結合したレイヤーの線は、動かす線・動かさない線それぞれで、まとまりごとに重ねる
+		const movingStrokes = layer.strokes.filter(stroke => ids.has(stroke.id)).map(stroke => ({
+			...stroke,
+			points: shiftPoints(stroke.points, -x0, -y0),
+			...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, -x0, -y0) } : {}),
+		}));
+		drawStrokesInGroups(movingCtx, movingStrokes, layer.groups, this.groupPool);
+		this.releaseGroupPoolLater();
+		const stillStrokes = layer.strokes.filter(stroke => {
+			if (ids.has(stroke.id)) return false;
+			const sr = strokeRect(stroke);
+			return sr != null && rectsIntersect(sr, r);
+		});
+		drawStrokesInGroups(stillCtx, stillStrokes, layer.groups, this.groupPool, { x0, y0, x1: x0 + moving.width, y1: y0 + moving.height });
+		this.releaseGroupPoolLater();
 		stillCtx.restore();
-		this.moving = { userId, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, pivotX: 0, pivotY: 0, lastRect: null };
+		this.moving = { userId, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
 		this.requestRender();
 	}
 
@@ -1729,8 +1858,10 @@ export class DrawCanvasEngine {
 		const sin = Math.sin(m.angle);
 		let rect: Rect | null = null;
 		for (const [cx, cy] of [[m.originX, m.originY], [m.originX + m.moving.width, m.originY], [m.originX, m.originY + m.moving.height], [m.originX + m.moving.width, m.originY + m.moving.height]]) {
-			const x = m.pivotX + (cx - m.pivotX) * cos - (cy - m.pivotY) * sin + m.dx;
-			const y = m.pivotY + (cx - m.pivotX) * sin + (cy - m.pivotY) * cos + m.dy;
+			const sx = (cx - m.pivotX) * m.scaleX;
+			const sy = (cy - m.pivotY) * m.scaleY;
+			const x = m.pivotX + sx * cos - sy * sin + m.dx;
+			const y = m.pivotY + sx * sin + sy * cos + m.dy;
 			rect = unionRect(rect, { x0: Math.floor(x) - 2, y0: Math.floor(y) - 2, x1: Math.ceil(x) + 2, y1: Math.ceil(y) + 2 });
 		}
 		return rect;
@@ -1758,8 +1889,17 @@ export class DrawCanvasEngine {
 	 * 選んだ線を(pivotX, pivotY)を中心に回転して見せる(ドラッグしている間)
 	 */
 	public updateRotate(angle: number, pivotX: number, pivotY: number): void {
+		this.updateTransform(angle, 1, 1, pivotX, pivotY);
+	}
+
+	/**
+	 * JUICE: 選んだ線を(pivotX, pivotY)を中心に、拡大縮小(負なら反転)・回転して見せる(ドラッグしている間)
+	 */
+	public updateTransform(angle: number, scaleX: number, scaleY: number, pivotX: number, pivotY: number): void {
 		if (this.moving == null) return;
 		this.moving.angle = angle;
+		this.moving.scaleX = scaleX;
+		this.moving.scaleY = scaleY;
 		this.moving.pivotX = pivotX;
 		this.moving.pivotY = pivotY;
 		this.movingChanged();
@@ -1796,6 +1936,23 @@ export class DrawCanvasEngine {
 
 	// 消しゴム・移動の途中に使うキャンバスの予備(1枚だけ持っておく)
 	private liveSpare: HTMLCanvasElement | null = null;
+	// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(入れ子の深さごと。使い回す)。
+	// キャンバスと同じ大きさなので、しばらく使わなければ小さくしてメモリを返す
+	private groupPool: HTMLCanvasElement[] = [];
+	private groupPoolReleaseTimer: number | null = null;
+
+	// まとまりのある線を描いた後に呼ぶ(しばらく使わなければ作業用の絵を小さくする)
+	private releaseGroupPoolLater(): void {
+		if (this.groupPool.length === 0) return;
+		if (this.groupPoolReleaseTimer != null) window.clearTimeout(this.groupPoolReleaseTimer);
+		this.groupPoolReleaseTimer = window.setTimeout(() => {
+			this.groupPoolReleaseTimer = null;
+			for (const canvas of this.groupPool) {
+				canvas.width = 1;
+				canvas.height = 1;
+			}
+		}, 10 * 1000);
+	}
 
 	private takeLiveCanvas(): HTMLCanvasElement {
 		const canvas = this.liveSpare ?? createCanvas(this.width, this.height);
@@ -1832,6 +1989,7 @@ export class DrawCanvasEngine {
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.translate(m.pivotX + m.dx, m.pivotY + m.dy);
 			ctx.rotate(m.angle);
+			ctx.scale(m.scaleX, m.scaleY);
 			ctx.translate(-m.pivotX, -m.pivotY);
 			ctx.drawImage(m.moving, m.originX, m.originY);
 			ctx.restore();

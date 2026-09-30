@@ -2411,7 +2411,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+     * **Credential required**: *No* / **Permission**: *read:draw-rooms*
      */
     request<E extends 'draw-rooms/chat-history', P extends Endpoints[E]['req']>(
       endpoint: E,
@@ -2455,9 +2455,31 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+     */
+    request<E extends 'draw-rooms/hosting', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:draw-rooms*
      */
     request<E extends 'draw-rooms/join', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:draw-rooms*
+     */
+    request<E extends 'draw-rooms/keep', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -2499,7 +2521,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+     * **Credential required**: *No* / **Permission**: *read:draw-rooms*
      */
     request<E extends 'draw-rooms/show', P extends Endpoints[E]['req']>(
       endpoint: E,
@@ -2510,7 +2532,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+     * **Credential required**: *No* / **Permission**: *read:draw-rooms*
      */
     request<E extends 'draw-rooms/strokes', P extends Endpoints[E]['req']>(
       endpoint: E,

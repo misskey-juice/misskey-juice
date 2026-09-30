@@ -8516,6 +8516,14 @@ export interface Locale extends ILocale {
              */
             "canCreateDrawRoomCaption": string;
             /**
+             * 絵チャで1人が同時に開催できる部屋の数
+             */
+            "drawRoomMaxActiveRooms": string;
+            /**
+             * 終了していない部屋の数です(1〜100)。終了した部屋は数えません
+             */
+            "drawRoomMaxActiveRoomsCaption": string;
+            /**
              * 絵チャで作れるキャンバスの大きさの上限
              */
             "drawRoomMaxCanvasSize": string;
@@ -9554,6 +9562,14 @@ export interface Locale extends ILocale {
          */
         "createRoom": string;
         /**
+         * 開催中の自分の部屋: {n}/{max}
+         */
+        "hostingRooms": ParameterizedString<"n" | "max">;
+        /**
+         * 上限に達しているので、部屋を終了すると新しく作れます
+         */
+        "hostingRoomsFull": string;
+        /**
          * 部屋の名前
          */
         "roomTitle": string;
@@ -9662,6 +9678,10 @@ export interface Locale extends ILocale {
          */
         "roomSensitiveGate": string;
         /**
+         * 最初にこちらをご確認ください
+         */
+        "nsfwRulesLink": string;
+        /**
          * 開く
          */
         "openRoomContent": string;
@@ -9713,6 +9733,14 @@ export interface Locale extends ILocale {
          * 見学中
          */
         "spectating": string;
+        /**
+         * ログインしていないため、見るだけです
+         */
+        "spectatingAsGuest": string;
+        /**
+         * ログインして参加
+         */
+        "loginToJoin": string;
         /**
          * 満員のため見学のみできます
          */
@@ -9794,6 +9822,38 @@ export interface Locale extends ILocale {
          */
         "shortBucket": string;
         /**
+         * 普通
+         */
+        "shortBrushNormal": string;
+        /**
+         * にじみ
+         */
+        "shortBrushSoft": string;
+        /**
+         * ドット
+         */
+        "shortBrushDot": string;
+        /**
+         * 線の中
+         */
+        "shortClipToLines": string;
+        /**
+         * 筆圧太さ
+         */
+        "shortPressureSize": string;
+        /**
+         * 筆圧濃さ
+         */
+        "shortPressureOpacity": string;
+        /**
+         * 透明ロック
+         */
+        "shortAlphaLock": string;
+        /**
+         * パレット
+         */
+        "shortPalette": string;
+        /**
          * 戻す
          */
         "shortUndo": string;
@@ -9853,6 +9913,10 @@ export interface Locale extends ILocale {
          * 部屋の線(全員)
          */
         "debugRoomStrokes": string;
+        /**
+         * 部屋全体のデータ量
+         */
+        "debugRoomBytes": string;
         /**
          * レイヤー
          */
@@ -10086,6 +10150,22 @@ export interface Locale extends ILocale {
          */
         "moveLayerDown": string;
         /**
+         * 上のレイヤーと結合
+         */
+        "mergeLayerUp": string;
+        /**
+         * 下のレイヤーと結合
+         */
+        "mergeLayerDown": string;
+        /**
+         * 「{from}」を「{into}」に結合しますか？結合は取り消せません。
+         */
+        "mergeLayerConfirm": ParameterizedString<"from" | "into">;
+        /**
+         * 「{name}」は合成モードを使っているので、結合すると見た目が変わることがあります。
+         */
+        "mergeLayerBlendLost": ParameterizedString<"name">;
+        /**
          * 囲って塗る(なぞって囲った範囲を、ペンなら塗り、消しゴムなら消す)
          */
         "brushAreaHint": string;
@@ -10093,6 +10173,10 @@ export interface Locale extends ILocale {
          * キャンバスを読み込み中
          */
         "loadingCanvas": string;
+        /**
+         * 全体
+         */
+        "loadingOverall": string;
         /**
          * 囲って塗る
          */
@@ -10117,6 +10201,42 @@ export interface Locale extends ILocale {
          * 選んだ部分を右に回転
          */
         "rotateSelectionRight": string;
+        /**
+         * 選んだ部分を拡大
+         */
+        "enlargeSelection": string;
+        /**
+         * 選んだ部分を縮小
+         */
+        "shrinkSelection": string;
+        /**
+         * 拡大
+         */
+        "shortEnlarge": string;
+        /**
+         * 縮小
+         */
+        "shortShrink": string;
+        /**
+         * 選んだ部分を左右反転
+         */
+        "flipSelectionHorizontal": string;
+        /**
+         * 左右反転
+         */
+        "shortFlipHorizontal": string;
+        /**
+         * 選んだ部分を上下反転
+         */
+        "flipSelectionVertical": string;
+        /**
+         * 上下反転
+         */
+        "shortFlipVertical": string;
+        /**
+         * キャンバスから大きくはみ出すので、この変形はできません
+         */
+        "transformOutOfRange": string;
         /**
          * {n}本の線を選択中
          */
@@ -10369,6 +10489,10 @@ export interface Locale extends ILocale {
          * この部屋を今すぐ削除しますか？(削除される時間を待たずに消えます。絵とチャットは元に戻せません)
          */
         "deleteRoomNowConfirm": string;
+        /**
+         * サーバーに保存する
+         */
+        "keepEndedRoom": string;
         /**
          * 描く人から外す
          */

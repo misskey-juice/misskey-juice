@@ -13,7 +13,8 @@ import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-err
 export const meta = {
 	tags: ['draw-rooms'],
 
-	requireCredential: true,
+	// JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見られる(見るだけ)
+	requireCredential: false,
 
 	kind: 'read:draw-rooms',
 

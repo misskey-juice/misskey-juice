@@ -147,6 +147,7 @@ const props = withDefaults(defineProps<{
 		microsoftOauthEnabled: false,
 		midiPlayerMaxSize: 500 * 1024,
 		drawRoomEnabled: true,
+		drawRoomMaxRoomMegabytes: 256,
 	}),
 });
 

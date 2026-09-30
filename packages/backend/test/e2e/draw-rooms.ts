@@ -9,7 +9,7 @@ import * as assert from 'assert';
 import { describe, beforeAll, test, vi } from 'vitest';
 import type { SignupSuccessResponse } from 'misskey-js/entities.js';
 import type WebSocket from 'ws';
-import { api, connectStream, role, signup } from '../utils.js';
+import { api, connectStream, port, role, signup } from '../utils.js';
 
 type DrawRoom = { id: string; ownerId: string; members: { id: string }[]; isMember: boolean; isEnded: boolean; maxMembers: number; keepAfterEnd: boolean; endedAt: string | null; deletesAt: string | null };
 
@@ -70,17 +70,40 @@ describe('絵チャ', () => {
 		await call('following/create', { userId: alice.id }, bob);
 	}, 1000 * 60 * 2);
 
-	test('部屋を作ると、部屋主がメンバーになる。開催中の部屋は1人1つまで', async () => {
+	test('部屋を作ると、部屋主がメンバーになる。開催中の部屋は1人5つまで(ロールのdrawRoomMaxActiveRoomsで変えられる)', async () => {
 		const room = await createRoom(alice);
 		assert.strictEqual(room.ownerId, alice.id);
 		assert.deepStrictEqual(room.members.map(m => m.id), [alice.id]);
 		assert.strictEqual(room.isMember, true);
 
-		const second = await call('draw-rooms/create', { title: 'second', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, alice);
-		assert.strictEqual(second.status, 400);
-		assert.strictEqual(second.body.error.code, 'ALREADY_HOSTING');
+		// 既定では5つまで
+		const rooms = [room];
+		for (let i = 0; i < 4; i++) rooms.push(await createRoom(alice));
+		// 開催中の部屋の数と上限
+		assert.deepStrictEqual((await call('draw-rooms/hosting', {}, alice)).body, { count: 5, max: 5 });
+		const sixth = await call('draw-rooms/create', { title: 'sixth', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, alice);
+		assert.strictEqual(sixth.status, 400);
+		assert.strictEqual(sixth.body.error.code, 'ALREADY_HOSTING');
+		// 1つ終了すれば、また作れる
+		await call('draw-rooms/end', { roomId: rooms[0].id }, alice);
+		rooms[0] = await createRoom(alice);
+		for (const r of rooms) await call('draw-rooms/end', { roomId: r.id }, alice);
 
-		await call('draw-rooms/end', { roomId: room.id }, alice);
+		// ロールで1つまでにした人は、2つ目を作れない
+		const oneRoom = await role(alice, { isModerator: false, name: 'Draw Room One' }, {
+			drawRoomMaxActiveRooms: { priority: 0, useDefault: false, value: 1 },
+		});
+		await call('admin/roles/assign', { userId: dave.id, roleId: oneRoom.id }, alice);
+		try {
+			assert.deepStrictEqual((await call('draw-rooms/hosting', {}, dave)).body, { count: 0, max: 1 });
+			const first = await createRoom(dave);
+			const second = await call('draw-rooms/create', { title: 'second', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, dave);
+			assert.strictEqual(second.status, 400);
+			assert.strictEqual(second.body.error.code, 'ALREADY_HOSTING');
+			await call('draw-rooms/end', { roomId: first.id }, dave);
+		} finally {
+			await call('admin/roles/unassign', { userId: dave.id, roleId: oneRoom.id }, alice);
+		}
 	});
 
 	test('フォロワー限定の部屋は、フォロワー以外は見られない', async () => {
@@ -282,7 +305,7 @@ describe('絵チャ', () => {
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
 		try {
 			// 今の大きさ(640)の外すぎる線は受け付けない
-			sendToChannel(aliceWs, 'stroke', { ...stroke('before'), points: encodePoints([[950, 100, 1]]) });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('before'), points: encodePoints([[1200, 100, 1]]) });
 			const updated = await call('draw-rooms/update', { roomId: room.id, canvasWidth: 1000 }, alice);
 			assert.strictEqual(updated.status, 200);
 			assert.strictEqual(updated.body.canvasWidth, 1000);
@@ -370,6 +393,48 @@ describe('絵チャ', () => {
 		assert.strictEqual(updated.body.cw, null);
 		assert.strictEqual(updated.body.isSensitive, false);
 		await call('draw-rooms/end', { roomId: room.body.id }, alice);
+	});
+
+	test('ログインしていない人は、公開範囲がローカル全体でNSFWでない部屋だけ見られる(見るだけ)。OGPの画像はCWの部屋では出さない', async () => {
+		const room = await createRoom(alice, { visibility: 'local' });
+		try {
+			// 見られる: 部屋の情報・線・チャット
+			assert.strictEqual((await api('draw-rooms/show', { roomId: room.id })).status, 200);
+			assert.strictEqual((await api('draw-rooms/strokes', { roomId: room.id })).status, 200);
+			assert.strictEqual((await api('draw-rooms/chat-history', { roomId: room.id })).status, 200);
+			// OGPの画像
+			const ogp = await fetch(new URL(`/draw/${room.id}/ogp.png`, `http://127.0.0.1:${port}`));
+			assert.strictEqual(ogp.status, 200);
+			assert.strictEqual(ogp.headers.get('content-type'), 'image/png');
+			// CWを付けると、ページは見られるが、OGPの画像は出さない
+			await call('draw-rooms/update', { roomId: room.id, cw: 'ネタバレ' }, alice);
+			assert.strictEqual((await api('draw-rooms/show', { roomId: room.id })).status, 200);
+			assert.strictEqual((await fetch(new URL(`/draw/${room.id}/ogp.png`, `http://127.0.0.1:${port}`))).status, 404);
+			// NSFWの印を付けると見られない
+			await call('draw-rooms/update', { roomId: room.id, cw: null, isSensitive: true }, alice);
+			assert.strictEqual((await api('draw-rooms/show', { roomId: room.id })).status, 400);
+			assert.strictEqual((await api('draw-rooms/strokes', { roomId: room.id })).status, 400);
+		} finally {
+			await call('draw-rooms/end', { roomId: room.id }, alice);
+		}
+		// フォロワーのみの部屋は見られない
+		const followersRoom = await createRoom(alice, { visibility: 'followers' });
+		try {
+			assert.strictEqual((await api('draw-rooms/show', { roomId: followersRoom.id })).status, 400);
+			assert.strictEqual((await fetch(new URL(`/draw/${followersRoom.id}/ogp.png`, `http://127.0.0.1:${port}`))).status, 404);
+		} finally {
+			await call('draw-rooms/end', { roomId: followersRoom.id }, alice);
+		}
+		// 部屋主が「見るのにログインが必要」にしていると見られない(ノートと同じ)
+		await call('i/update', { requireSigninToViewContents: true }, alice);
+		const signinRoom = await createRoom(alice, { visibility: 'local' });
+		try {
+			await vi.waitFor(async () => assert.strictEqual((await api('draw-rooms/show', { roomId: signinRoom.id })).status, 400), { timeout: 5000, interval: 200 });
+			assert.strictEqual((await fetch(new URL(`/draw/${signinRoom.id}/ogp.png`, `http://127.0.0.1:${port}`))).status, 404);
+		} finally {
+			await call('draw-rooms/end', { roomId: signinRoom.id }, alice);
+			await call('i/update', { requireSigninToViewContents: false }, alice);
+		}
 	});
 
 	test('保存した部屋は、ほかの人も一覧(saved)で見られる。開催中・保存しない部屋・見られない部屋は出ない', async () => {
@@ -904,7 +969,8 @@ describe('絵チャ', () => {
 			assert.deepStrictEqual(bobView?.layers.map(l => l.id), ['0']);
 			assert.deepStrictEqual(bobView?.strokes.map(s => s.id), ['p1']);
 			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'stroke' && m.body.stroke.id === 'p1')), { timeout: 5000, interval: 100 });
-			assert.ok(!received.some(m => (m.type === 'stroke' || m.type === 'strokePart') && (m.body.stroke?.id === 'd1' || m.body.strokeId === 'd1')));
+			assert.ok(!received.some(m => m.type === 'stroke' && m.body.stroke.id === 'd1'));
+			assert.ok(!received.some(m => m.type === 'strokeParts' && m.body.parts.some((p: { strokeId: string }) => p.strokeId === 'd1')));
 			assert.ok(received.filter(m => m.type === 'layersUpdated').every(m => m.body.layers.every((l: Layer) => !l.private)));
 
 			// みんなに見せるようにすると、その時点の線がまとめて届く
@@ -934,6 +1000,95 @@ describe('絵チャ', () => {
 		assert.deepStrictEqual((await view(alice))?.strokes.map(s => s.id), ['d1', 'p1']);
 	});
 
+	test('レイヤーを結合すると、結合元の線が重なり順を保って結合先に入り、結合元の濃さ・合成モードを持つまとまりになる', async () => {
+		const room = await createRoom(alice);
+		type Stroke = { id: string; layer?: string; opacity?: number; g?: string };
+		type Group = { id: string; parent?: string; opacity: number; blend?: string };
+		const received: Record<string, any>[] = [];
+		const bobWs = await connectStream(bob, 'drawRoom', (msg) => received.push(msg), { roomId: room.id });
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		const view = async () => (await layersOf(room, alice)).find(l => l.userId === alice.id) as unknown as { strokes: Stroke[]; layers: { id: string; opacity: number; name: string; groups?: Group[] }[] } | undefined;
+		try {
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '下', visible: true, opacity: 1 },
+				{ id: 'top', name: '上', visible: true, opacity: 0.5, blend: 'multiply' },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			await vi.waitFor(async () => assert.strictEqual((await view())?.layers.length, 3), { timeout: 5000, interval: 200 });
+			// 上下のレイヤーに交互に描く(描いた順は t1, b1, t2, b2)
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t1'), layer: 'top' });
+			sendToChannel(aliceWs, 'stroke', stroke('b1'));
+			sendToChannel(aliceWs, 'stroke', { ...stroke('t2'), layer: 'top', opacity: 0.8 });
+			sendToChannel(aliceWs, 'stroke', stroke('b2'));
+			await vi.waitFor(async () => assert.strictEqual((await view())?.strokes.length, 4), { timeout: 5000, interval: 200 });
+
+			// 下描きと皆に見えるレイヤーの結合は断られる
+			sendToChannel(aliceWs, 'mergeLayer', { from: 'draft', into: 'top' });
+			// 上のレイヤーを下のレイヤーに結合する: 上にあった線は、下のレイヤーの線の後ろ(上)に並ぶ
+			sendToChannel(aliceWs, 'mergeLayer', { from: 'top', into: '0' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await view())?.layers.map(l => l.id), ['0', 'draft']), { timeout: 5000, interval: 200 });
+			const merged0 = (await view())!;
+			const strokes = merged0.strokes;
+			assert.deepStrictEqual(strokes.map(s => s.id), ['b1', 'b2', 't1', 't2']);
+			assert.ok(strokes.every(s => (s.layer ?? '0') === '0'));
+			// 線の濃さはそのまま(焼き込まない)。結合元の線は、結合元の濃さ(50%)・合成モードを持つまとまりの線になる
+			assert.deepStrictEqual(strokes.map(s => s.opacity ?? 1), [1, 1, 1, 0.8]);
+			const groups = merged0.layers[0].groups ?? [];
+			assert.strictEqual(groups.length, 1);
+			assert.deepStrictEqual({ opacity: groups[0].opacity, blend: groups[0].blend, parent: groups[0].parent }, { opacity: 0.5, blend: 'multiply', parent: undefined });
+			assert.deepStrictEqual(strokes.map(s => s.g ?? null), [null, null, groups[0].id, groups[0].id]);
+			// 結合したレイヤーの一覧を置き換えても(名前を変える)、まとまりはサーバーが引き継ぐ
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '結合', visible: true, opacity: 1 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			await vi.waitFor(async () => {
+				const layers = (await view())!.layers;
+				assert.strictEqual(layers[0].name, '結合');
+				assert.deepStrictEqual(layers[0].groups, groups);
+			}, { timeout: 5000, interval: 200 });
+
+			// 上へ結合する: 結合先の線もまとまりになる(結合先の消しゴムが、結合元の線に効かないように)。濃さは結合先のものを引き継ぐ
+			sendToChannel(aliceWs, 'setLayers', { layers: [
+				{ id: '0', name: '結合', visible: true, opacity: 1 },
+				{ id: 'up', name: '上2', visible: true, opacity: 0.6 },
+				{ id: 'draft', name: '下描き', visible: true, opacity: 1, private: true },
+			] });
+			await vi.waitFor(async () => assert.strictEqual((await view())?.layers.length, 3), { timeout: 5000, interval: 200 });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('u1'), layer: 'up' });
+			await vi.waitFor(async () => assert.strictEqual((await view())?.strokes.length, 5), { timeout: 5000, interval: 200 });
+			// レイヤーの操作は回数の上限があるので、少し待ってから結合する
+			await new Promise(resolve => setTimeout(resolve, 2100));
+			sendToChannel(aliceWs, 'mergeLayer', { from: '0', into: 'up' });
+			await vi.waitFor(async () => assert.deepStrictEqual((await view())?.layers.map(l => l.id), ['up', 'draft']), { timeout: 5000, interval: 200 });
+			const up = (await view())!;
+			assert.deepStrictEqual(up.strokes.map(s => s.id), ['b1', 'b2', 't1', 't2', 'u1']);
+			assert.strictEqual(up.layers[0].opacity, 0.6);
+			const upGroups = new Map((up.layers[0].groups ?? []).map(g => [g.id, g]));
+			const gOf = (id: string) => upGroups.get(up.strokes.find(s => s.id === id)!.g!)!;
+			// 結合元(下)の線: 元のまとまりの無い線は新しいまとまり(濃さ100%)、元のまとまりはその下に入る
+			assert.strictEqual(gOf('b1').opacity, 1);
+			assert.strictEqual(gOf('t1').parent, gOf('b1').id);
+			assert.strictEqual(gOf('t1').opacity, 0.5);
+			// 結合先(上)の線: 濃さ100%のまとまり(レイヤーの濃さ60%がかかる)
+			assert.strictEqual(gOf('u1').opacity, 1);
+			assert.strictEqual(gOf('u1').parent, undefined);
+			// 下描きと皆に見えるレイヤーの結合は断られていた(下描きは残っている)
+			assert.ok(up.layers.some(l => l.id === 'draft'));
+			// ほかの人には、結合先のレイヤーの線が配り直される(下描きのレイヤーは流れない)
+			await vi.waitFor(() => {
+				const merged = received.find(m => m.type === 'layerMerged' && m.body.layer === '0');
+				assert.strictEqual(merged?.body.layer, '0');
+				assert.deepStrictEqual(merged?.body.strokes.map((s: Stroke) => s.id), ['b1', 'b2', 't1', 't2']);
+			}, { timeout: 5000, interval: 100 });
+			assert.deepStrictEqual((await layersOf(room, bob)).find(l => l.userId === alice.id)?.strokes.map(s => s.id), ['b1', 'b2', 't1', 't2', 'u1']);
+		} finally {
+			aliceWs.close();
+			bobWs.close();
+			await call('draw-rooms/end', { roomId: room.id }, alice);
+		}
+	});
+
 	test('描いている途中で下描きに変えた線は、ほかの人の画面から取り消される。線を切ったときは下描きの線だけを除いて届く', async () => {
 		const room = await createRoom(alice);
 		const received: Record<string, any>[] = [];
@@ -944,7 +1099,8 @@ describe('絵チャ', () => {
 			sendToChannel(aliceWs, 'setLayers', { layers: publicLayers });
 			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'layersUpdated')), { timeout: 5000, interval: 100 });
 			sendToChannel(aliceWs, 'strokePart', { strokeId: 'x1', tool: 'pen', color: '#000000', size: 4, layer: 'd', points: encodePoints([[1, 1, 1]]) });
-			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'strokePart' && m.body.strokeId === 'x1')), { timeout: 5000, interval: 100 });
+			// 描いている途中の線は、部屋ごとにまとめて届く
+			await vi.waitFor(() => assert.ok(received.some(m => m.type === 'strokeParts' && m.body.parts.some((p: { strokeId: string }) => p.strokeId === 'x1'))), { timeout: 5000, interval: 100 });
 
 			// 途中で下描きにする → 確定した線は届かず、途中まで届いた分は取り消される
 			sendToChannel(aliceWs, 'setLayers', { layers: [publicLayers[0], { ...publicLayers[1], private: true }] });
@@ -974,7 +1130,7 @@ describe('絵チャ', () => {
 		const room = await createRoom(alice, { canvasPreset: 'square3840' });
 		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
 		try {
-			sendToChannel(aliceWs, 'stroke', { ...stroke('outside'), points: encodePoints([[3840 + 250, 10, 1]]) });
+			sendToChannel(aliceWs, 'stroke', { ...stroke('outside'), points: encodePoints([[-600, 10, 1]]) });
 			sendToChannel(aliceWs, 'stroke', { ...stroke('corner'), points: encodePoints([[3839.875, 3839.875, 1], [3900, 3900, 0.5]]) });
 			await vi.waitFor(async () => {
 				const layers = await layersOf(room, alice);
@@ -1038,5 +1194,42 @@ describe('絵チャ', () => {
 		const active = await createRoom(alice);
 		assert.strictEqual((await call('draw-rooms/delete', { roomId: active.id }, alice)).body.error.code, 'ROOM_NOT_ENDED');
 		await call('draw-rooms/end', { roomId: active.id }, alice);
+	});
+
+	test('「保存しない」で終了した部屋は、削除されるまでなら部屋主が保存する設定に変えられ、線とチャットが残る', async () => {
+		const room = await createRoom(alice, { keepAfterEnd: false });
+		const aliceWs = await connectStream(alice, 'drawRoom', () => {}, { roomId: room.id });
+		try {
+			sendToChannel(aliceWs, 'stroke', stroke('late1'));
+			sendToChannel(aliceWs, 'chat', { text: 'keep me' });
+			await vi.waitFor(async () => {
+				const layers = await layersOf(room, alice);
+				assert.deepStrictEqual(layers.find(l => l.userId === alice.id)?.strokes.map(s => s.id), ['late1']);
+			}, { timeout: 5000, interval: 200 });
+		} finally {
+			aliceWs.close();
+		}
+
+		// 開催中は使えない(開催中は設定の変更で切り替える)
+		assert.strictEqual((await call('draw-rooms/keep', { roomId: room.id }, alice)).body.error.code, 'ROOM_NOT_ENDED');
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+		// 部屋主以外は変えられない
+		assert.strictEqual((await call('draw-rooms/keep', { roomId: room.id }, bob)).body.error.code, 'NOT_OWNER');
+
+		const kept = (await call('draw-rooms/keep', { roomId: room.id }, alice)).body as DrawRoom;
+		assert.strictEqual(kept.isEnded, true);
+		assert.strictEqual(kept.keepAfterEnd, true);
+		assert.strictEqual(kept.deletesAt, null);
+		// もう一度押しても変わらない
+		assert.strictEqual(((await call('draw-rooms/keep', { roomId: room.id }, alice)).body as DrawRoom).keepAfterEnd, true);
+
+		// 保存した部屋として、線とチャットを見られる
+		const layers = await layersOf(room, bob);
+		assert.deepStrictEqual(layers.find(l => l.userId === alice.id)?.strokes.map(s => s.id), ['late1']);
+		const chat = (await call('draw-rooms/chat-history', { roomId: room.id }, bob)).body as { message: { text: string } }[];
+		assert.deepStrictEqual(chat.map(c => c.message.text), ['keep me']);
+		const saved = (await call('draw-rooms/list', { saved: true }, bob)).body as DrawRoom[];
+		assert.strictEqual(saved.some(r => r.id === room.id), true);
+		await call('draw-rooms/delete', { roomId: room.id }, alice);
 	});
 });

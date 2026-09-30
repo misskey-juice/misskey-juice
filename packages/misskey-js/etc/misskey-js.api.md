@@ -1089,20 +1089,9 @@ export type Channels = {
             roomId: string;
         };
         events: {
-            strokePart: (payload: {
-                userId: User['id'];
-                strokeId: string;
-                tool: DrawStroke['tool'];
-                color: string;
-                size: number;
-                opacity?: number;
-                brush?: DrawStroke['brush'];
-                clip?: string;
-                layer?: string;
-                lock?: boolean;
-                pressure?: DrawStroke['pressure'];
-                points: string;
-                private?: boolean;
+            strokePart: (payload: DrawRoomStrokePart) => void;
+            strokeParts: (payload: {
+                parts: DrawRoomStrokePart[];
             }) => void;
             cursors: (payload: {
                 cursors: {
@@ -1157,6 +1146,12 @@ export type Channels = {
                 userId: User['id'];
                 layer: string;
                 strokes: DrawStroke[];
+            }) => void;
+            layerMerged: (payload: {
+                userId: User['id'];
+                layer: string;
+                strokes: DrawStroke[];
+                private?: boolean;
             }) => void;
             operationRejected: (payload: Record<string, never>) => void;
             strokeLimitReached: (payload: {
@@ -1220,6 +1215,10 @@ export type Channels = {
             };
             setLayers: {
                 layers: DrawLayer[];
+            };
+            mergeLayer: {
+                from: string;
+                into: string;
             };
             moveStrokes: {
                 strokeIds: string[] | null;
@@ -1677,7 +1676,16 @@ type DrawRoomsEndRequest = operations['draw-rooms___end']['requestBody']['conten
 type DrawRoomsEndResponse = operations['draw-rooms___end']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type DrawRoomsHostingResponse = operations['draw-rooms___hosting']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type DrawRoomsJoinRequest = operations['draw-rooms___join']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawRoomsKeepRequest = operations['draw-rooms___keep']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type DrawRoomsKeepResponse = operations['draw-rooms___keep']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type DrawRoomsKickRequest = operations['draw-rooms___kick']['requestBody']['content']['application/json'];
@@ -2347,7 +2355,10 @@ declare namespace entities {
         DrawRoomsDeleteRequest,
         DrawRoomsEndRequest,
         DrawRoomsEndResponse,
+        DrawRoomsHostingResponse,
         DrawRoomsJoinRequest,
+        DrawRoomsKeepRequest,
+        DrawRoomsKeepResponse,
         DrawRoomsKickRequest,
         DrawRoomsLeaveRequest,
         DrawRoomsListRequest,
@@ -4000,7 +4011,7 @@ type RoleLite = components['schemas']['RoleLite'];
 type RolePolicies = components['schemas']['RolePolicies'];
 
 // @public (undocumented)
-export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxCanvasSize", "drawRoomMaxStrokes", "drawRoomMaxStrokeMegabytes", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
+export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxActiveRooms", "drawRoomMaxCanvasSize", "drawRoomMaxStrokes", "drawRoomMaxStrokeMegabytes", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
 
 // @public (undocumented)
 type RolesListResponse = operations['roles___list']['responses']['200']['content']['application/json'];
@@ -4438,9 +4449,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:287:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:302:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:317:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:290:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:305:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:315:4 - (ae-forgotten-export) The symbol "DrawRoomStrokePart" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:322:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
