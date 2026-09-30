@@ -110,7 +110,8 @@ async function fetchRooms(): Promise<void> {
 			misskeyApi('draw-rooms/list', { limit: 30 }),
 			misskeyApi('draw-rooms/list', { userId: $i.id, limit: 30 }),
 			misskeyApi('draw-rooms/list', { saved: true, limit: SAVED_ROOMS_PAGE }),
-			$i.policies.canCreateDrawRoom ? misskeyApi('draw-rooms/hosting', {}) : Promise.resolve(null),
+			// 部屋の数は補助の表示なので、取れなくても一覧は出す(上限はサーバーが確かめる)
+			$i.policies.canCreateDrawRoom ? misskeyApi('draw-rooms/hosting', {}).catch(() => null) : Promise.resolve(null),
 		]);
 		hosting.value = hostingStatus;
 		openRooms.value = open.filter(room => !room.isEnded);

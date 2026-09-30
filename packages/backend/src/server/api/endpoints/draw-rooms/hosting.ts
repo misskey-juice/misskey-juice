@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DrawRoomService } from '@/core/DrawRoomService.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
@@ -15,6 +16,11 @@ export const meta = {
 	requireCredential: true,
 
 	kind: 'read:draw-rooms',
+
+	limit: {
+		duration: ms('1minute'),
+		max: 60,
+	},
 
 	res: {
 		type: 'object',

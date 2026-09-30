@@ -285,6 +285,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									@pointermove.stop="onRotateHandleMove"
 									@pointerup.stop="onRotateHandleUp"
 									@pointercancel.stop="onRotateHandleUp"
+									@lostpointercapture.stop="onRotateHandleUp"
 								/>
 								<!-- JUICE: ドラッグして選んだ部分を拡大縮小するつまみ(右下の角。真ん中を中心に、縦横同じ倍率で) -->
 								<rect
@@ -297,6 +298,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									@pointermove.stop="onScaleHandleMove"
 									@pointerup.stop="onScaleHandleUp"
 									@pointercancel.stop="onScaleHandleUp"
+									@lostpointercapture.stop="onScaleHandleUp"
 								/>
 							</template>
 						</g>
@@ -361,6 +363,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<button class="_button" :class="$style.selectionAction" @click="tool = 'move'"><i class="ti ti-arrows-move"></i> {{ i18n.ts._drawRoom.moveTool }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionLeft" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionLeft" @click="rotateSelection(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionRight" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionRight" @click="rotateSelection(ROTATE_STEP)"><i class="ti ti-rotate-clockwise-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateRight }}</span></button>
+					<!-- JUICE: 選んだ部分を拡大・縮小する(つまみを使えないとき用) -->
+					<button v-tooltip="i18n.ts._drawRoom.enlargeSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.enlargeSelection" @click="scaleSelection(SELECTION_SCALE_STEP)"><i class="ti ti-arrows-maximize"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortEnlarge }}</span></button>
+					<button v-tooltip="i18n.ts._drawRoom.shrinkSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.shrinkSelection" @click="scaleSelection(1 / SELECTION_SCALE_STEP)"><i class="ti ti-arrows-minimize"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortShrink }}</span></button>
 					<!-- JUICE: 選んだ部分を左右反転する(選んだ形の真ん中を軸に) -->
 					<button v-tooltip="i18n.ts._drawRoom.flipSelectionHorizontal" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionHorizontal" @click="flipSelectionHorizontal"><i class="ti ti-flip-vertical"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipHorizontal }}</span></button>
 					<!-- JUICE: 選んだ部分を上下反転する(選んだ形の真ん中を軸に) -->
@@ -2939,6 +2944,8 @@ function finishSelectGesture(gesture: { kind: 'select' | 'lasso'; points: number
 }
 
 function clearStrokeSelection(): void {
+	// JUICE: つまみを動かしている途中なら取りやめる(つまみが消えて、離したことが届かなくなるため)
+	cancelRotateDrag();
 	strokeSelection.value = new Set();
 	selectionShapes.value = [];
 	selectionNeedsSplit = false;
@@ -3071,7 +3078,8 @@ let rotateDrag: { pointerId: number; startAngle: number; pivotX: number; pivotY:
 function onRotateHandleDown(ev: PointerEvent): void {
 	const pivot = selectionPivot.value;
 	const e = engine.value;
-	if (pivot == null || e == null || !canDraw.value) return;
+	// 拡大縮小・回転のつまみは、同時に1つだけ動かせる
+	if (pivot == null || e == null || !canDraw.value || rotateDrag != null || scaleDrag != null) return;
 	(ev.currentTarget as Element).setPointerCapture(ev.pointerId);
 	const [x, y] = toCanvasPoint(ev);
 	const prepared = prepareSelection();
@@ -3089,22 +3097,26 @@ function onRotateHandleMove(ev: PointerEvent): void {
 	engine.value?.updateRotate(angle, rotateDrag.pivotX, rotateDrag.pivotY);
 }
 
-// 回転のつまみを動かしている途中で、ページを離れた・部屋が終わったときに取りやめる
+// 回転・拡大縮小のつまみを動かしている途中で、ページを離れた・部屋が終わった・選択が外れたときに取りやめる。
+// つまみを押したときに境目で切った線は自分の画面では切れているので、切った内容だけはサーバーへ送る
 function cancelRotateDrag(): void {
-	if (rotateDrag == null && scaleDrag == null) return;
+	const drag = rotateDrag ?? scaleDrag;
+	if (drag == null) return;
 	rotateDrag = null;
 	scaleDrag = null;
 	rotateDragAngle.value = 0;
 	scaleDragFactor.value = 1;
 	scaleDragPivot.value = null;
 	engine.value?.endMove();
+	commitTransform(drag.prepared, { angle: 0, scaleX: 1, scaleY: 1 }, drag.pivotX, drag.pivotY);
 }
 
 function onRotateHandleUp(ev: PointerEvent): void {
 	if (rotateDrag == null || rotateDrag.pointerId !== ev.pointerId) return;
 	const drag = rotateDrag;
 	rotateDrag = null;
-	const angle = ev.type === 'pointercancel' ? 0 : rotateDragAngle.value;
+	// 離した(pointerup)とき以外(取りやめ・つかんでいたのが外れた)は変形しない
+	const angle = ev.type === 'pointerup' ? rotateDragAngle.value : 0;
 	rotateDragAngle.value = 0;
 	engine.value?.endMove();
 	commitTransform(drag.prepared, { angle, scaleX: 1, scaleY: 1 }, drag.pivotX, drag.pivotY);
@@ -3124,6 +3136,15 @@ function flipSelectionHorizontal(): void {
 	commitTransform(prepareSelection(), { angle: 0, scaleX: -1, scaleY: 1 }, pivot.x, pivot.y);
 }
 
+// JUICE: ボタンで拡大・縮小する(選んだ形の真ん中を中心に。つまみを使えないとき用)
+const SELECTION_SCALE_STEP = 1.25;
+
+function scaleSelection(factor: number): void {
+	const pivot = selectionPivot.value;
+	if (pivot == null || !canDraw.value) return;
+	commitTransform(prepareSelection(), { angle: 0, scaleX: factor, scaleY: factor }, pivot.x, pivot.y);
+}
+
 // JUICE: 上下反転(選んだ形の真ん中を軸に)
 function flipSelectionVertical(): void {
 	const pivot = selectionPivot.value;
@@ -3137,7 +3158,8 @@ let scaleDrag: { pointerId: number; startDistance: number; pivotX: number; pivot
 function onScaleHandleDown(ev: PointerEvent): void {
 	const pivot = selectionPivot.value;
 	const e = engine.value;
-	if (pivot == null || e == null || !canDraw.value) return;
+	// 拡大縮小・回転のつまみは、同時に1つだけ動かせる
+	if (pivot == null || e == null || !canDraw.value || rotateDrag != null || scaleDrag != null) return;
 	(ev.currentTarget as Element).setPointerCapture(ev.pointerId);
 	const [x, y] = toCanvasPoint(ev);
 	const prepared = prepareSelection();
@@ -3161,7 +3183,8 @@ function onScaleHandleUp(ev: PointerEvent): void {
 	if (scaleDrag == null || scaleDrag.pointerId !== ev.pointerId) return;
 	const drag = scaleDrag;
 	scaleDrag = null;
-	const factor = ev.type === 'pointercancel' ? 1 : scaleDragFactor.value;
+	// 離した(pointerup)とき以外(取りやめ・つかんでいたのが外れた)は変形しない
+	const factor = ev.type === 'pointerup' ? scaleDragFactor.value : 1;
 	scaleDragFactor.value = 1;
 	scaleDragPivot.value = null;
 	engine.value?.endMove();

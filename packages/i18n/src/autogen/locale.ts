@@ -10202,6 +10202,22 @@ export interface Locale extends ILocale {
          */
         "rotateSelectionRight": string;
         /**
+         * 選んだ部分を拡大
+         */
+        "enlargeSelection": string;
+        /**
+         * 選んだ部分を縮小
+         */
+        "shrinkSelection": string;
+        /**
+         * 拡大
+         */
+        "shortEnlarge": string;
+        /**
+         * 縮小
+         */
+        "shortShrink": string;
+        /**
          * 選んだ部分を左右反転
          */
         "flipSelectionHorizontal": string;

@@ -1331,6 +1331,7 @@ export class DrawCanvasEngine {
 		if (layer.groups.size > 0 && from === 0) {
 			layer.strokes.push(...strokes);
 			drawStrokesInGroups(ctx, strokes, layer.groups, this.groupPool);
+			this.releaseGroupPoolLater();
 			return strokes.length;
 		}
 		let i = from;
@@ -1387,6 +1388,7 @@ export class DrawCanvasEngine {
 			const ctx = layer.committed.getContext('2d')!;
 			ctx.clearRect(0, 0, this.width, this.height);
 			drawStrokesInGroups(ctx, layer.strokes, layer.groups, this.groupPool);
+			this.releaseGroupPoolLater();
 			this.redrawThumb(layer);
 			this.committedChanged();
 		}
@@ -1445,6 +1447,7 @@ export class DrawCanvasEngine {
 			ctx.clip();
 			ctx.clearRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
 			drawStrokesInGroups(ctx, strokes, layer.groups, this.groupPool, r);
+			this.releaseGroupPoolLater();
 			ctx.restore();
 		};
 		redraw(layer.committed.getContext('2d')!, rect);
@@ -1834,12 +1837,14 @@ export class DrawCanvasEngine {
 			...(stroke.clip != null ? { clip: shiftPoints(stroke.clip, -x0, -y0) } : {}),
 		}));
 		drawStrokesInGroups(movingCtx, movingStrokes, layer.groups, this.groupPool);
+		this.releaseGroupPoolLater();
 		const stillStrokes = layer.strokes.filter(stroke => {
 			if (ids.has(stroke.id)) return false;
 			const sr = strokeRect(stroke);
 			return sr != null && rectsIntersect(sr, r);
 		});
 		drawStrokesInGroups(stillCtx, stillStrokes, layer.groups, this.groupPool, { x0, y0, x1: x0 + moving.width, y1: y0 + moving.height });
+		this.releaseGroupPoolLater();
 		stillCtx.restore();
 		this.moving = { userId, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
 		this.requestRender();
@@ -1931,8 +1936,23 @@ export class DrawCanvasEngine {
 
 	// 消しゴム・移動の途中に使うキャンバスの予備(1枚だけ持っておく)
 	private liveSpare: HTMLCanvasElement | null = null;
-	// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(入れ子の深さごと。使い回す)
+	// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(入れ子の深さごと。使い回す)。
+	// キャンバスと同じ大きさなので、しばらく使わなければ小さくしてメモリを返す
 	private groupPool: HTMLCanvasElement[] = [];
+	private groupPoolReleaseTimer: number | null = null;
+
+	// まとまりのある線を描いた後に呼ぶ(しばらく使わなければ作業用の絵を小さくする)
+	private releaseGroupPoolLater(): void {
+		if (this.groupPool.length === 0) return;
+		if (this.groupPoolReleaseTimer != null) window.clearTimeout(this.groupPoolReleaseTimer);
+		this.groupPoolReleaseTimer = window.setTimeout(() => {
+			this.groupPoolReleaseTimer = null;
+			for (const canvas of this.groupPool) {
+				canvas.width = 1;
+				canvas.height = 1;
+			}
+		}, 10 * 1000);
+	}
 
 	private takeLiveCanvas(): HTMLCanvasElement {
 		const canvas = this.liveSpare ?? createCanvas(this.width, this.height);

@@ -1038,7 +1038,14 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// 同時に作成を投げても上限を超えないよう、確認から作成までを短いロックで囲む
 		const maxActiveRooms = this.maxActiveRoomsOf(policies);
 		const lockKey = `drawroom:creating:${me.id}`;
-		if (await this.redisClient.set(lockKey, '1', 'EX', 10, 'NX') == null) throw new DrawRoomError('alreadyHosting');
+		// JUICE: 同じ人が同時に作成を投げたとき(ボタンの連打など)は、先の作成が終わるまで少し待つ
+		// (すぐ断ると、上限に達していないのに「上限の数の部屋を開催中」と出てしまうため)
+		let locked = false;
+		for (let i = 0; i < 20 && !locked; i++) {
+			locked = await this.redisClient.set(lockKey, '1', 'EX', 10, 'NX') != null;
+			if (!locked) await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		if (!locked) throw new DrawRoomError('alreadyHosting');
 		try {
 			if (await this.drawRoomsRepository.countBy({ ownerId: me.id, isEnded: false }) >= maxActiveRooms) {
 				throw new DrawRoomError('alreadyHosting');
@@ -1443,8 +1450,9 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 * JUICE: 自分のレイヤー(from)を、重なり順でとなりのレイヤー(into)に結合する。下描きどうし・皆に見えるレイヤーどうしだけ結合できる。
 	 * fromの線はfromの濃さ・合成モード・表示を持つまとまりにし(消しゴム・透明度ロックの線もその中だけに効く)、
 	 * intoの線も、上へ結合するとき(intoの消しゴムがfromの線を消さないように)などは、まとまりにする。
-	 * 結合したレイヤーの濃さ・合成モードはintoのものを引き継ぐ。どちらも100%・通常なら結合する前と同じ見た目で、
-	 * 半透明・合成モードのレイヤーでは、線の重なった所の見え方が変わることがある。取り消せない
+	 * 結合したレイヤーの濃さ・合成モードはintoのものを引き継ぐ(Photoshopなどと同じ)。どちらも100%・通常なら結合する前と同じ見た目。
+	 * intoが半透明ならfromの線にもその濃さがかかり(例: intoが50%なら、fromの線も半分の濃さに見える)、
+	 * 合成モードのレイヤーでは見え方が変わることがある。取り消せない
 	 */
 	@bindThis
 	public async mergeLayer(roomId: MiDrawRoom['id'], userId: MiUser['id'], from: string, into: string): Promise<boolean> {
@@ -1463,7 +1471,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		const visible = fromLayer.visible || intoLayer.visible;
 		const clamp = (v: number) => Math.min(1, Math.max(0, v));
 		// 結合したレイヤーの濃さは、結合先(into)の濃さを引き継ぐ(Photoshopなどと同じ)。fromの線は、fromの濃さのまとまりとして
-		// intoの中に重ねる(どちらも100%なら結合する前と同じ見た目。半透明どうしでは、線の重なった所の見え方が変わることがある)
+		// intoの中に重ねる(どちらも100%なら結合する前と同じ見た目。intoが半透明なら、fromの線にもその濃さがかかる)
 		const intoOpacity = intoLayer.visible || !visible ? 1 : 0;
 		const fromOpacity = fromLayer.visible || !visible ? clamp(fromLayer.opacity) : 0;
 		const gB = secureRndstr(8, { chars: '0123456789abcdefghijklmnopqrstuvwxyz' });
