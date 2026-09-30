@@ -1415,8 +1415,52 @@ export class DrawCanvasEngine {
 		this.stats.lastRedrawFull = rect == null;
 	}
 
-	// JUICE: デバッグ情報の表示用(描き直しにかかった時間など)
-	public stats = { lastRedrawMs: 0, lastRedrawFull: false, lastRenderMs: 0 };
+	// JUICE: デバッグ情報の表示用(描き直しにかかった時間など)。
+	// grabExactMs: 移動ツールで仮の絵を動かし始めてから、Workerで描いた正しい絵に差し替わるまで(仮の絵を使わなければnull)。
+	// regionRedrawMs: Workerでの描き直しを頼んでから、全て差し替え終わるまで
+	public stats = { lastRedrawMs: 0, lastRedrawFull: false, lastRenderMs: 0, grabExactMs: null as number | null, regionRedrawMs: null as number | null };
+
+	/**
+	 * JUICE: デバッグ情報の表示用。エンジンが持っているキャンバスの画素のメモリの見積もり(バイト。1画素4バイト)。
+	 * Safari(iPad等)は、キャンバスのメモリの合計が上限を超えると描けなくなるため、その目安にする
+	 */
+	public canvasMemoryBytes(): number {
+		const canvases = new Set<HTMLCanvasElement>();
+		const add = (canvas: HTMLCanvasElement | null | undefined) => {
+			if (canvas != null) canvases.add(canvas);
+		};
+		add(this.display);
+		add(this.overlay);
+		add(this.overlayAlpha);
+		add(this.probe);
+		add(this.groupCanvas.below);
+		add(this.groupCanvas.above);
+		add(this.liveSpare);
+		add(this.moveStillSpare);
+		add(this.moving?.moving);
+		add(this.moving?.still);
+		for (const canvas of this.groupPool) add(canvas);
+		for (const canvas of this.strokeCanvasPool) add(canvas);
+		for (const canvas of this.strokeCanvasInUse) add(canvas);
+		for (const layer of this.layers.values()) {
+			add(layer.committed);
+			add(layer.live);
+			add(layer.thumb);
+		}
+		// 線を描くときの作業用(全員で共有)
+		add(scratch);
+		add(pressureScratch);
+		add(pressureField);
+		add(lockScratch);
+		let bytes = 0;
+		for (const canvas of canvases) bytes += canvas.width * canvas.height * 4;
+		return bytes;
+	}
+
+	// JUICE: Workerで描き直している範囲の数(デバッグ情報の表示用)
+	public get pendingRegionRedraws(): number {
+		return this.regionRedraws.size;
+	}
 
 	/**
 	 * JUICE: デバッグ情報の表示用。レイヤーの数・全員の線の本数・描いている途中の線の数。
@@ -1907,6 +1951,7 @@ export class DrawCanvasEngine {
 			this.releaseGroupPoolLater();
 			stillCtx.restore();
 			this.moving = { userId, ids, staleRect, stillExact: true, movingExact: true, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
+			this.stats.grabExactMs = null;
 			this.requestRender();
 			return;
 		}
@@ -1929,6 +1974,8 @@ export class DrawCanvasEngine {
 		stillCtx.restore();
 		const session = { userId, ids, staleRect, stillExact: false, movingExact: false, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
 		this.moving = session;
+		const approximatedAt = performance.now();
+		this.stats.grabExactMs = null;
 		this.requestRender();
 		// 正しい絵ができたら、動かしている間なら差し替える(動かし終えていたら、描き終わった絵の方をWorkerで描き直している)
 		const replace = (target: HTMLCanvasElement, result: { bitmap: ImageBitmap; x: number; y: number } | null, apply: () => void) => {
@@ -1941,6 +1988,7 @@ export class DrawCanvasEngine {
 			ctx.drawImage(result.bitmap, result.x, result.y);
 			result.bitmap.close();
 			apply();
+			if (session.stillExact && session.movingExact) this.stats.grabExactMs = performance.now() - approximatedAt;
 			// 動かしている線の表示を、正しい絵で作り直す
 			session.lastRect = null;
 			this.requestRender();
@@ -2169,6 +2217,16 @@ export class DrawCanvasEngine {
 	// レイヤーごとの、Workerで描き直している範囲
 	private regionRedraws = new Map<Layer, { rect: Rect; token: number }>();
 	private regionRedrawToken = 0;
+	// Workerでの描き直しを頼み始めた時刻(デバッグ情報の表示用。全て差し替え終わったらnull)
+	private regionRedrawStartedAt: number | null = null;
+
+	// Workerでの描き直しを1つ終えた(全て終えたら、かかった時間を覚える)
+	private finishRegionRedraw(layer: Layer): void {
+		this.regionRedraws.delete(layer);
+		if (this.regionRedraws.size > 0 || this.regionRedrawStartedAt == null) return;
+		this.stats.regionRedrawMs = performance.now() - this.regionRedrawStartedAt;
+		this.regionRedrawStartedAt = null;
+	}
 
 	// 範囲にかかる線の数が多く、Workerで描き直すほうがよいか
 	private canRenderRegionAsync(layer: Layer, rect: Rect): boolean {
@@ -2208,6 +2266,7 @@ export class DrawCanvasEngine {
 	private scheduleRegionRedraw(layer: Layer, rect: Rect): void {
 		const full = unionRect(this.regionRedraws.get(layer)?.rect ?? null, rect)!;
 		const token = ++this.regionRedrawToken;
+		this.regionRedrawStartedAt ??= performance.now();
 		this.regionRedraws.set(layer, { rect: full, token });
 		const strokesRef = layer.strokes;
 		const count = strokesRef.length;
@@ -2218,7 +2277,7 @@ export class DrawCanvasEngine {
 		});
 		const request = this.renderRegion(layer, strokes, full);
 		if (request == null) {
-			this.regionRedraws.delete(layer);
+			this.finishRegionRedraw(layer);
 			this.redrawStrokesRegion(layer, full);
 			return;
 		}
@@ -2227,17 +2286,19 @@ export class DrawCanvasEngine {
 				result?.bitmap.close();
 				return;
 			}
-			this.regionRedraws.delete(layer);
 			if (result == null) {
+				this.finishRegionRedraw(layer);
 				this.redrawStrokesRegion(layer, full);
 				return;
 			}
 			if (layer.strokes !== strokesRef || layer.strokes.length !== count || layer.groups !== groupsRef) {
 				// 描いている間に線が変わった: 今の線で描き直す
 				result.bitmap.close();
+				this.regionRedraws.delete(layer);
 				this.scheduleRegionRedraw(layer, full);
 				return;
 			}
+			this.finishRegionRedraw(layer);
 			this.markLayerRegion(layer, full);
 			this.invalidateLive(layer, full);
 			const ctx = layer.committed.getContext('2d')!;
@@ -2258,7 +2319,7 @@ export class DrawCanvasEngine {
 	private flushRegionRedraw(layer?: Layer): void {
 		for (const [key, pending] of [...this.regionRedraws]) {
 			if (layer != null && key !== layer) continue;
-			this.regionRedraws.delete(key);
+			this.finishRegionRedraw(key);
 			if (this.layers.get(key.key) === key) this.redrawStrokesRegion(key, pending.rect);
 		}
 	}
@@ -2701,6 +2762,7 @@ export class DrawCanvasEngine {
 
 	public dispose(): void {
 		this.regionRedraws.clear();
+		this.regionRedrawStartedAt = null;
 		this.regionRenderer = null;
 		if (this.spareReleaseTimer != null) window.clearTimeout(this.spareReleaseTimer);
 		this.spareReleaseTimer = null;

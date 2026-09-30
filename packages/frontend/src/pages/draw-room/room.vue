@@ -323,6 +323,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div>{{ i18n.ts._drawRoom.debugCanvas }}: {{ room.canvasWidth }}×{{ room.canvasHeight }} / {{ Math.round(view.scale * 100) }}% / {{ rotationDegrees }}°</div>
 					<div>{{ i18n.ts._drawRoom.debugRedraw }}: {{ debugInfo.lastRedrawMs.toFixed(1) }}ms ({{ debugInfo.lastRedrawFull ? i18n.ts._drawRoom.debugRedrawFull : i18n.ts._drawRoom.debugRedrawRegion }})</div>
 					<div>{{ i18n.ts._drawRoom.debugRender }}: {{ debugInfo.lastRenderMs.toFixed(1) }}ms</div>
+					<!-- JUICE: 移動ツールの重さ(実機で確かめる用)。つかんで・離してから画面に出るまでと、Workerで描いた正しい絵に差し替わるまで -->
+					<div>{{ i18n.ts._drawRoom.debugMoveGrab }}: {{ formatDebugMs(debugInfo.moveGrabMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMoveRelease }}: {{ formatDebugMs(debugInfo.moveReleaseMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMoveGrabExact }}: {{ formatDebugMs(debugInfo.grabExactMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugRegionRedraw }}: {{ formatDebugMs(debugInfo.regionRedrawMs) }}<template v-if="debugInfo.pendingRegionRedraws > 0"> ({{ i18n.tsx._drawRoom.debugRegionRedrawPending({ n: debugInfo.pendingRegionRedraws }) }})</template></div>
+					<div>{{ i18n.ts._drawRoom.debugCanvasMemory }}: ≈{{ formatMegabytes(debugInfo.canvasMemoryBytes) }}</div>
 					<div>{{ i18n.ts._drawRoom.debugOnline }}: {{ onlineUserIds.size }}</div>
 				</div>
 				<!-- JUICE: ほかの人のカーソル(位置の点と、丸いアイコン) -->
@@ -2008,8 +2014,26 @@ type DebugInfo = {
 	lastRedrawMs: number;
 	lastRedrawFull: boolean;
 	lastRenderMs: number;
+	moveGrabMs: number | null;
+	moveReleaseMs: number | null;
+	grabExactMs: number | null;
+	regionRedrawMs: number | null;
+	pendingRegionRedraws: number;
+	canvasMemoryBytes: number;
 };
 const debugInfo = ref<DebugInfo | null>(null);
+
+// JUICE: 移動ツールで、つかんで(離して)から画面に出るまでの時間(デバッグ情報の表示用。まだ測っていなければnull)
+const moveTiming: { grabMs: number | null; releaseMs: number | null } = { grabMs: null, releaseMs: null };
+
+// 操作を始めた時刻から、次の画面の更新までの時間を測る(表示の描き直しは、その前に頼んである)
+function measureUntilNextFrame(startedAt: number, done: (ms: number) => void): void {
+	window.requestAnimationFrame(() => done(performance.now() - startedAt));
+}
+
+function formatDebugMs(ms: number | null): string {
+	return ms == null ? '-' : `${Math.round(ms)}ms`;
+}
 
 // JUICE: 部屋全体の線のデータ量の上限(MB。JUICEの設定)。デバッグ情報を出すときに読む
 const roomMegabytesLimit = ref<number | null>(null);
@@ -2060,6 +2084,12 @@ function updateDebugInfo(): void {
 		lastRedrawMs: e.stats.lastRedrawMs,
 		lastRedrawFull: e.stats.lastRedrawFull,
 		lastRenderMs: e.stats.lastRenderMs,
+		moveGrabMs: moveTiming.grabMs,
+		moveReleaseMs: moveTiming.releaseMs,
+		grabExactMs: e.stats.grabExactMs,
+		regionRedrawMs: e.stats.regionRedrawMs,
+		pendingRegionRedraws: e.pendingRegionRedraws,
+		canvasMemoryBytes: e.canvasMemoryBytes(),
 	};
 }
 
@@ -2547,6 +2577,9 @@ function onPointerDown(ev: PointerEvent): void {
 		const ids = prepared?.ids ?? null;
 		moveDrag = { startX: x, startY: y, pointerId: ev.pointerId, ids, splits: prepared?.splits ?? [] };
 		engine.value.beginMove(activeKey.value, ids, prepared?.staleRect ?? null, ids != null ? selectionShapes.value : undefined);
+		// 押した時刻(イベントの時刻)から測る(その前に画面が止まっていた分も入れる)。イベントの時刻が使えなければ今から
+		const pressedAt = ev.timeStamp > 0 && ev.timeStamp <= performance.now() ? ev.timeStamp : performance.now();
+		measureUntilNextFrame(pressedAt, ms => { moveTiming.grabMs = ms; });
 		return;
 	}
 	// スポイト(またはAltを押しながらクリック)は、その位置の色を拾う
@@ -3005,8 +3038,10 @@ function finishMove(apply: boolean): void {
 	moveOffset.x = 0;
 	moveOffset.y = 0;
 	const moved = apply && (dx !== 0 || dy !== 0);
+	const endedAt = performance.now();
 	// 自分の画面には、ドラッグ中に作った絵を使ってすぐ反映する
 	e.endMove(moved ? { dx, dy } : undefined);
+	if (moved) measureUntilNextFrame(endedAt, ms => { moveTiming.releaseMs = ms; });
 	// 境目で線を切っただけでも(動かさなかった・取りやめた場合も)、切った内容はほかの人にも届ける
 	if (!moved && drag.splits.length === 0) return;
 	// 自分の画面にはすぐ反映し、ほかの人にはサーバー経由で届ける
