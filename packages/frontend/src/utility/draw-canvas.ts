@@ -271,6 +271,13 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 	return canvas;
 }
 
+// JUICE: キャンバスを小さくして、その場でメモリを返す(Safariは、使い終わったキャンバスもガベージコレクションまでメモリを持ち続け、
+// キャンバスのメモリの合計が上限を超えると描けなくなって画面が真っ黒になるため)
+function releaseCanvas(canvas: HTMLCanvasElement): void {
+	canvas.width = 1;
+	canvas.height = 1;
+}
+
 type StrokeShape = Pick<CanvasStroke, 'tool' | 'color' | 'size' | 'points' | 'opacity' | 'brush' | 'clip' | 'lock' | 'pressure'>;
 
 // JUICE: 筆圧で濃さを変える線か(にじみ筆は筆跡ごとに、普通の筆は線全体で。ドット・塗りつぶしには使わない)
@@ -1797,10 +1804,18 @@ export class DrawCanvasEngine {
 		const layer = this.layers.get(userId);
 		if (layer == null) return;
 		if (ids == null) {
-			// レイヤー全体: 描き終わった絵をそのまま動かす
-			const moving = createCanvas(this.width, this.height);
-			moving.getContext('2d')!.drawImage(layer.committed, 0, 0);
-			this.moving = { userId, still: null, moving, originX: 0, originY: 0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
+			// レイヤー全体: 描き終わった絵を、線のある範囲だけ写して動かす
+			// JUICE: キャンバス全体の大きさで作ると、大きなキャンバス(3840×3840で約59MB)ではドラッグのたびにメモリを大きく使い、
+			// iPad等(Safari)ではキャンバスのメモリの上限を超えて画面が真っ黒になるため
+			let content: Rect | null = null;
+			for (const stroke of layer.strokes) content = unionRect(content, strokeRect(stroke));
+			const x0 = Math.max(0, Math.floor(content?.x0 ?? 0));
+			const y0 = Math.max(0, Math.floor(content?.y0 ?? 0));
+			const w = Math.max(1, Math.min(this.width, Math.ceil(content?.x1 ?? 1)) - x0);
+			const h = Math.max(1, Math.min(this.height, Math.ceil(content?.y1 ?? 1)) - y0);
+			const moving = createCanvas(w, h);
+			moving.getContext('2d')!.drawImage(layer.committed, x0, y0, w, h, 0, 0, w, h);
+			this.moving = { userId, still: null, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
 			this.requestRender();
 			return;
 		}
@@ -1867,14 +1882,11 @@ export class DrawCanvasEngine {
 		return rect;
 	}
 
-	// 動かしている線の表示を変えた(前の範囲と今の範囲だけを表示し直す。レイヤー全体を動かしているときは全体)
+	// 動かしている線の表示を変えた(前の範囲と今の範囲だけを表示し直す)
+	// JUICE: レイヤー全体を動かしているときも範囲だけにする(大きなキャンバスで毎回全体を重ね直すと、iPad等で重いため)
 	private movingChanged(): void {
 		const m = this.moving;
 		if (m == null) return;
-		if (m.still == null) {
-			this.requestRender();
-			return;
-		}
 		this.requestRender(unionRect(m.lastRect, this.movingRect()));
 	}
 
@@ -1909,6 +1921,10 @@ export class DrawCanvasEngine {
 		const m = this.moving;
 		this.moving = null;
 		if (m?.still != null) this.moveStillSpare = m.still;
+		// JUICE: 動かした線の絵は使い回さないので、すぐに小さくしてメモリを返す(ガベージコレクションを待つと、
+		// ドラッグを繰り返したときにiPad等(Safari)のキャンバスのメモリの上限を超えて、画面が真っ黒になるため)
+		if (m != null) releaseCanvas(m.moving);
+		this.releaseSparesLater();
 		// 全体を表示し直す(動かしている間にそのレイヤーの線がほかから変わっていても、古いまま残らないように。
 		// 3枚を重ねるだけなので軽い。描き終わった絵の描き直しは、この後の線の移動・置き換えで行う)
 		this.requestRender();
@@ -1916,6 +1932,21 @@ export class DrawCanvasEngine {
 
 	// 動かさない線の絵に使うキャンバスの予備(次のドラッグで使い回す)
 	private moveStillSpare: HTMLCanvasElement | null = null;
+	private spareReleaseTimer: number | null = null;
+
+	// JUICE: 移動・消しゴムに使うキャンバスの予備(キャンバスと同じ大きさ)は、しばらく使わなければ手放してメモリを返す
+	// (大きなキャンバスでは1枚で数十MBあり、iPad等(Safari)のキャンバスのメモリの上限に近づくため)
+	private releaseSparesLater(): void {
+		if (this.spareReleaseTimer != null) window.clearTimeout(this.spareReleaseTimer);
+		this.spareReleaseTimer = window.setTimeout(() => {
+			this.spareReleaseTimer = null;
+			if (this.moving != null) return;
+			if (this.moveStillSpare != null) releaseCanvas(this.moveStillSpare);
+			this.moveStillSpare = null;
+			if (this.liveSpare != null) releaseCanvas(this.liveSpare);
+			this.liveSpare = null;
+		}, 10 * 1000);
+	}
 	//#endregion
 
 	/**
@@ -1947,10 +1978,7 @@ export class DrawCanvasEngine {
 		if (this.groupPoolReleaseTimer != null) window.clearTimeout(this.groupPoolReleaseTimer);
 		this.groupPoolReleaseTimer = window.setTimeout(() => {
 			this.groupPoolReleaseTimer = null;
-			for (const canvas of this.groupPool) {
-				canvas.width = 1;
-				canvas.height = 1;
-			}
+			for (const canvas of this.groupPool) releaseCanvas(canvas);
 		}, 10 * 1000);
 	}
 
@@ -1964,7 +1992,7 @@ export class DrawCanvasEngine {
 		// 移動ツールでドラッグしている間は、動かさない線の上に動かす線をずらして重ねる
 		if (this.moving != null && this.moving.userId === layer.key) {
 			const m = this.moving;
-			const first = layer.live == null || m.lastRect == null || m.still == null;
+			const first = layer.live == null || m.lastRect == null;
 			layer.live ??= this.takeLiveCanvas();
 			const ctx = layer.live.getContext('2d')!;
 			const now = this.movingRect();
@@ -1983,8 +2011,13 @@ export class DrawCanvasEngine {
 				ctx.beginPath();
 				ctx.rect(x, y, Math.max(0, w), Math.max(0, h));
 				ctx.clip();
-				ctx.globalCompositeOperation = 'copy';
-				if (w > 0 && h > 0) ctx.drawImage(m.still!, x, y, w, h, x, y, w, h);
+				if (m.still != null) {
+					ctx.globalCompositeOperation = 'copy';
+					if (w > 0 && h > 0) ctx.drawImage(m.still, x, y, w, h, x, y, w, h);
+				} else if (w > 0 && h > 0) {
+					// レイヤー全体を動かしているときは、動かさない線は無い
+					ctx.clearRect(x, y, w, h);
+				}
 			}
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.translate(m.pivotX + m.dx, m.pivotY + m.dy);
@@ -2001,7 +2034,11 @@ export class DrawCanvasEngine {
 		const erasing = [...layer.pending.values()].filter(stroke => !this.isOverlay(layer, stroke));
 		if (erasing.length === 0) {
 			// 消しゴム・移動の途中に使ったキャンバスは、使い終わったら予備に戻す(スマホ等でメモリを使いすぎないように)
-			if (layer.live != null && this.liveSpare == null) this.liveSpare = layer.live;
+			if (layer.live != null) {
+				if (this.liveSpare == null) this.liveSpare = layer.live;
+				else releaseCanvas(layer.live);
+				this.releaseSparesLater();
+			}
 			layer.live = null;
 			layer.liveDirty = null;
 			return layer.committed;
@@ -2277,6 +2314,8 @@ export class DrawCanvasEngine {
 		const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 		this.composite(ctx, true);
 		const image = ctx.getImageData(0, 0, this.width, this.height);
+		// JUICE: 読み出した後の作業用のキャンバスは、すぐに小さくしてメモリを返す(iPad等でのキャンバスのメモリの上限のため)
+		releaseCanvas(canvas);
 		this.referenceCache = { version: this.committedVersion, image };
 		return image;
 	}
@@ -2325,6 +2364,32 @@ export class DrawCanvasEngine {
 	}
 
 	public dispose(): void {
+		if (this.spareReleaseTimer != null) window.clearTimeout(this.spareReleaseTimer);
+		this.spareReleaseTimer = null;
+		if (this.groupPoolReleaseTimer != null) window.clearTimeout(this.groupPoolReleaseTimer);
+		this.groupPoolReleaseTimer = null;
+		// JUICE: 大きなキャンバスは、ガベージコレクションを待たずに小さくしてメモリを返す
+		// (部屋を出入りしたときに、iPad等(Safari)のキャンバスのメモリの上限を超えないように)
+		const canvases = new Set<HTMLCanvasElement>();
+		const add = (canvas: HTMLCanvasElement | null | undefined) => {
+			if (canvas != null) canvases.add(canvas);
+		};
+		add(this.moving?.moving);
+		add(this.moving?.still);
+		add(this.moveStillSpare);
+		add(this.liveSpare);
+		add(this.groupCanvas.below);
+		add(this.groupCanvas.above);
+		for (const canvas of this.strokeCanvasPool) add(canvas);
+		for (const canvas of this.strokeCanvasInUse) add(canvas);
+		for (const canvas of this.groupPool) add(canvas);
+		for (const layer of this.layers.values()) {
+			add(layer.committed);
+			add(layer.live);
+			add(layer.thumb);
+		}
+		for (const canvas of canvases) releaseCanvas(canvas);
+		this.groupPool = [];
 		this.moving = null;
 		this.moveStillSpare = null;
 		this.referenceCache = null;
