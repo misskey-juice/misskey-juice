@@ -10194,6 +10194,14 @@ export interface Locale extends ILocale {
          */
         "shortFlipHorizontal": string;
         /**
+         * 選んだ部分を上下反転
+         */
+        "flipSelectionVertical": string;
+        /**
+         * 上下反転
+         */
+        "shortFlipVertical": string;
+        /**
          * キャンバスから大きくはみ出すので、この変形はできません
          */
         "transformOutOfRange": string;

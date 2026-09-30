@@ -2662,6 +2662,8 @@ _drawRoom:
   rotateSelectionRight: "選んだ部分を右に回転"
   flipSelectionHorizontal: "選んだ部分を左右反転"
   shortFlipHorizontal: "左右反転"
+  flipSelectionVertical: "選んだ部分を上下反転"
+  shortFlipVertical: "上下反転"
   transformOutOfRange: "キャンバスから大きくはみ出すので、この変形はできません"
   selectedStrokes: "{n}本の線を選択中"
   clearSelection: "選択を解除"

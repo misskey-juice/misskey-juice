@@ -4013,6 +4013,8 @@ _drawRoom:
   rotateSelectionRight: "선택한 부분을 오른쪽으로 회전"
   flipSelectionHorizontal: "선택한 부분을 좌우 반전"
   shortFlipHorizontal: "좌우 반전"
+  flipSelectionVertical: "선택한 부분을 상하 반전"
+  shortFlipVertical: "상하 반전"
   transformOutOfRange: "캔버스 밖으로 너무 많이 벗어나서 이 변형은 할 수 없습니다"
   selectedStrokes: "선 {n}개 선택 중"
   clearSelection: "선택 해제"

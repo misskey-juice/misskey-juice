@@ -4013,6 +4013,8 @@ _drawRoom:
   rotateSelectionRight: "向右旋转所选部分"
   flipSelectionHorizontal: "水平翻转所选部分"
   shortFlipHorizontal: "水平翻转"
+  flipSelectionVertical: "垂直翻转所选部分"
+  shortFlipVertical: "垂直翻转"
   transformOutOfRange: "超出画布范围太多，无法进行此变形"
   selectedStrokes: "已选择 {n} 条线"
   clearSelection: "取消选择"

@@ -268,10 +268,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<path :d="pixelGridPath" :class="$style.pixelGrid" :stroke-opacity="pixelGridOpacity"/>
 					</svg>
 					<!-- JUICE: 選んでいる線の範囲と、投げ縄・範囲選択の途中の線 -->
-					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || (selecting && selection != null))" :class="$style.canvasOverlay" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
+					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
 						<!-- 選んだときに囲んだ形(範囲・投げ縄)のまま表示し、移動ツールでずらしている間は一緒に動かす -->
-						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0}) translate(${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0}) scale(${scaleDragFactor}) translate(${-(selectionPivot?.x ?? 0)} ${-(selectionPivot?.y ?? 0)})`">
-							<polygon v-for="(shape, i) in selectionShapes" :key="i" :points="toSvgPoints(shape)" :class="$style.selectionOutline"/>
+						<!-- 拡大縮小の途中は、形の座標を拡大して描く(まとめて拡大すると、枠の線・つまみも大きくなるため) -->
+						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0})`">
+							<polygon v-for="(shape, i) in displayedSelectionShapes" :key="i" :points="toSvgPoints(shape)" :class="$style.selectionOutline"/>
 							<!-- JUICE: ドラッグして選んだ部分を回転するつまみ -->
 							<template v-if="selectionBox != null && canDraw">
 								<line :x1="selectionBox.cx" :y1="selectionBox.minY" :x2="selectionBox.cx" :y2="selectionBox.minY - 28 / view.scale" :class="$style.selectionOutline"/>
@@ -362,6 +363,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionRight" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionRight" @click="rotateSelection(ROTATE_STEP)"><i class="ti ti-rotate-clockwise-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateRight }}</span></button>
 					<!-- JUICE: 選んだ部分を左右反転する(選んだ形の真ん中を軸に) -->
 					<button v-tooltip="i18n.ts._drawRoom.flipSelectionHorizontal" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionHorizontal" @click="flipSelectionHorizontal"><i class="ti ti-flip-vertical"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipHorizontal }}</span></button>
+					<!-- JUICE: 選んだ部分を上下反転する(選んだ形の真ん中を軸に) -->
+					<button v-tooltip="i18n.ts._drawRoom.flipSelectionVertical" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionVertical" @click="flipSelectionVertical"><i class="ti ti-flip-horizontal"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipVertical }}</span></button>
 					<button class="_button" :class="$style.selectionAction" @click="deleteSelectedStrokes"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.clearSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.clearSelection" @click="clearStrokeSelection"><i class="ti ti-x"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortDeselect }}</span></button>
 				</div>
@@ -3029,14 +3032,22 @@ watch(tool, (value) => {
 });
 
 //#region 選んだ部分の回転(JUICE)
+// 表示する選んだ形(拡大縮小のつまみをドラッグしている間は、その倍率で真ん中から拡大縮小したもの)
+const displayedSelectionShapes = computed(() => {
+	const factor = scaleDragFactor.value;
+	const pivot = scaleDragPivot.value;
+	if (factor === 1 || pivot == null) return selectionShapes.value;
+	return selectionShapes.value.map(shape => shape.map((v, i) => (i % 2 === 0 ? pivot.x + (v - pivot.x) * factor : pivot.y + (v - pivot.y) * factor)));
+});
+
 // 選んだ形の外枠(回転の中心と、つまみの位置に使う)
 const selectionBox = computed(() => {
-	if (selectionShapes.value.length === 0) return null;
+	if (displayedSelectionShapes.value.length === 0) return null;
 	let minX = Infinity;
 	let minY = Infinity;
 	let maxX = -Infinity;
 	let maxY = -Infinity;
-	for (const shape of selectionShapes.value) {
+	for (const shape of displayedSelectionShapes.value) {
 		for (let i = 0; i + 1 < shape.length; i += 2) {
 			minX = Math.min(minX, shape[i]);
 			maxX = Math.max(maxX, shape[i]);
@@ -3050,6 +3061,8 @@ const selectionPivot = computed(() => (selectionBox.value == null ? null : { x: 
 // つまみをドラッグしている間の回転の角度・拡大縮小の倍率(表示だけ。離したときに線を変形する)
 const rotateDragAngle = ref(0);
 const scaleDragFactor = ref(1);
+// 拡大縮小の中心(つまみをドラッグしている間だけ)
+const scaleDragPivot = ref<{ x: number; y: number } | null>(null);
 // JUICE: 拡大縮小の倍率の範囲(1回のドラッグで)
 const SELECTION_SCALE_MIN = 0.05;
 const SELECTION_SCALE_MAX = 20;
@@ -3083,6 +3096,7 @@ function cancelRotateDrag(): void {
 	scaleDrag = null;
 	rotateDragAngle.value = 0;
 	scaleDragFactor.value = 1;
+	scaleDragPivot.value = null;
 	engine.value?.endMove();
 }
 
@@ -3110,6 +3124,13 @@ function flipSelectionHorizontal(): void {
 	commitTransform(prepareSelection(), { angle: 0, scaleX: -1, scaleY: 1 }, pivot.x, pivot.y);
 }
 
+// JUICE: 上下反転(選んだ形の真ん中を軸に)
+function flipSelectionVertical(): void {
+	const pivot = selectionPivot.value;
+	if (pivot == null || !canDraw.value) return;
+	commitTransform(prepareSelection(), { angle: 0, scaleX: 1, scaleY: -1 }, pivot.x, pivot.y);
+}
+
 // JUICE: 右下のつまみで拡大縮小する(真ん中からの距離の比を倍率にする)
 let scaleDrag: { pointerId: number; startDistance: number; pivotX: number; pivotY: number; prepared: { ids: Set<string>; splits: SelectionSplit[] } } | null = null;
 
@@ -3121,6 +3142,7 @@ function onScaleHandleDown(ev: PointerEvent): void {
 	const [x, y] = toCanvasPoint(ev);
 	const prepared = prepareSelection();
 	scaleDrag = { pointerId: ev.pointerId, startDistance: Math.max(1, Math.hypot(x - pivot.x, y - pivot.y)), pivotX: pivot.x, pivotY: pivot.y, prepared };
+	scaleDragPivot.value = { x: pivot.x, y: pivot.y };
 	e.beginMove(activeKey.value, prepared.ids);
 }
 
@@ -3141,6 +3163,7 @@ function onScaleHandleUp(ev: PointerEvent): void {
 	scaleDrag = null;
 	const factor = ev.type === 'pointercancel' ? 1 : scaleDragFactor.value;
 	scaleDragFactor.value = 1;
+	scaleDragPivot.value = null;
 	engine.value?.endMove();
 	commitTransform(drag.prepared, { angle: 0, scaleX: factor, scaleY: factor }, drag.pivotX, drag.pivotY);
 }
@@ -4316,6 +4339,11 @@ definePage(() => ({
 	width: 100%;
 	height: 100%;
 	pointer-events: none;
+}
+
+.selectionLayer {
+	// JUICE: 選んだ範囲の枠・つまみは、キャンバスの外に出ても表示してつかめるようにする(外へ拡大・移動したものを戻せるように)
+	overflow: visible;
 }
 
 .canvasDrawable {
