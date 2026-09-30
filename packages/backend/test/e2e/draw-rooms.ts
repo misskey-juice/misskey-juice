@@ -70,17 +70,40 @@ describe('絵チャ', () => {
 		await call('following/create', { userId: alice.id }, bob);
 	}, 1000 * 60 * 2);
 
-	test('部屋を作ると、部屋主がメンバーになる。開催中の部屋は1人1つまで', async () => {
+	test('部屋を作ると、部屋主がメンバーになる。開催中の部屋は1人5つまで(ロールのdrawRoomMaxActiveRoomsで変えられる)', async () => {
 		const room = await createRoom(alice);
 		assert.strictEqual(room.ownerId, alice.id);
 		assert.deepStrictEqual(room.members.map(m => m.id), [alice.id]);
 		assert.strictEqual(room.isMember, true);
 
-		const second = await call('draw-rooms/create', { title: 'second', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, alice);
-		assert.strictEqual(second.status, 400);
-		assert.strictEqual(second.body.error.code, 'ALREADY_HOSTING');
+		// 既定では5つまで
+		const rooms = [room];
+		for (let i = 0; i < 4; i++) rooms.push(await createRoom(alice));
+		// 開催中の部屋の数と上限
+		assert.deepStrictEqual((await call('draw-rooms/hosting', {}, alice)).body, { count: 5, max: 5 });
+		const sixth = await call('draw-rooms/create', { title: 'sixth', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, alice);
+		assert.strictEqual(sixth.status, 400);
+		assert.strictEqual(sixth.body.error.code, 'ALREADY_HOSTING');
+		// 1つ終了すれば、また作れる
+		await call('draw-rooms/end', { roomId: rooms[0].id }, alice);
+		rooms[0] = await createRoom(alice);
+		for (const r of rooms) await call('draw-rooms/end', { roomId: r.id }, alice);
 
-		await call('draw-rooms/end', { roomId: room.id }, alice);
+		// ロールで1つまでにした人は、2つ目を作れない
+		const oneRoom = await role(alice, { isModerator: false, name: 'Draw Room One' }, {
+			drawRoomMaxActiveRooms: { priority: 0, useDefault: false, value: 1 },
+		});
+		await call('admin/roles/assign', { userId: dave.id, roleId: oneRoom.id }, alice);
+		try {
+			assert.deepStrictEqual((await call('draw-rooms/hosting', {}, dave)).body, { count: 0, max: 1 });
+			const first = await createRoom(dave);
+			const second = await call('draw-rooms/create', { title: 'second', visibility: 'local', maxMembers: 2, canvasPreset: 'square' }, dave);
+			assert.strictEqual(second.status, 400);
+			assert.strictEqual(second.body.error.code, 'ALREADY_HOSTING');
+			await call('draw-rooms/end', { roomId: first.id }, dave);
+		} finally {
+			await call('admin/roles/unassign', { userId: dave.id, roleId: oneRoom.id }, alice);
+		}
 	});
 
 	test('フォロワー限定の部屋は、フォロワー以外は見られない', async () => {

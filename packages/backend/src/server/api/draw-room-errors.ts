@@ -37,7 +37,7 @@ export const drawRoomErrors = {
 		id: '80512214-91b6-40c3-b5ba-fb2d0d43d505',
 	},
 	alreadyHosting: {
-		message: 'You are already hosting another room.',
+		message: 'You are already hosting the maximum number of rooms.',
 		code: 'ALREADY_HOSTING',
 		id: '1c5ff310-dfa1-40a9-93a9-650bdbb9ee79',
 	},

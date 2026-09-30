@@ -2009,6 +2009,15 @@ export type paths = {
          */
         post: operations['draw-rooms___end'];
     };
+    '/draw-rooms/hosting': {
+        /**
+         * draw-rooms/hosting
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:draw-rooms*
+         */
+        post: operations['draw-rooms___hosting'];
+    };
     '/draw-rooms/join': {
         /**
          * draw-rooms/join
@@ -6298,6 +6307,7 @@ export type components = {
             avatarDecorationRequestDailyLimit: number;
             announcementReactionTypeLimit: number;
             canCreateDrawRoom: boolean;
+            drawRoomMaxActiveRooms: number;
             drawRoomMaxCanvasSize: number;
             drawRoomMaxStrokes: number;
             drawRoomMaxStrokeMegabytes: number;
@@ -22865,6 +22875,67 @@ export interface operations {
             };
             /** @description Too many requests */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'draw-rooms___hosting': {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        count: number;
+                        max: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
                 headers: {
                     [name: string]: unknown;
                 };

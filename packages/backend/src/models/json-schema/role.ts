@@ -353,6 +353,10 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		drawRoomMaxActiveRooms: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 		drawRoomMaxCanvasSize: {
 			type: 'integer',
 			optional: false, nullable: false,

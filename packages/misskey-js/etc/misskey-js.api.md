@@ -1676,6 +1676,9 @@ type DrawRoomsEndRequest = operations['draw-rooms___end']['requestBody']['conten
 type DrawRoomsEndResponse = operations['draw-rooms___end']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type DrawRoomsHostingResponse = operations['draw-rooms___hosting']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type DrawRoomsJoinRequest = operations['draw-rooms___join']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2352,6 +2355,7 @@ declare namespace entities {
         DrawRoomsDeleteRequest,
         DrawRoomsEndRequest,
         DrawRoomsEndResponse,
+        DrawRoomsHostingResponse,
         DrawRoomsJoinRequest,
         DrawRoomsKeepRequest,
         DrawRoomsKeepResponse,
@@ -4007,7 +4011,7 @@ type RoleLite = components['schemas']['RoleLite'];
 type RolePolicies = components['schemas']['RolePolicies'];
 
 // @public (undocumented)
-export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxCanvasSize", "drawRoomMaxStrokes", "drawRoomMaxStrokeMegabytes", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
+export const rolePolicies: readonly ["gtlAvailable", "ltlAvailable", "canPublicNote", "mentionLimit", "canInvite", "inviteLimit", "inviteLimitCycle", "inviteExpirationTime", "canManageCustomEmojis", "canManageAvatarDecorations", "canSearchNotes", "canSearchUsers", "canUseTranslator", "canHideAds", "canCreateChannel", "driveCapacityMb", "maxFileSizeMb", "alwaysMarkNsfw", "canUpdateBioMedia", "pinLimit", "antennaLimit", "wordMuteLimit", "webhookLimit", "clipLimit", "noteEachClipsLimit", "userListLimit", "userEachUserListsLimit", "rateLimitFactor", "avatarDecorationLimit", "canImportAntennas", "canImportBlocking", "canImportFollowing", "canImportMuting", "canImportUserLists", "chatAvailability", "uploadableFileTypes", "noteDraftLimit", "scheduledNoteLimit", "watermarkAvailable", "emojiRequestLimit", "avatarDecorationRequestLimit", "announcementReactionTypeLimit", "canCreateDrawRoom", "drawRoomMaxActiveRooms", "drawRoomMaxCanvasSize", "drawRoomMaxStrokes", "drawRoomMaxStrokeMegabytes", "canApproveEmojiRequests", "canApproveAvatarDecorationRequests", "canApproveSignups"];
 
 // @public (undocumented)
 type RolesListResponse = operations['roles___list']['responses']['200']['content']['application/json'];

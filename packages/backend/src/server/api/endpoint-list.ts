@@ -370,6 +370,7 @@ export * as 'draw-rooms/chat-history' from './endpoints/draw-rooms/chat-history.
 export * as 'draw-rooms/create' from './endpoints/draw-rooms/create.js';
 export * as 'draw-rooms/delete' from './endpoints/draw-rooms/delete.js';
 export * as 'draw-rooms/end' from './endpoints/draw-rooms/end.js';
+export * as 'draw-rooms/hosting' from './endpoints/draw-rooms/hosting.js';
 export * as 'draw-rooms/keep' from './endpoints/draw-rooms/keep.js';
 export * as 'draw-rooms/join' from './endpoints/draw-rooms/join.js';
 export * as 'draw-rooms/kick' from './endpoints/draw-rooms/kick.js';

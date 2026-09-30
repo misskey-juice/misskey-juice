@@ -10,7 +10,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div class="_gaps">
 			<MkInfo>{{ i18n.ts._drawRoom.description }}</MkInfo>
 			<!-- JUICE: 部屋を作れるのはロールで許されている人だけ。作れない人も見学・参加はできる -->
-			<MkButton v-if="$i.policies.canCreateDrawRoom" primary rounded :class="$style.createButton" @click="createRoom"><i class="ti ti-plus"></i> {{ i18n.ts._drawRoom.createRoom }}</MkButton>
+			<template v-if="$i.policies.canCreateDrawRoom">
+				<MkButton primary rounded :class="$style.createButton" :disabled="hosting != null && hosting.count >= hosting.max" @click="createRoom"><i class="ti ti-plus"></i> {{ i18n.ts._drawRoom.createRoom }}</MkButton>
+				<!-- JUICE: 自分が開催中の部屋の数と、同時に開催できる数(ロールで決まる) -->
+				<div v-if="hosting != null" :class="$style.hosting">
+					{{ i18n.tsx._drawRoom.hostingRooms({ n: hosting.count, max: hosting.max }) }}
+					<template v-if="hosting.count >= hosting.max"> · {{ i18n.ts._drawRoom.hostingRoomsFull }}</template>
+				</div>
+			</template>
 			<MkInfo v-else warn>{{ i18n.ts._drawRoom.cannotCreate }}</MkInfo>
 
 			<MkFoldableSection>
@@ -93,15 +100,19 @@ async function fetchMoreSavedRooms(): Promise<void> {
 }
 
 const error = ref<unknown>(null);
+// JUICE: 自分が開催中の部屋の数と、同時に開催できる数の上限
+const hosting = ref<{ count: number; max: number } | null>(null);
 
 async function fetchRooms(): Promise<void> {
 	error.value = null;
 	try {
-		const [open, mine, saved] = await Promise.all([
+		const [open, mine, saved, hostingStatus] = await Promise.all([
 			misskeyApi('draw-rooms/list', { limit: 30 }),
 			misskeyApi('draw-rooms/list', { userId: $i.id, limit: 30 }),
 			misskeyApi('draw-rooms/list', { saved: true, limit: SAVED_ROOMS_PAGE }),
+			$i.policies.canCreateDrawRoom ? misskeyApi('draw-rooms/hosting', {}) : Promise.resolve(null),
 		]);
+		hosting.value = hostingStatus;
 		openRooms.value = open.filter(room => !room.isEnded);
 		endingRooms.value = open.filter(room => room.isEnded && room.deletesAt != null);
 		myRooms.value = mine.filter(room => room.isEnded);
@@ -249,6 +260,12 @@ definePage(() => ({
 
 .createButton {
 	margin: 0 auto;
+}
+
+.hosting {
+	text-align: center;
+	font-size: 0.85em;
+	opacity: 0.7;
 }
 
 .empty {

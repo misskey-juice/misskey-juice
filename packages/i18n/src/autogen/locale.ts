@@ -8516,6 +8516,14 @@ export interface Locale extends ILocale {
              */
             "canCreateDrawRoomCaption": string;
             /**
+             * 絵チャで1人が同時に開催できる部屋の数
+             */
+            "drawRoomMaxActiveRooms": string;
+            /**
+             * 終了していない部屋の数です(1〜100)。終了した部屋は数えません
+             */
+            "drawRoomMaxActiveRoomsCaption": string;
+            /**
              * 絵チャで作れるキャンバスの大きさの上限
              */
             "drawRoomMaxCanvasSize": string;
@@ -9553,6 +9561,14 @@ export interface Locale extends ILocale {
          * 部屋を作る
          */
         "createRoom": string;
+        /**
+         * 開催中の自分の部屋: {n}/{max}
+         */
+        "hostingRooms": ParameterizedString<"n" | "max">;
+        /**
+         * 上限に達しているので、部屋を終了すると新しく作れます
+         */
+        "hostingRoomsFull": string;
         /**
          * 部屋の名前
          */

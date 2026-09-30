@@ -44,6 +44,8 @@ export const DRAW_ROOM_CANVAS_MAX_SIZE = 3840;
 
 export const DRAW_ROOM_MIN_MEMBERS = 2;
 export const DRAW_ROOM_MAX_MEMBERS = 512;
+// JUICE: 1人が同時に開催できる部屋の数の最大(ロールでもこれより多くはできない)
+export const DRAW_ROOM_MAX_ACTIVE_ROOMS = 100;
 // 1本の線の点の最大数(1点 = x, y, 筆圧の3要素)
 export const DRAW_STROKE_MAX_POINTS = 5000;
 // 描いている途中の線を分割送信するときの、1回あたりの点の最大数
@@ -1030,13 +1032,15 @@ export class DrawRoomService implements OnApplicationShutdown {
 	}): Promise<MiDrawRoom> {
 		await this.ensureEnabled();
 		// JUICE: 部屋を作れるのは、ロールで許されている人だけ(見学・参加は誰でもできる)
-		if (!(await this.roleService.getUserPolicies(me.id)).canCreateDrawRoom) throw new DrawRoomError('cannotCreate');
-		// 1人が同時に開催できる部屋は1つまで(放置された部屋が増え続けないように)。
-		// 同時に作成を投げても2つできないよう、確認から作成までを短いロックで囲む
+		const policies = await this.roleService.getUserPolicies(me.id);
+		if (!policies.canCreateDrawRoom) throw new DrawRoomError('cannotCreate');
+		// JUICE: 1人が同時に開催できる部屋の数は、ロールで決める(放置された部屋が増え続けないように)。
+		// 同時に作成を投げても上限を超えないよう、確認から作成までを短いロックで囲む
+		const maxActiveRooms = this.maxActiveRoomsOf(policies);
 		const lockKey = `drawroom:creating:${me.id}`;
 		if (await this.redisClient.set(lockKey, '1', 'EX', 10, 'NX') == null) throw new DrawRoomError('alreadyHosting');
 		try {
-			if (await this.drawRoomsRepository.existsBy({ ownerId: me.id, isEnded: false })) {
+			if (await this.drawRoomsRepository.countBy({ ownerId: me.id, isEnded: false }) >= maxActiveRooms) {
 				throw new DrawRoomError('alreadyHosting');
 			}
 			const [canvasWidth, canvasHeight] = params.canvasSize != null
@@ -1069,6 +1073,26 @@ export class DrawRoomService implements OnApplicationShutdown {
 		} finally {
 			await this.redisClient.del(lockKey);
 		}
+	}
+
+	// JUICE: 1人が同時に開催できる部屋の数(ロールの値は管理者が入れるので、範囲に収める)
+	private maxActiveRoomsOf(policies: { drawRoomMaxActiveRooms: number }): number {
+		return Number.isFinite(policies.drawRoomMaxActiveRooms)
+			? Math.max(1, Math.min(DRAW_ROOM_MAX_ACTIVE_ROOMS, Math.floor(policies.drawRoomMaxActiveRooms)))
+			: DEFAULT_POLICIES.drawRoomMaxActiveRooms;
+	}
+
+	/**
+	 * JUICE: 自分が開催中の部屋の数と、同時に開催できる部屋の数の上限
+	 */
+	@bindThis
+	public async hostingStatus(me: MiUser): Promise<{ count: number; max: number }> {
+		await this.ensureEnabled();
+		const [count, policies] = await Promise.all([
+			this.drawRoomsRepository.countBy({ ownerId: me.id, isEnded: false }),
+			this.roleService.getUserPolicies(me.id),
+		]);
+		return { count, max: this.maxActiveRoomsOf(policies) };
 	}
 
 	/**
