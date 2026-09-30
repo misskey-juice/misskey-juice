@@ -239,9 +239,12 @@ function reset(): void {
 // JUICE: 拍は、音の時計(AudioContextのcurrentTime)で少し先まで決めておき、その時刻に鳴らす。
 // setTimeoutで1拍ずつ待つと、待ちの遅れが積み重なって測ったBPMより遅くなり、画面を見ていないタブでは
 // ブラウザがタイマーを1秒に1回ほどに減らすので、BPM60あたりで頭打ちになるため
+// BPMの上限は無い。ただしタップの間がほぼ0だった時など、ありえないほど速い(1秒に1万拍を超える)ときは、
+// 音を作りきれず画面が固まるので、決めきれない分は飛ばす(もう拍ではなく1つの音にしか聞こえない速さ)
 const METRONOME_MIN_BPM = 1;
-// 1秒に100拍(これより速いと、拍ではなく1つの音(うなり)に聞こえる)。音を作りすぎて重くならないための上限
-const METRONOME_MAX_BPM = 6000;
+const METRONOME_MAX_BEATS_PER_SECOND = 10000;
+// 光らせるのはこの間隔(秒)より拍が長いときだけ(速いときは、光ったままにする)
+const FLASH_MIN_INTERVAL_S = 0.05;
 // 先に決めておく時間(秒)。見ていないタブではタイマーが1秒に1回ほどになるので、それより長くする
 const LOOKAHEAD_VISIBLE_S = 0.1;
 const LOOKAHEAD_HIDDEN_S = 1.5;
@@ -284,13 +287,15 @@ function currentClock(): { kind: 'audio' | 'performance'; now: number; ctx: Audi
 }
 
 // 1拍を、時計の時刻atに鳴らす(光らせる)
-function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null): void {
-	const delayMs = Math.max(0, (at - now) * 1000);
-	const timer = window.setTimeout(() => {
-		flashTimers.delete(timer);
-		flash();
-	}, delayMs);
-	flashTimers.add(timer);
+function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null, withFlash: boolean): void {
+	if (withFlash) {
+		const delayMs = Math.max(0, (at - now) * 1000);
+		const timer = window.setTimeout(() => {
+			flashTimers.delete(timer);
+			flash();
+		}, delayMs);
+		flashTimers.add(timer);
+	}
 
 	const masterVolume = prefer.s['sound.masterVolume'];
 	if (ctx == null || metronomeBuffer == null || masterVolume <= 0 || sound.isMute()) return;
@@ -342,17 +347,23 @@ function tickMetronome(): void {
 	// 鳴らす前に止まっていたら動かし直す(画面を操作した後なら動く。動くまでは光らせるだけ)
 	const audioCtx = sound.getAudioContext();
 	if (audioCtx != null && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-	const interval = 60 / Math.min(value, METRONOME_MAX_BPM);
+	const interval = 60 / value;
 	// 始めたとき・時計を替えたとき・止まっていて大きく遅れたとき(スリープ等)は、今から数え直す
 	if (nextBeatAt == null || clockKind !== kind || nextBeatAt < now - interval) {
 		nextBeatAt = now + 0.05;
 		clockKind = kind;
 	}
-	const horizon = now + (window.document.visibilityState === 'visible' ? LOOKAHEAD_VISIBLE_S : LOOKAHEAD_HIDDEN_S);
-	while (nextBeatAt < horizon) {
-		scheduleBeatAt(nextBeatAt, now, ctx);
+	const lookahead = window.document.visibilityState === 'visible' ? LOOKAHEAD_VISIBLE_S : LOOKAHEAD_HIDDEN_S;
+	const horizon = now + lookahead;
+	const withFlash = interval >= FLASH_MIN_INTERVAL_S;
+	if (!withFlash) flash();
+	let budget = Math.ceil(METRONOME_MAX_BEATS_PER_SECOND * lookahead);
+	while (nextBeatAt < horizon && budget-- > 0) {
+		scheduleBeatAt(nextBeatAt, now, ctx, withFlash);
 		nextBeatAt += interval;
 	}
+	// 決めきれなかった分は飛ばす
+	if (nextBeatAt < horizon) nextBeatAt = horizon;
 	metronomeTimer = window.setTimeout(tickMetronome, SCHEDULER_TICK_MS);
 }
 
