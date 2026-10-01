@@ -110,11 +110,12 @@ export const store = markRaw(new Pizzax('base', {
 		where: 'device',
 		default: '#ffffff',
 	},
-	// JUICE: 小説ビューワーの続きから読める位置(ノートIDごと、縦書きページめくりモードのみ)。
-	// 際限無く増えないよう、直近50件を上限にMkEmojiPicker.vueのrecentlyUsedEmojisと同じ方式で切り詰める
+	// JUICE: 小説ビューワーの続きから読める位置(しおり。ノートIDごと)。
+	// 縦書きは本文全体のうちの位置(ratio。古いものはページ番号のpageだけ)、横書きは[newpage]のページ(section)と
+	// その中の位置(sectionRatio)。際限無く増えないよう、直近50件を上限にMkEmojiPicker.vueのrecentlyUsedEmojisと同じ方式で切り詰める
 	novelViewerProgress: {
 		where: 'device',
-		default: {} as Record<string, { page: number; updatedAt: number }>,
+		default: {} as Record<string, { page?: number; ratio?: number; section?: number; sectionRatio?: number; updatedAt: number }>,
 	},
 	realtimeMode: {
 		where: 'device',

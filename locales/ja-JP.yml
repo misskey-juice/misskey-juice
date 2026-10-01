@@ -4321,6 +4321,8 @@ _juice:
   novelViewerParagraphIndentCaption: "行頭に全角スペースが無い段落へ自動で字下げを補います。既に字下げされている段落と、「」などの始め括弧や、中黒(・)・ダッシュ(―)・傍点(﹅)・●○などの記号で始まる段落はそのままです。"
   novelViewerAozoraNotation: "青空文庫記法を解釈する"
   novelViewerAozoraNotationCaption: "｜漢字《かんじ》のルビや［＃ここからN字下げ］等、青空文庫形式のテキストによくある入力者注記を解釈して反映します(対応しきれない注記は非表示にします)。"
+  novelViewerLatinSideways: "半角の英単語を横向きのまま組み込む"
+  novelViewerLatinSidewaysCaption: "縦書きで、半角の英単語や3桁以上の数字を1文字ずつ縦に並べず、横向きのまま(90度回して)組み込みます。2桁の半角数字は縦中横(横に並べて1文字分に収める)にします。"
   novelViewerFontFamily: "書体"
   novelViewerFontFamilyDefault: "標準"
   novelViewerFontFamilyMincho: "明朝体"
