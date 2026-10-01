@@ -4625,6 +4625,7 @@ export type components = {
                 url: string;
                 offsetX?: number;
                 offsetY?: number;
+                scale?: number;
             }[];
             isBot?: boolean;
             isCat?: boolean;
@@ -32775,6 +32776,7 @@ export interface operations {
                         flipH?: boolean | null;
                         offsetX?: number | null;
                         offsetY?: number | null;
+                        scale?: number | null;
                     }[];
                     /** Format: misskey:id */
                     bannerId?: string | null;

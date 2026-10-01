@@ -153,6 +153,8 @@ export const paramDef = {
 				flipH: { type: 'boolean', nullable: true },
 				offsetX: { type: 'number', nullable: true, maximum: 0.25, minimum: -0.25 },
 				offsetY: { type: 'number', nullable: true, maximum: 0.25, minimum: -0.25 },
+				// JUICE: デコレーションの大きさ(1が今までと同じ大きさ。縮小だけ。mk-goのscaleと同じ)
+				scale: { type: 'number', nullable: true, maximum: 1, minimum: 0.1 },
 			},
 			required: ['id'],
 		} },
@@ -432,6 +434,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					flipH: d.flipH ?? false,
 					offsetX: d.offsetX ?? 0,
 					offsetY: d.offsetY ?? 0,
+					// JUICE: 既定(1)は保存しない(今までの行と同じ形のままにする)
+					...(d.scale != null && d.scale !== 1 ? { scale: d.scale } : {}),
 				}));
 			}
 
