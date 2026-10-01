@@ -102,6 +102,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			this.queryService.generateBaseNoteFilteringQuery(query, me);
+			// 本家2026.10.0でグローバルタイムラインに入った、ログインしていない人向けの公開範囲(ugcVisibilityForVisitor)をこちらにも
+			if (me == null) this.queryService.generateUgcVisibilityQueryForVisitor(query);
 			if (me) {
 				this.queryService.generateMutedUserRenotesQueryForNotes(query, me);
 				// JUICE: 表示言語の絞り込み
