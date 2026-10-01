@@ -117,6 +117,11 @@ export const store = markRaw(new Pizzax('base', {
 		where: 'device',
 		default: {} as Record<string, { page?: number; ratio?: number; section?: number; sectionRatio?: number; updatedAt: number }>,
 	},
+	// JUICE: 小説ビューワーの、行に挟むしおり(ノートIDごと。章・行・行の書き出し)。直近50作品までに切り詰める
+	novelViewerBookmarks: {
+		where: 'device',
+		default: {} as Record<string, { items: import('@/utility/novel-bookmark.js').NovelBookmark[]; updatedAt: number }>,
+	},
 	realtimeMode: {
 		where: 'device',
 		default: true,

@@ -33,6 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-show="appearNote == null || appearNote.cw == null || showContent" ref="readerEl" :class="[$style.reader, { [$style.fullscreen]: isFullscreen, [$style.readerFit]: writingMode === 'vertical' && !isFullscreen }]">
 				<div v-if="isFullscreen" :class="$style.fullscreenToolbar">
 					<button v-if="chapters.length > 1" v-tooltip="i18n.ts._juice.novelViewerToc" class="_button" :class="$style.fullscreenToolbarButton" :aria-label="i18n.ts._juice.novelViewerToc" @click="openToc"><i class="ti ti-list"></i><span :class="$style.fullscreenToolbarLabel">{{ i18n.ts._juice.novelViewerToc }}</span></button>
+					<button v-if="!isPreview" v-tooltip="i18n.ts._juice.novelViewerBookmarks" class="_button" :class="$style.fullscreenToolbarButton" :aria-label="i18n.ts._juice.novelViewerBookmarks" @click="openBookmarks"><i class="ti ti-bookmark"></i><span :class="$style.fullscreenToolbarLabel">{{ i18n.ts._juice.novelViewerBookmarks }}</span></button>
 					<button v-tooltip="i18n.ts._juice.novelViewerSettings" class="_button" :class="$style.fullscreenToolbarButton" :aria-label="i18n.ts._juice.novelViewerSettings" @click="openSettings"><i class="ti ti-adjustments"></i><span :class="$style.fullscreenToolbarLabel">{{ i18n.ts._juice.novelViewerSettings }}</span></button>
 					<button v-tooltip="writingModeToggleLabel" class="_button" :class="$style.fullscreenToolbarButton" :aria-label="writingModeToggleLabel" @click="toggleWritingMode"><i class="ti ti-camera-rotate"></i><span :class="$style.fullscreenToolbarLabel">{{ writingModeToggleLabel }}</span></button>
 					<button v-tooltip="i18n.ts._juice.novelViewerExitFullscreen" class="_button" :class="$style.fullscreenToolbarButton" :aria-label="i18n.ts._juice.novelViewerExitFullscreen" @click="exitFullscreen"><i class="ti ti-minimize"></i><span :class="$style.fullscreenToolbarLabel">{{ i18n.ts._juice.novelViewerExitFullscreen }}</span></button>
@@ -61,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<div v-if="i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 										<div v-else-if="i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
 										<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-										<span :class="[$style.novelText, '_selectable']"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+										<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</div>
 							</div>
@@ -80,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<template v-for="(chapter, i) in chapters" :key="`${i}:${latinSideways}:${chapter.text}`">
 											<div v-if="i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 											<div v-else-if="i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
-											<span :class="$style.novelText"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+											<span :class="$style.novelText" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 										</template>
 									</template>
 								</div>
@@ -108,7 +109,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div v-else-if="writingMode !== 'horizontal' && i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 									<div v-else-if="writingMode !== 'horizontal' && i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
 									<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-									<span :class="[$style.novelText, '_selectable']"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+									<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</template>
 								<div v-if="writingMode === 'horizontal' && sectionCount > 1" :class="$style.chapterNav">
@@ -145,7 +146,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, markRaw, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, provide, ref, useTemplateRef, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host } from '@@/js/config.js';
-import { getScrollContainer } from '@@/js/scroll.js';
+import { getScrollContainer, getStickyTop } from '@@/js/scroll.js';
 import * as os from '@/os.js';
 import MkCwButton from '@/components/MkCwButton.vue';
 import MkNovelViewerColorPicker from '@/components/MkNovelViewerColorPicker.vue';
@@ -153,6 +154,9 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { store } from '@/store.js';
+import type { MenuItem } from '@/types/menu.js';
+import { caretAtPoint, chapterElementOf, lineAtPosition, lineExcerpt, lineRange, rangeStartRect, resolveBookmark } from '@/utility/novel-bookmark.js';
+import type { NovelBookmark } from '@/utility/novel-bookmark.js';
 import { prefer } from '@/preferences.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import { userPage } from '@/filters/user.js';
@@ -784,6 +788,207 @@ function restoreHorizontalProgress(): void {
 	});
 }
 
+//#region 行に挟むしおり(JUICE)
+// 本文の行(改行で区切った行)にしおりを挟み、あとからその行へ飛べるようにする(縦書き・横書きどちらでも)。
+// しおりはノートごとに、このブラウザに覚える(続きから読む位置と同じく、直近50作品まで)
+const NOVEL_BOOKMARK_MAX = 100;
+const BOOKMARK_HIGHLIGHT = 'juice-novel-bookmark';
+
+const bookmarks = ref<NovelBookmark[]>([]);
+
+watch(() => appearNote.value?.id, (id) => {
+	bookmarks.value = id != null ? [...(store.s.novelViewerBookmarks[id]?.items ?? [])] : [];
+}, { immediate: true });
+
+function saveBookmarks(): void {
+	const id = appearNote.value?.id;
+	if (id == null) return;
+	const rest = Object.entries(store.s.novelViewerBookmarks)
+		.filter(([key]) => key !== id)
+		.sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+		.slice(0, 49);
+	if (bookmarks.value.length > 0) rest.push([id, { items: bookmarks.value, updatedAt: Date.now() }]);
+	store.set('novelViewerBookmarks', Object.fromEntries(rest));
+}
+
+// 章ごとの、表示している本文の行(ルビはよみを除いた文字だけ)
+const chapterLines = computed(() => chapters.value.map(chapter => chapter.segments.map(seg => (seg.type === 'ruby' ? seg.base : seg.text)).join('').split('\n')));
+
+// 本文の文字を選んでいたら、その行(しおりのボタンを押すと選択が外れることがあるので、外れてすぐなら使う)
+let selectedLine: { chapter: number; line: number; collapsedAt: number | null } | null = null;
+
+function onSelectionChange(): void {
+	const selection = window.getSelection();
+	if (selection == null || selection.rangeCount === 0) return;
+	if (selection.isCollapsed) {
+		if (selectedLine != null) selectedLine.collapsedAt ??= Date.now();
+		return;
+	}
+	const inner = primaryInnerEl();
+	const range = selection.getRangeAt(0);
+	const chapterEl = inner != null ? chapterElementOf(inner, range.startContainer) : null;
+	selectedLine = chapterEl != null
+		? { chapter: Number(chapterEl.dataset.novelChapter), line: lineAtPosition(chapterEl, range.startContainer, range.startOffset), collapsedAt: null }
+		: null;
+}
+
+function pickSelectedLine(): { chapter: number; line: number } | null {
+	if (selectedLine == null) return null;
+	if (selectedLine.collapsedAt != null && Date.now() - selectedLine.collapsedAt > 2000) return null;
+	return { chapter: selectedLine.chapter, line: selectedLine.line };
+}
+
+// 今読んでいる行(横書きは画面の上の端、縦書きはページの最初の列にある行)
+function currentLine(): { chapter: number; line: number } | null {
+	const inner = primaryInnerEl();
+	const el = outerEl.value;
+	if (inner == null || el == null) return null;
+	const fontSizePx = parseFloat(window.getComputedStyle(inner).fontSize) || 16;
+	let x: number;
+	let y: number;
+	if (writingMode.value === 'vertical') {
+		const viewport = primaryViewportEl();
+		if (viewport == null) return null;
+		const rect = viewport.getBoundingClientRect();
+		x = rect.right - fontSizePx;
+		y = rect.top + fontSizePx * 2;
+	} else {
+		const rect = inner.getBoundingClientRect();
+		x = rect.left + fontSizePx * 2;
+		y = Math.max(rect.top, getStickyTop(el)) + fontSizePx * 1.5;
+	}
+	const caret = caretAtPoint(x, y);
+	if (caret == null) return null;
+	const chapterEl = chapterElementOf(inner, caret.node);
+	if (chapterEl == null) return null;
+	return { chapter: Number(chapterEl.dataset.novelChapter), line: lineAtPosition(chapterEl, caret.node, caret.offset) };
+}
+
+function addBookmark(target: { chapter: number; line: number } | null): void {
+	if (target == null) {
+		os.toast(i18n.ts._juice.novelViewerBookmarkFailed);
+		return;
+	}
+	const excerpt = lineExcerpt(chapterLines.value[target.chapter]?.[target.line] ?? '');
+	const others = bookmarks.value.filter(b => !(b.chapter === target.chapter && b.line === target.line));
+	bookmarks.value = [...others, { ...target, excerpt, createdAt: Date.now() }]
+		.sort((a, b) => a.chapter - b.chapter || a.line - b.line)
+		.slice(-NOVEL_BOOKMARK_MAX);
+	saveBookmarks();
+	updateBookmarkHighlights();
+	os.toast(i18n.ts._juice.novelViewerBookmarkAdded);
+}
+
+function removeBookmark(bookmark: NovelBookmark): void {
+	bookmarks.value = bookmarks.value.filter(b => b !== bookmark);
+	saveBookmarks();
+	updateBookmarkHighlights();
+}
+
+function bookmarkLabel(bookmark: NovelBookmark): string {
+	const pos = resolveBookmark(chapterLines.value, bookmark) ?? bookmark;
+	const chapter = chapters.value[pos.chapter];
+	const excerpt = bookmark.excerpt === '' ? i18n.ts._juice.novelViewerBookmarkEmptyLine : bookmark.excerpt.length > 20 ? `${bookmark.excerpt.slice(0, 20)}…` : bookmark.excerpt;
+	if (chapters.value.length <= 1) return excerpt;
+	return `${chapter?.title ?? i18n.tsx._juice.novelViewerChapter({ n: pos.chapter + 1 })} · ${excerpt}`;
+}
+
+function jumpToBookmark(bookmark: NovelBookmark): void {
+	const pos = resolveBookmark(chapterLines.value, bookmark);
+	if (pos == null) return;
+	if (writingMode.value === 'horizontal') {
+		// 別のページ([newpage])にある行なら、そのページを描いてから移動する
+		currentSection.value = chapters.value[pos.chapter]?.section ?? currentSection.value;
+		nextTick(() => {
+			const inner = primaryInnerEl();
+			const el = outerEl.value;
+			const chapterEl = inner?.querySelector<HTMLElement>(`[data-novel-chapter="${pos.chapter}"]`);
+			const range = chapterEl != null ? lineRange(chapterEl, pos.line) : null;
+			const rect = range != null ? rangeStartRect(range) : null;
+			if (el == null || rect == null) return;
+			const container = getScrollContainer(el);
+			// 固定ヘッダーの裏に隠れないよう、その下に1行分の余白を空けて止める
+			const delta = rect.top - getStickyTop(el, container) - rect.height;
+			if (container == null) window.scrollBy({ top: delta, behavior: 'instant' });
+			else container.scrollBy({ top: delta, behavior: 'instant' });
+		});
+		return;
+	}
+	const inner = primaryInnerEl();
+	const chapterEl = inner?.querySelector<HTMLElement>(`[data-novel-chapter="${pos.chapter}"]`);
+	const range = chapterEl != null ? lineRange(chapterEl, pos.line) : null;
+	const rect = range != null ? rangeStartRect(range) : null;
+	if (inner == null || rect == null) return;
+	// 目次の章への移動(jumpToChapter)と同じく、本文の先頭からの距離でページを決める
+	const distanceFromStart = inner.getBoundingClientRect().right - rect.right;
+	let targetPage = 1;
+	for (let p = 0; p < primaryPageOffsets.length; p++) {
+		if (primaryPageOffsets[p] <= distanceFromStart) targetPage = p + 1;
+		else break;
+	}
+	applyLayout(targetPage);
+	saveProgress();
+}
+
+// しおりを挟んだ行に、薄い色を付ける(CSS Custom Highlight API。本文の要素を増やさないので、ページの区切りが変わらない)。
+// 使えないブラウザでは色を付けないだけ
+function clearBookmarkHighlights(): void {
+	if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete(BOOKMARK_HIGHLIGHT);
+}
+
+function updateBookmarkHighlights(): void {
+	if (typeof CSS === 'undefined' || !('highlights' in CSS) || typeof Highlight === 'undefined') return;
+	const ranges: Range[] = [];
+	for (const root of panelInnerEls.value) {
+		if (root == null) continue;
+		for (const bookmark of bookmarks.value) {
+			const pos = resolveBookmark(chapterLines.value, bookmark);
+			if (pos == null) continue;
+			const chapterEl = root.querySelector<HTMLElement>(`[data-novel-chapter="${pos.chapter}"]`);
+			const range = chapterEl != null ? lineRange(chapterEl, pos.line) : null;
+			if (range != null && !range.collapsed) ranges.push(range);
+		}
+	}
+	if (ranges.length === 0) CSS.highlights.delete(BOOKMARK_HIGHLIGHT);
+	else CSS.highlights.set(BOOKMARK_HIGHLIGHT, new Highlight(...ranges));
+}
+
+// 本文を描き直したら(横書きのページ替え・表示の設定・見開きの切り替えなど)、印を付け直す
+watch([chapters, currentSection, isSpread, writingMode, latinSideways, () => bookmarks.value.length], updateBookmarkHighlights, { flush: 'post' });
+
+function openBookmarks(ev: PointerEvent): void {
+	const selected = pickSelectedLine();
+	const items: MenuItem[] = [{
+		icon: 'ti ti-bookmark-plus',
+		text: selected != null ? i18n.ts._juice.novelViewerBookmarkSelected : i18n.ts._juice.novelViewerBookmarkHere,
+		action: () => addBookmark(selected ?? currentLine()),
+	}];
+	if (bookmarks.value.length > 0) {
+		items.push({ type: 'divider' });
+		for (const bookmark of bookmarks.value) {
+			items.push({
+				icon: 'ti ti-bookmark',
+				text: bookmarkLabel(bookmark),
+				action: () => jumpToBookmark(bookmark),
+			});
+		}
+		items.push({ type: 'divider' }, {
+			type: 'parent',
+			icon: 'ti ti-bookmark-off',
+			text: i18n.ts._juice.novelViewerRemoveBookmark,
+			children: bookmarks.value.map(bookmark => ({
+				text: bookmarkLabel(bookmark),
+				danger: true,
+				action: () => removeBookmark(bookmark),
+			})),
+		});
+	} else {
+		items.push({ type: 'label', text: i18n.ts._juice.novelViewerBookmarkHint });
+	}
+	os.popupMenu(items, ev.currentTarget ?? ev.target ?? undefined);
+}
+//#endregion
+
 // JUICE: 横書きでスクロールしたら、少し待ってからしおりの位置を覚える(スクロールのたびに保存しないように)
 let progressSaveTimer: number | null = null;
 
@@ -905,6 +1110,8 @@ watch([currentPage, pageCount, isSpread, chapters], () => {
 	const secondaryInner = panelInnerEls.value[1];
 	if (!isSpread.value || !secondaryInner) return;
 	rotateSidewaysGlyphs(secondaryInner);
+	// 字形を直すと文字の要素が作り直されるので、しおりの行の印も付け直す
+	updateBookmarkHighlights();
 }, { flush: 'post' });
 
 // JUICE: ページ送りはtransformで行い、クリップ窓(.panelViewport, overflow: hidden)自体はスクロールさせない
@@ -1002,6 +1209,7 @@ function applyLayout(target: number | { ratio: number }): void {
 			setInnerPage(inner, viewport, currentPage.value, primaryPageOffsets);
 			syncSecondaryPanel();
 			pendingLayoutTarget = null;
+			updateBookmarkHighlights();
 		});
 	});
 }
@@ -1262,6 +1470,7 @@ function attachWindowListeners(): void {
 	// JUICE: 横書きのしおり。スクロールする要素は場所によって違う(ページ全体・デッキのカラム等)ので、windowで
 	// 全ての要素のscrollを捕まえる(scrollは伝わらないが、捕捉(capture)では届く)
 	window.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
+	window.document.addEventListener('selectionchange', onSelectionChange);
 	// JUICE: エディターの中に並べたときは、キーでのページめくり・画面端のスワイプ対策をしない
 	// (エディターでの入力やボタン操作、エディター側のタッチ操作に割り込まないように)
 	if (props.embedded) return;
@@ -1277,6 +1486,8 @@ function detachWindowListeners(): void {
 	window.removeEventListener('resize', onResize);
 	window.document.removeEventListener('fullscreenchange', onFullscreenChange);
 	window.removeEventListener('scroll', onAnyScroll, { capture: true });
+	window.document.removeEventListener('selectionchange', onSelectionChange);
+	clearBookmarkHighlights();
 	if (progressSaveTimer != null) {
 		window.clearTimeout(progressSaveTimer);
 		progressSaveTimer = null;
@@ -1289,6 +1500,7 @@ function detachWindowListeners(): void {
 
 onMounted(attachWindowListeners);
 onActivated(attachWindowListeners);
+onActivated(() => nextTick(updateBookmarkHighlights));
 onDeactivated(() => {
 	// JUICE: 全画面のまま別のページへ移ったら全画面も解除する
 	if (isFullscreen.value) exitFullscreen();
@@ -1439,6 +1651,14 @@ const headerActions = computed(() => {
 			text: i18n.ts._juice.novelViewerToc,
 			icon: 'ti ti-list',
 			handler: openToc,
+		});
+	}
+	// JUICE: 行に挟むしおり(エディターのプレビューでは使わない)
+	if (!isPreview.value) {
+		actions.unshift({
+			text: i18n.ts._juice.novelViewerBookmarks,
+			icon: 'ti ti-bookmark',
+			handler: openBookmarks,
 		});
 	}
 	// JUICE: 狭いときは名前付きのメニューにまとめる
@@ -1668,6 +1888,11 @@ if (!props.embedded) {
 // スクリプト側で作る要素なので、CSS Modulesのクラスではなくdata属性で指定する(下記の注意を参照)
 [data-novel-sideways] {
 	text-orientation: mixed;
+}
+
+// JUICE: しおりを挟んだ行の印(updateBookmarkHighlights。CSS Custom Highlight APIの名前で指定する)
+::highlight(juice-novel-bookmark) {
+	background-color: rgba(255, 196, 0, 0.28);
 }
 
 // JUICE: 縦中横(2桁の半角数字を横に並べて1文字分に収める。rotateLatinRuns参照)
