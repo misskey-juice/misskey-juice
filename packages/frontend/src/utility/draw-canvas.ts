@@ -548,65 +548,101 @@ export function drawStrokesInGroups(ctx: CanvasRenderingContext2D, strokes: read
 		for (const stroke of strokes) drawStroke(ctx, stroke, region);
 		return;
 	}
-	const width = ctx.canvas.width;
-	const height = ctx.canvas.height;
-	const rx = region == null ? 0 : Math.max(0, Math.floor(region.x0));
-	const ry = region == null ? 0 : Math.max(0, Math.floor(region.y0));
-	const rw = (region == null ? width : Math.min(width, Math.ceil(region.x1))) - rx;
-	const rh = (region == null ? height : Math.min(height, Math.ceil(region.y1))) - ry;
-	if (rw <= 0 || rh <= 0) return;
-	const paths = new Map<string, string[]>();
-	const pathOf = (g: string | undefined): string[] => {
-		if (g == null || !groups.has(g)) return [];
-		let path = paths.get(g);
+	const drawer = new GroupedStrokeDrawer(ctx, groups, pool, region);
+	for (const stroke of strokes) drawer.draw(stroke);
+	drawer.finish();
+}
+
+/**
+ * JUICE: drawStrokesInGroupsを、何回かに分けて描くためのもの(線の多い結合したレイヤーを、画面を固めずに読み込むため)。
+ * 線をdrawで順に渡し、最後にfinishで開いているまとまりを重ねる。途中でやめるときはabort(作業用の絵の状態を戻すだけ)。
+ * 描いている間は、poolをほかの描画に使わないこと
+ */
+export class GroupedStrokeDrawer {
+	private readonly stack: { id: string | null; ctx: CanvasRenderingContext2D }[];
+	private readonly paths = new Map<string, string[]>();
+	private readonly rx: number;
+	private readonly ry: number;
+	private readonly rw: number;
+	private readonly rh: number;
+
+	constructor(
+		ctx: CanvasRenderingContext2D,
+		private readonly groups: ReadonlyMap<string, DrawLayerGroup>,
+		private readonly pool: HTMLCanvasElement[],
+		private readonly region?: Rect,
+	) {
+		this.stack = [{ id: null, ctx }];
+		const width = ctx.canvas.width;
+		const height = ctx.canvas.height;
+		this.rx = region == null ? 0 : Math.max(0, Math.floor(region.x0));
+		this.ry = region == null ? 0 : Math.max(0, Math.floor(region.y0));
+		this.rw = (region == null ? width : Math.min(width, Math.ceil(region.x1))) - this.rx;
+		this.rh = (region == null ? height : Math.min(height, Math.ceil(region.y1))) - this.ry;
+	}
+
+	private pathOf(g: string | undefined): string[] {
+		if (g == null || !this.groups.has(g)) return [];
+		let path = this.paths.get(g);
 		if (path == null) {
 			path = [];
-			for (let group = groups.get(g); group != null && path.length < DRAW_LAYER_GROUP_MAX_DEPTH && !path.includes(group.id); group = group.parent != null ? groups.get(group.parent) : undefined) {
+			for (let group = this.groups.get(g); group != null && path.length < DRAW_LAYER_GROUP_MAX_DEPTH && !path.includes(group.id); group = group.parent != null ? this.groups.get(group.parent) : undefined) {
 				path.unshift(group.id);
 			}
-			paths.set(g, path);
+			this.paths.set(g, path);
 		}
 		return path;
-	};
-	const stack: { id: string | null; ctx: CanvasRenderingContext2D }[] = [{ id: null, ctx }];
-	const open = (id: string) => {
-		const depth = stack.length - 1;
-		const canvas = pool[depth] ??= createScratch();
+	}
+
+	private open(id: string): void {
+		const base = this.stack[0].ctx.canvas;
+		const depth = this.stack.length - 1;
+		const canvas = this.pool[depth] ??= createScratch();
 		// 大きさを変えると中身が消えるので、足りないときだけ大きくする(大きい分は使わない)
-		if (canvas.width < width) canvas.width = width;
-		if (canvas.height < height) canvas.height = height;
+		if (canvas.width < base.width) canvas.width = base.width;
+		if (canvas.height < base.height) canvas.height = base.height;
 		const gctx = canvas.getContext('2d')!;
 		gctx.save();
 		gctx.setTransform(1, 0, 0, 1, 0, 0);
 		gctx.globalAlpha = 1;
 		gctx.globalCompositeOperation = 'source-over';
-		gctx.clearRect(rx, ry, rw, rh);
+		gctx.clearRect(this.rx, this.ry, this.rw, this.rh);
 		gctx.beginPath();
-		gctx.rect(rx, ry, rw, rh);
+		gctx.rect(this.rx, this.ry, this.rw, this.rh);
 		gctx.clip();
-		stack.push({ id, ctx: gctx });
-	};
-	const close = () => {
-		const top = stack.pop()!;
+		this.stack.push({ id, ctx: gctx });
+	}
+
+	private close(): void {
+		const top = this.stack.pop()!;
 		top.ctx.restore();
-		const group = groups.get(top.id!)!;
+		const group = this.groups.get(top.id!)!;
 		if (group.opacity <= 0) return;
-		const parent = stack[stack.length - 1].ctx;
+		const parent = this.stack[this.stack.length - 1].ctx;
 		parent.save();
 		parent.globalAlpha = Math.min(1, group.opacity);
 		parent.globalCompositeOperation = group.blend ?? 'source-over';
-		parent.drawImage(top.ctx.canvas, rx, ry, rw, rh, rx, ry, rw, rh);
+		parent.drawImage(top.ctx.canvas, this.rx, this.ry, this.rw, this.rh, this.rx, this.ry, this.rw, this.rh);
 		parent.restore();
-	};
-	for (const stroke of strokes) {
-		const path = pathOf(stroke.g);
-		let common = 0;
-		while (common < path.length && common + 1 < stack.length && stack[common + 1].id === path[common]) common++;
-		while (stack.length - 1 > common) close();
-		for (let i = stack.length - 1; i < path.length; i++) open(path[i]);
-		drawStroke(stack[stack.length - 1].ctx, stroke, region);
 	}
-	while (stack.length > 1) close();
+
+	public draw(stroke: StrokeShape & { g?: string }): void {
+		if (this.rw <= 0 || this.rh <= 0) return;
+		const path = this.pathOf(stroke.g);
+		let common = 0;
+		while (common < path.length && common + 1 < this.stack.length && this.stack[common + 1].id === path[common]) common++;
+		while (this.stack.length - 1 > common) this.close();
+		for (let i = this.stack.length - 1; i < path.length; i++) this.open(path[i]);
+		drawStroke(this.stack[this.stack.length - 1].ctx, stroke, this.region);
+	}
+
+	public finish(): void {
+		while (this.stack.length > 1) this.close();
+	}
+
+	public abort(): void {
+		while (this.stack.length > 1) this.stack.pop()!.ctx.restore();
+	}
 }
 
 // JUICE: 透明度ロックの線を、作業用キャンバスに普通に描いてから、レイヤーの描いてある所にだけ重ねる
@@ -1335,6 +1371,8 @@ export class DrawCanvasEngine {
 	 */
 	public beginLoadLayer(key: string): void {
 		const layer = this.ensureLayer(key);
+		this.loadDrawers.get(layer)?.abort();
+		this.loadDrawers.delete(layer);
 		layer.strokes = [];
 		layer.pending.clear();
 		layer.committed.getContext('2d')!.clearRect(0, 0, this.width, this.height);
@@ -1348,12 +1386,32 @@ export class DrawCanvasEngine {
 		const layer = this.layers.get(key);
 		if (layer == null) return strokes.length - from;
 		const ctx = layer.committed.getContext('2d')!;
-		// JUICE: 結合したレイヤー(まとまりがある)は、まとまりごとに重ねるので、途中で区切らずに一度に描く
-		if (layer.groups.size > 0 && from === 0) {
-			layer.strokes.push(...strokes);
-			drawStrokesInGroups(ctx, strokes, layer.groups, this.groupPool);
-			this.releaseGroupPoolLater();
-			return strokes.length;
+		// JUICE: 結合したレイヤー(まとまりがある)は、まとまりごとに重ねる。何回かに分けて描けるよう、描いている途中のまとまりを覚えておく
+		// (一度に描くと、Workerを使えない端末で線の多いレイヤーを読み込むときに画面が固まるため)
+		if (layer.groups.size > 0) {
+			let drawer = this.loadDrawers.get(layer);
+			if (from === 0 || drawer == null) {
+				drawer?.abort();
+				drawer = new GroupedStrokeDrawer(ctx, layer.groups, this.loadGroupPool);
+				this.loadDrawers.set(layer, drawer);
+			}
+			let i = from;
+			while (i < strokes.length) {
+				layer.strokes.push(strokes[i]);
+				drawer.draw(strokes[i]);
+				i++;
+				if (performance.now() >= deadline) break;
+			}
+			if (i >= strokes.length) {
+				drawer.finish();
+				this.loadDrawers.delete(layer);
+				// 読み込み用の作業用の絵は、ほかの読み込みが終わってから手放す
+				if (this.loadDrawers.size === 0) {
+					for (const canvas of this.loadGroupPool) releaseCanvas(canvas);
+					this.loadGroupPool = [];
+				}
+			}
+			return i - from;
 		}
 		let i = from;
 		while (i < strokes.length) {
@@ -2432,6 +2490,10 @@ export class DrawCanvasEngine {
 
 	// 消しゴム・移動の途中に使うキャンバスの予備(1枚だけ持っておく)
 	private liveSpare: HTMLCanvasElement | null = null;
+	// JUICE: 読み込みで、何回かに分けて描いている結合したレイヤーの途中の状態と、その作業用の絵
+	// (ほかの描画と作業用の絵を取り合わないよう、別に持つ)
+	private loadDrawers = new Map<Layer, GroupedStrokeDrawer>();
+	private loadGroupPool: HTMLCanvasElement[] = [];
 	// JUICE: 結合したレイヤーのまとまりを描く作業用の絵(入れ子の深さごと。使い回す)。
 	// キャンバスと同じ大きさなので、しばらく使わなければ小さくしてメモリを返す
 	private groupPool: HTMLCanvasElement[] = [];

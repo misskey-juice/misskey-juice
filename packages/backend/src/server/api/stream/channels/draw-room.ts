@@ -112,6 +112,10 @@ export class DrawRoomChannel extends Channel {
 		const selfId = this.user?.id ?? null;
 		if (data.type === 'memberJoined' && data.body.user.id === selfId) this.isMember = true;
 		if (data.type === 'memberLeft' && data.body.userId === selfId) this.isMember = false;
+		// JUICE: 抜けた・外された人の描きかけの線は、この後に届いても流さない(その人の接続が別のプロセスにあると、
+		// まだ配っていなかった分が抜けた知らせより後に届き、皆の画面で描きかけのまま残ってしまうため)
+		if (data.type === 'memberLeft') this.leftUserIds.add(data.body.userId);
+		if (data.type === 'memberJoined') this.leftUserIds.delete(data.body.user.id);
 		if (data.type === 'ended' || data.type === 'deleted') this.room = { ...this.room, isEnded: true };
 		if (data.type === 'updated') {
 			const { title, maxMembers, canvasWidth, canvasHeight } = data.body.room;
@@ -170,6 +174,13 @@ export class DrawRoomChannel extends Channel {
 		for (const part of parts) {
 			if (part.userId !== selfId && part.private) hiddenStrokes.add(part.strokeId);
 		}
+		// 抜けた・外された人の描きかけの線は除く(その人の画面からは、抜けた知らせで消してもらっている)
+		const fromLeft = this.leftUserIds.size > 0 && parts.some(part => this.leftUserIds.has(part.userId));
+		if (fromLeft) {
+			const rest = parts.filter(part => !this.leftUserIds.has(part.userId));
+			if (rest.length > 0) this.sendStrokeParts({ type: 'strokeParts', body: { parts: rest } }, selfId);
+			return;
+		}
 		if (hiddenStrokes.size === 0) {
 			for (const part of parts) {
 				if (part.userId !== selfId) this.rememberForwardedPart(part.strokeId);
@@ -202,6 +213,8 @@ export class DrawRoomChannel extends Channel {
 	// JUICE: この接続に途中まで流した、ほかの人の描いている途中の線のid(下描きに変わったときに取り消してもらうため)。
 	// 取り消し・確定が届かなかった分で増え続けないよう、古いものから捨てる
 	private forwardedPartIds = new Set<string>();
+	// JUICE: 抜けた・外された人(また参加したら外す)
+	private leftUserIds = new Set<string>();
 
 	private rememberForwardedPart(strokeId: string): void {
 		if (this.forwardedPartIds.has(strokeId)) return;
