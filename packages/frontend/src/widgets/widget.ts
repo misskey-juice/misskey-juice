@@ -51,8 +51,15 @@ export const useWidgetPropsManager = <F extends FormWithDefault>(
 		return np;
 	})());
 
+	// JUICE: このウィジェットが送った設定(の中身)。設定が保存されて戻ってきたときに、その後に変えた値を
+	// 古い値で上書きしないよう、自分が送った設定は読み直さない(すばやく続けて変えると、元に戻ってしまうため)
+	const emittedSnapshots = new Set<string>();
+	// 設定の中身を、キーの順番によらない文字列にする
+	const snapshotOf = (data: Record<string, unknown>) => JSON.stringify(Object.keys(propsDef).map(key => data[key] ?? null));
+
 	watch(() => props.widget?.data, (to) => {
 		if (to != null) {
+			if (emittedSnapshots.has(snapshotOf(to))) return;
 			for (const key of Object.keys(propsDef)) {
 				(widgetProps as any)[key] = to[key];
 			}
@@ -60,6 +67,10 @@ export const useWidgetPropsManager = <F extends FormWithDefault>(
 	}, { deep: true });
 
 	const save = throttle(3000, () => {
+		const snapshot = snapshotOf(widgetProps as Record<string, unknown>);
+		emittedSnapshots.add(snapshot);
+		// 覚えておくのは最近のものだけにする
+		if (emittedSnapshots.size > 20) emittedSnapshots.delete(emittedSnapshots.values().next().value!);
 		emit('updateProps', widgetProps as GetFormResultType<F>);
 	});
 
