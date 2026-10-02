@@ -18,7 +18,7 @@ export type NovelBookmark = {
 const EXCERPT_LENGTH = 40;
 
 export function lineExcerpt(line: string): string {
-	return line.replace(/^[\s　]+/, '').slice(0, EXCERPT_LENGTH);
+	return line.replace(/^[\s\u3000]+/, '').slice(0, EXCERPT_LENGTH);
 }
 
 /**

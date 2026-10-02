@@ -532,6 +532,7 @@ function splitByChapterTitles(part: string): string[] {
 	pieces.push(part.slice(from));
 	return pieces.map(t => t.trim()).filter(t => t.length > 0);
 }
+
 const PIXIV_RUBY_BASE_PATTERN = /\[\[rb:\s*([^>\]]+?)\s*>[^\]]*\]\]/g;
 
 const chapters = computed<NovelChapter[]>(() => {
