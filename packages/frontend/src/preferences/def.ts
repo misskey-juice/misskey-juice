@@ -211,6 +211,10 @@ export const PREF_DEF = definePreferences({
 	novelViewerFontFamily: {
 		default: 'default' as 'default' | 'mincho' | 'gothic',
 	},
+	// 縦書きで、半角の英単語を1文字ずつ縦に並べず、横向きのまま(90度回して)組み込む(2桁の数字は縦中横)
+	novelViewerLatinSideways: {
+		default: false,
+	},
 	// カスタムテーマ(novelViewerTheme: 'custom' のときに使う文字色・背景色)
 	novelViewerCustomTextColor: {
 		default: '#1a1a1a',

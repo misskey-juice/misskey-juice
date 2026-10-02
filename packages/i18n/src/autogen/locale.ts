@@ -16263,6 +16263,46 @@ export interface Locale extends ILocale {
          */
         "novelViewerAozoraNotationCaption": string;
         /**
+         * しおり
+         */
+        "novelViewerBookmarks": string;
+        /**
+         * 今読んでいる所にしおりを挟む
+         */
+        "novelViewerBookmarkHere": string;
+        /**
+         * 選んだ行にしおりを挟む
+         */
+        "novelViewerBookmarkSelected": string;
+        /**
+         * しおりを挟みました
+         */
+        "novelViewerBookmarkAdded": string;
+        /**
+         * しおりを挟む行が見つかりませんでした
+         */
+        "novelViewerBookmarkFailed": string;
+        /**
+         * しおりを外す
+         */
+        "novelViewerRemoveBookmark": string;
+        /**
+         * (空いている行)
+         */
+        "novelViewerBookmarkEmptyLine": string;
+        /**
+         * 本文の文字を選んでから開くと、その行にしおりを挟めます。挟んだ行には色が付き、ここから飛べます
+         */
+        "novelViewerBookmarkHint": string;
+        /**
+         * 半角の英単語を横向きのまま組み込む
+         */
+        "novelViewerLatinSideways": string;
+        /**
+         * 縦書きで、半角の英単語や3桁以上の数字を1文字ずつ縦に並べず、横向きのまま(90度回して)組み込みます。2桁の半角数字は縦中横(横に並べて1文字分に収める)にします。
+         */
+        "novelViewerLatinSidewaysCaption": string;
+        /**
          * 書体
          */
         "novelViewerFontFamily": string;
