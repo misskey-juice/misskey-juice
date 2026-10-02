@@ -265,6 +265,8 @@ let clockKind: 'audio' | 'performance' | null = null;
 let resuming = false;
 // 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
 const scheduledSources: AudioBufferSourceNode[] = [];
+// 重なりすぎて、途中で止める時刻を決めた音(メトロノームを止めたときは、その時刻を待たずに止める)
+const evictedSources = new Set<AudioBufferSourceNode>();
 // 光らせる予定のタイマー
 const flashTimers = new Set<number>();
 
@@ -310,6 +312,8 @@ function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null, withF
 		const oldest = scheduledSources.shift()!;
 		try {
 			oldest.stop(at);
+			evictedSources.add(oldest);
+			oldest.addEventListener('ended', () => evictedSources.delete(oldest), { once: true });
 		} catch {
 			// もう止まっている
 		}
@@ -328,7 +332,7 @@ function stopMetronome(): void {
 	clockKind = null;
 	for (const timer of flashTimers) window.clearTimeout(timer);
 	flashTimers.clear();
-	for (const source of scheduledSources) {
+	for (const source of [...scheduledSources, ...evictedSources]) {
 		try {
 			source.stop();
 		} catch {
@@ -336,6 +340,7 @@ function stopMetronome(): void {
 		}
 	}
 	scheduledSources.length = 0;
+	evictedSources.clear();
 }
 
 // 少し先までの拍を、その時のBPMで決めていく(BPMが変わっても、先に決めた分の後からすぐ付いていく)
