@@ -138,6 +138,7 @@ import { extractMentions } from '@/utility/extract-mentions.js';
 import { formatTimeString } from '@/utility/format-time-string.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import * as os from '@/os.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { chooseDriveFile } from '@/utility/drive.js';
 import { store } from '@/store.js';
@@ -212,16 +213,22 @@ const isNovel = ref<boolean>(false);
 watch(() => files.value.map(f => f.id), (ids, oldIds) => {
 	const added = files.value.filter(f => !(oldIds ?? []).includes(f.id));
 	if (added.some(f => f.isNovel)) isNovel.value = true;
-	// JUICE: 設定で決めていれば、新しく添付した小説のtxtを初めからダウンロードさせない(下書きから戻したものは除く)
-	if (oldIds != null && prefer.s.novelTextDownloadDisabledByDefault) {
-		for (const file of added) {
-			if (file.novelDownloadDisabled || !(file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt'))) continue;
-			misskeyApi('drive/files/update', { fileId: file.id, novelDownloadDisabled: true }).then(() => {
-				file.novelDownloadDisabled = true;
-			}).catch(() => {});
-		}
-	}
 }, { immediate: true });
+
+// JUICE: 設定で決めていれば、この投稿フォームで新しく添付した(アップロード・ドライブから選んだ・ドロップした)txtを、
+// 初めからほかの人にダウンロードさせない。下書きから戻した・「削除して編集」のファイルは、前に決めたままにする
+function applyNovelDownloadDefault(added: Misskey.entities.DriveFile[]): void {
+	if (props.mock || !prefer.s.novelTextDownloadDisabledByDefault) return;
+	for (const file of added) {
+		if (file.novelDownloadDisabled || !isNovelTextFile(file)) continue;
+		misskeyApi('drive/files/update', { fileId: file.id, novelDownloadDisabled: true }).then(() => {
+			file.novelDownloadDisabled = true;
+		}).catch(err => {
+			os.alert({ type: 'error', title: i18n.ts.error, text: err.message });
+		});
+	}
+}
+
 const mediaTimelineEnabled = ref(false);
 juicePublicSettingsCache.fetch().then(res => {
 	mediaTimelineEnabled.value = res.mediaTimelineEnabled;
@@ -281,6 +288,7 @@ onUnmounted(() => {
 
 uploader.events.on('itemUploaded', ctx => {
 	files.value.push(ctx.item.uploaded!);
+	applyNovelDownloadDefault([ctx.item.uploaded!]);
 	uploader.removeItem(ctx.item);
 });
 
@@ -551,6 +559,7 @@ function chooseFileFromDrive(ev: PointerEvent) {
 
 	chooseDriveFile({ multiple: true }).then(driveFiles => {
 		files.value.push(...driveFiles);
+		applyNovelDownloadDefault(driveFiles);
 	});
 }
 
@@ -935,6 +944,7 @@ function onDrop(ev: DragEvent): void {
 		const droppedData = getDragData(ev, 'driveFiles');
 		if (droppedData != null) {
 			files.value.push(...droppedData);
+			applyNovelDownloadDefault(droppedData);
 			ev.preventDefault();
 		}
 	}
@@ -1037,6 +1047,7 @@ async function uploadFiles() {
 
 	for (const uploadedItem of uploader.items.value.filter(x => x.uploaded != null)) {
 		files.value.push(uploadedItem.uploaded!);
+		applyNovelDownloadDefault([uploadedItem.uploaded!]);
 		uploader.removeItem(uploadedItem);
 	}
 }

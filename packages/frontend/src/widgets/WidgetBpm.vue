@@ -49,11 +49,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:step="1"
 				:continuousUpdate="true"
 				:textConverter="(v) => formatBpm(positionToBpm(v))"
-				@update:modelValue="v => setSliderBpm(positionToBpm(v))"
+				@update:modelValue="onSliderInput"
 			>
 				<template #label>{{ i18n.ts._juice.bpmSourceSlider }}</template>
 			</MkRange>
 			<MkInput
+				:key="sliderInputKey"
 				:class="$style.sliderControl"
 				:modelValue="widgetProps.sliderBpm"
 				type="number"
@@ -61,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:max="SLIDER_MAX_BPM"
 				:step="0.1"
 				manualSave
-				@update:modelValue="v => setSliderBpm(Number(v))"
+				@update:modelValue="onSliderBpmInput"
 			>
 				<template #label>BPM</template>
 				<template #caption>{{ i18n.tsx._juice.bpmSliderRange({ min: SLIDER_MIN_BPM, max: SLIDER_MAX_BPM }) }}</template>
@@ -74,6 +75,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </MkContainer>
 </template>
+
+<script lang="ts">
+// JUICE: メトロノームを鳴らしているBPMウィジェットが、画面の操作を受けたときに音を動かし直すためのもの。
+// 画面全体の操作を見るのは1つだけにする(ウィジェットを複数置いたときに、操作のたびに何度も呼ばれないように)
+const metronomeGestureWatchers = new Set<() => void>();
+let metronomeGestureListening = false;
+
+function onMetronomeGesture(): void {
+	for (const fn of metronomeGestureWatchers) fn();
+}
+
+function updateMetronomeGestureListener(): void {
+	const shouldListen = metronomeGestureWatchers.size > 0;
+	if (shouldListen === metronomeGestureListening) return;
+	metronomeGestureListening = shouldListen;
+	if (shouldListen) {
+		window.addEventListener('pointerdown', onMetronomeGesture, { capture: true });
+		window.addEventListener('keydown', onMetronomeGesture, { capture: true });
+	} else {
+		window.removeEventListener('pointerdown', onMetronomeGesture, { capture: true });
+		window.removeEventListener('keydown', onMetronomeGesture, { capture: true });
+	}
+}
+</script>
 
 <script lang="ts" setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
@@ -183,7 +208,26 @@ function formatBpm(bpm: number): string {
 	return bpm < 100 ? bpm.toFixed(1) : String(Math.round(bpm));
 }
 
-const sliderPosition = computed(() => bpmToPosition(clampSliderBpm(widgetProps.sliderBpm)));
+// スライダーのつまみの位置。BPMから位置に戻すと丸めでずれる(遅いところで、つまみが跳ねる)ので、動かした位置を覚えておき、
+// BPMがほかから変わったときだけ合わせる
+const sliderPosition = ref(bpmToPosition(clampSliderBpm(widgetProps.sliderBpm)));
+watch(() => widgetProps.sliderBpm, (bpm) => {
+	if (positionToBpm(sliderPosition.value) !== clampSliderBpm(bpm)) sliderPosition.value = bpmToPosition(clampSliderBpm(bpm));
+});
+
+function onSliderInput(position: number): void {
+	sliderPosition.value = position;
+	setSliderBpm(positionToBpm(position));
+}
+
+// 数の入力欄。範囲の外の数・空欄は、決めた値に戻して見せる(入れた数が残って見えないように、欄を作り直す)
+const sliderInputKey = ref(0);
+
+function onSliderBpmInput(value: string | number): void {
+	const bpm = typeof value === 'number' ? value : value.trim() === '' ? Number.NaN : Number(value);
+	if (!Number.isFinite(bpm) || clampSliderBpm(bpm) !== bpm) sliderInputKey.value++;
+	setSliderBpm(bpm);
+}
 
 function setSliderBpm(bpm: number): void {
 	if (!Number.isFinite(bpm)) return;
@@ -352,12 +396,12 @@ function resumeAudio(): void {
 	audioCtx.resume().catch(() => {});
 }
 
-function onUserGesture(): void {
-	if (widgetProps.metronome) resumeAudio();
-}
-
-window.addEventListener('pointerdown', onUserGesture, { capture: true });
-window.addEventListener('keydown', onUserGesture, { capture: true });
+// 画面の操作を見るのは、メトロノームを鳴らしている間だけ(ウィジェットを複数置いても、1つにまとめる)
+watch(() => widgetProps.metronome, (on) => {
+	if (on) metronomeGestureWatchers.add(resumeAudio);
+	else metronomeGestureWatchers.delete(resumeAudio);
+	updateMetronomeGestureListener();
+}, { immediate: true });
 // 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
 const scheduledSources: AudioBufferSourceNode[] = [];
 // 重なりすぎて、途中で止める時刻を決めた音(メトロノームを止めたときは、その時刻を待たずに止める)
@@ -526,8 +570,8 @@ function toggleMetronome(): void {
 //#endregion
 
 onUnmounted(() => {
-	window.removeEventListener('pointerdown', onUserGesture, { capture: true });
-	window.removeEventListener('keydown', onUserGesture, { capture: true });
+	metronomeGestureWatchers.delete(resumeAudio);
+	updateMetronomeGestureListener();
 	window.clearInterval(clock);
 	stopMetronome();
 	if (beatTimer != null) window.clearTimeout(beatTimer);

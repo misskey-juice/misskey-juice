@@ -476,10 +476,11 @@ export class NoteEntityService implements OnModuleInit {
 
 		this.treatVisibility(packed);
 
-		// JUICE: 投稿者がダウンロードさせないことにした小説のtxtは、投稿者以外にはファイルのURLを渡さない。
+		// JUICE: 投稿者がダウンロードさせないことにしたtxtは、投稿者以外にはファイルのURLを渡さない(小説の印が無い投稿でも。
+		// 後から小説の印を外しても、ファイルに付けた「ダウンロードさせない」がそのまま効くように)。
 		// 添付としては出したまま(ファイル名などは見える)、URLはこのノートの小説ビューワーのページにする
 		// (ダウンロードのボタンは出さない。本文は小説ビューワーが notes/novel-text で読む)
-		if (note.isNovel && note.userId !== meId && packed.files != null && packed.files.length > 0) {
+		if (note.userId !== meId && packed.files != null && packed.files.length > 0) {
 			const viewerUrl = `${this.config.url}/notes/${note.id}/novel-viewer`;
 			let protectedAny = false;
 			packed.files = packed.files.map(file => {

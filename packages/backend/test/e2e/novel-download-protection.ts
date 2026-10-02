@@ -82,6 +82,31 @@ describe('小説のtxtのダウンロード禁止', () => {
 		assert.ok((ap.body._misskey_content as string).startsWith('あらすじ\n\n📖 '));
 	});
 
+	test('小説の印が無い投稿でも、ダウンロードさせないtxtのURLは渡さず、本文は読める', async () => {
+		const plainNoteId = (await post(alice, { text: '小説の印なし', fileIds: [fileId] })).id;
+		const note = (await api('notes/show', { noteId: plainNoteId }, bob)).body as unknown as Note;
+		assert.ok(note.files[0].url.endsWith(`/notes/${plainNoteId}/novel-viewer`), note.files[0].url);
+		const res = await api('notes/novel-text', { noteId: plainNoteId }, bob);
+		assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+		assert.strictEqual(Buffer.from(res.body.data, 'base64').toString('utf8'), content);
+	});
+
+	test('ダウンロードさせないtxtが複数あれば、fileIdでどれを読むか選べる', async () => {
+		const second = '第二部\n';
+		const uploaded = await uploadFile(alice, { blob: new Blob([new TextEncoder().encode(second)], { type: 'text/plain' }), name: 'part2.txt' });
+		const secondId = uploaded.body!.id;
+		await api('drive/files/update', { fileId: secondId, novelDownloadDisabled: true }, alice);
+		const twoId = (await post(alice, { text: '二部作', fileIds: [fileId, secondId], isNovel: true })).id;
+		const first = await api('notes/novel-text', { noteId: twoId }, bob);
+		assert.strictEqual(first.body.name, 'story.txt');
+		const picked = await api('notes/novel-text', { noteId: twoId, fileId: secondId }, bob);
+		assert.strictEqual(picked.body.name, 'part2.txt');
+		assert.strictEqual(Buffer.from(picked.body.data, 'base64').toString('utf8'), second);
+		// その投稿に無いファイルは選べない
+		const other = await api('notes/novel-text', { noteId, fileId: secondId }, bob);
+		assert.strictEqual((other.body as unknown as { error: { code: string } }).error.code, 'NO_NOVEL_TEXT');
+	});
+
 	test('ダウンロードさせるに戻すと、ほかの人にも添付として出る', async () => {
 		await api('drive/files/update', { fileId, novelDownloadDisabled: false }, alice);
 		const forBob = (await api('notes/show', { noteId }, bob)).body as unknown as Note;
@@ -89,5 +114,8 @@ describe('小説のtxtのダウンロード禁止', () => {
 		assert.strictEqual(forBob.novelTextProtected, undefined);
 		const ap = await simpleGet(`notes/${noteId}`, 'application/activity+json');
 		assert.strictEqual(ap.body.attachment.length, 1);
+		// ダウンロードさせるtxtはURLで読めるので、本文のAPIでは返さない
+		const res = await api('notes/novel-text', { noteId }, bob);
+		assert.strictEqual((res.body as unknown as { error: { code: string } }).error.code, 'NO_NOVEL_TEXT');
 	});
 });

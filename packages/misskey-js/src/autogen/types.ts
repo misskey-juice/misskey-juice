@@ -36101,6 +36101,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     noteId: string;
+                    /** Format: misskey:id */
+                    fileId?: string;
                 };
             };
         };

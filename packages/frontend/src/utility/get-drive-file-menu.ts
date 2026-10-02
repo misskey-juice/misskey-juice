@@ -13,6 +13,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 
 function rename(file: Misskey.entities.DriveFile) {
 	os.inputText({
@@ -146,10 +147,6 @@ async function deleteFile(file: Misskey.entities.DriveFile) {
 }
 
 // JUICE: 小説ビューワーが本文として読み込める.txtファイルかどうか(novel-viewer.vueと同じ判定)
-function isTextFile(file: Misskey.entities.DriveFile): boolean {
-	return file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-}
-
 /** 自分のドライブファイルを操作する際のメニュー */
 export function getDriveFileMenu(file: Misskey.entities.DriveFile, folder?: Misskey.entities.DriveFolder | null): MenuItem[] {
 	const _isImage = file.type.startsWith('image/');
@@ -178,7 +175,7 @@ export function getDriveFileMenu(file: Misskey.entities.DriveFile, folder?: Miss
 		icon: 'ti ti-ai _juiceAiIcon',
 		badge: true,
 		action: () => toggleAIGenerated(file),
-	}, ...(isTextFile(file) ? [{
+	}, ...(isNovelTextFile(file) ? [{
 		text: file.isNovel ? i18n.ts._juice.unmarkAsNovel : i18n.ts._juice.markAsNovel,
 		icon: 'ti ti-book',
 		badge: true,

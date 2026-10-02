@@ -13,11 +13,12 @@ import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { DI } from '@/di-symbols.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { DriveFilesRepository } from '@/models/_.js';
-import { pickNovelTextFile } from '@/misc/novel-text-file.js';
+import { isNovelTextFile, pickNovelTextFile } from '@/misc/novel-text-file.js';
 import { ApiError } from '../../error.js';
 
-// JUICE: 小説の投稿に添付されたtxtの本文を返す(小説ビューワー用)。投稿者がダウンロードさせないことにしたtxtは、
-// ほかの人にはファイルのURLを渡さないので、本文はここから読む。ノートを見られる人だけが読める
+// JUICE: 投稿者がダウンロードさせないことにしたtxtの本文を返す(小説ビューワー用)。そのtxtは、ほかの人には
+// ファイルのURLを渡さないので、本文はここから読む。ノートを見られる人だけが読める。
+// ほかのtxt(URLで読めるもの)は返さない(このサーバーが代わりに読み込む必要が無いため)
 export const meta = {
 	tags: ['notes'],
 
@@ -46,7 +47,7 @@ export const meta = {
 			id: '30538e58-d6fa-437e-8715-71c7be73c609',
 		},
 		noNovelText: {
-			message: 'This note has no novel text file.',
+			message: 'This note has no protected novel text file.',
 			code: 'NO_NOVEL_TEXT',
 			id: 'f655a42b-d9dd-455c-9672-bb843bdf3494',
 		},
@@ -60,6 +61,11 @@ export const meta = {
 			code: 'CONTENT_RESTRICTED_BY_SERVER',
 			id: 'fccb0a11-0ba8-4b43-88c5-bba2c31b1a69',
 		},
+		failedToRead: {
+			message: 'Failed to read the novel text file.',
+			code: 'FAILED_TO_READ_NOVEL_TEXT',
+			id: '67cc913e-eb6c-4a8a-a0e2-5cad60ac91ae',
+		},
 	},
 } as const;
 
@@ -67,6 +73,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		noteId: { type: 'string', format: 'misskey:id' },
+		// JUICE: ダウンロードさせないtxtが複数あるとき、どれを読むか(省略すると、小説ビューワーと同じく「小説」の印の付いたものを優先)
+		fileId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['noteId'],
 } as const;
@@ -100,23 +108,33 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (this.serverSettings.ugcVisibilityForVisitor === 'local' && note.userHost != null && me == null) throw new ApiError(meta.errors.contentRestrictedByServer);
 
 			// 公開範囲などで見られないノートは、見られないノートとして扱う
-			const packed = await this.noteEntityService.pack(note, me, { detail: false });
+			// (detailにするのは、フォロワー限定でも自分の投稿への返信なら見られる、をnotes/showと揃えるため)
+			const packed = await this.noteEntityService.pack(note, me, { detail: true });
 			if (packed.isHidden) throw new ApiError(meta.errors.noSuchNote);
 
-			if (!note.isNovel || note.fileIds.length === 0) throw new ApiError(meta.errors.noNovelText);
+			if (note.fileIds.length === 0) throw new ApiError(meta.errors.noNovelText);
 			const files = await this.driveFilesRepository.findBy({ id: In(note.fileIds) });
 			const ordered = note.fileIds.map(id => files.find(file => file.id === id)).filter(file => file != null);
-			const file = pickNovelTextFile(ordered);
+			// ダウンロードさせないtxtだけを選ぶ(小説ビューワーと同じく、「小説」の印の付いたものを優先)
+			const protectedFiles = ordered.filter(f => f.novelDownloadDisabled);
+			const file = ps.fileId != null
+				? protectedFiles.find(f => f.id === ps.fileId && isNovelTextFile(f)) ?? null
+				: pickNovelTextFile(protectedFiles);
 			if (file == null || file.size > MAX_NOVEL_TEXT_BYTES) throw new ApiError(meta.errors.noNovelText);
 
 			let data: Buffer;
-			if (file.storedInternal && file.accessKey != null) {
-				const chunks: Buffer[] = [];
-				for await (const chunk of this.internalStorageService.read(file.accessKey)) chunks.push(chunk as Buffer);
-				data = Buffer.concat(chunks);
-			} else {
-				const res = await this.httpRequestService.send(file.url, { timeout: 30 * 1000, size: MAX_NOVEL_TEXT_BYTES });
-				data = Buffer.from(await res.arrayBuffer());
+			try {
+				if (file.storedInternal && file.accessKey != null) {
+					const chunks: Buffer[] = [];
+					for await (const chunk of this.internalStorageService.read(file.accessKey)) chunks.push(chunk as Buffer);
+					data = Buffer.concat(chunks);
+				} else {
+					// このサーバーのファイル(オブジェクトストレージ)は、管理者が設定した置き場所なので、内部のアドレスでも読む
+					const res = await this.httpRequestService.send(file.url, { timeout: 30 * 1000, size: MAX_NOVEL_TEXT_BYTES, isLocalAddressAllowed: file.userHost == null });
+					data = Buffer.from(await res.arrayBuffer());
+				}
+			} catch {
+				throw new ApiError(meta.errors.failedToRead);
 			}
 
 			return { name: file.name, data: data.toString('base64') };

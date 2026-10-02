@@ -47,6 +47,7 @@ import { copyToClipboard } from '@/utility/copy-to-clipboard';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import * as os from '@/os.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
@@ -137,11 +138,9 @@ function toggleNovelDownloadDisabled(file: Misskey.entities.DriveFile) {
 		novelDownloadDisabled: value,
 	}).then(() => {
 		file.novelDownloadDisabled = value;
+	}).catch(err => {
+		os.alert({ type: 'error', title: i18n.ts.error, text: err.message });
 	});
-}
-
-function isTextFile(file: Misskey.entities.DriveFile): boolean {
-	return file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
 }
 
 async function rename(file: Misskey.entities.DriveFile) {
@@ -200,7 +199,7 @@ function showFileMenu(file: Misskey.entities.DriveFile, ev: PointerEvent | Keybo
 		icon: 'ti ti-ai _juiceAiIcon',
 		badge: true,
 		action: () => { toggleAIGenerated(file); },
-	}, ...(isTextFile(file) ? [{
+	}, ...(isNovelTextFile(file) ? [{
 		text: file.novelDownloadDisabled ? i18n.ts._juice.allowNovelDownload : i18n.ts._juice.disallowNovelDownload,
 		icon: file.novelDownloadDisabled ? 'ti ti-download' : 'ti ti-download-off',
 		badge: true,

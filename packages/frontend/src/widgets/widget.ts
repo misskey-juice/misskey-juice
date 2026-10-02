@@ -51,28 +51,35 @@ export const useWidgetPropsManager = <F extends FormWithDefault>(
 		return np;
 	})());
 
-	// JUICE: このウィジェットが送った設定(の中身)。設定が保存されて戻ってきたときに、その後に変えた値を
-	// 古い値で上書きしないよう、自分が送った設定は読み直さない(すばやく続けて変えると、元に戻ってしまうため)
-	const emittedSnapshots = new Set<string>();
+	// JUICE: 設定が保存されて戻ってきたときに、その後に変えた値を古い値で上書きしないようにする
+	// (すばやく続けて変えると、元に戻ってしまうため)。次のときは読み直さない:
+	// - 最後に送った設定そのものが戻ってきた
+	// - まだ送っていない変更がある(3秒に1回にまとめて送るので、送るまでの間。送れば、こちらの値で保存される)
+	// それ以外(ほかのタブ・端末で変えた等)は、今まで通り読み直す
+	let lastEmitted: string | null = null;
+	let pendingLocalChange = false;
 	// 設定の中身を、キーの順番によらない文字列にする
 	const snapshotOf = (data: Record<string, unknown>) => JSON.stringify(Object.keys(propsDef).map(key => data[key] ?? null));
 
 	watch(() => props.widget?.data, (to) => {
 		if (to != null) {
-			if (emittedSnapshots.has(snapshotOf(to))) return;
+			if (pendingLocalChange || snapshotOf(to) === lastEmitted) return;
 			for (const key of Object.keys(propsDef)) {
 				(widgetProps as any)[key] = to[key];
 			}
 		}
 	}, { deep: true });
 
-	const save = throttle(3000, () => {
-		const snapshot = snapshotOf(widgetProps as Record<string, unknown>);
-		emittedSnapshots.add(snapshot);
-		// 覚えておくのは最近のものだけにする
-		if (emittedSnapshots.size > 20) emittedSnapshots.delete(emittedSnapshots.values().next().value!);
+	const emitNow = throttle(3000, () => {
+		pendingLocalChange = false;
+		lastEmitted = snapshotOf(widgetProps as Record<string, unknown>);
 		emit('updateProps', widgetProps as GetFormResultType<F>);
 	});
+
+	const save = () => {
+		pendingLocalChange = true;
+		emitNow();
+	};
 
 	const configure = async () => {
 		const form = deepClone(propsDef);

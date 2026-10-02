@@ -157,6 +157,7 @@ import { store } from '@/store.js';
 import type { MenuItem } from '@/types/menu.js';
 import { caretAtPoint, chapterElementOf, lineAtPosition, lineExcerpt, lineRange, rangeStartRect, resolveBookmark, setNovelBookmarkHighlight } from '@/utility/novel-bookmark.js';
 import type { NovelBookmark } from '@/utility/novel-bookmark.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 import { prefer } from '@/preferences.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
 import { userPage } from '@/filters/user.js';
@@ -174,6 +175,8 @@ const props = defineProps<{
 	noteId?: string;
 	// JUICE: 小説エディターの中に並べて表示している(ページの題名は変えない)
 	embedded?: boolean;
+	// JUICE: txtが複数あるとき、どれを読むか(無ければ「小説」の印の付いたものを優先)
+	fileId?: string;
 }>();
 
 const isPreview = computed(() => props.noteId == null);
@@ -259,13 +262,13 @@ watch(() => currentWork.value.text, (text) => {
 // ノート本文だけだと文字数上限に収まらない長編を投稿できないための機能
 // .txtが複数添付されている場合は、ドライブで「小説」フラグを付けたファイルを優先する
 // JUICE: 投稿者がダウンロードさせないことにしたtxtは、添付に入っていない(ファイルのURLが無い)ので、本文をAPIで読む
-type NovelFileSource = Misskey.entities.DriveFile | { protectedNoteId: string };
+type NovelFileSource = Misskey.entities.DriveFile | { protectedNoteId: string; fileId: string };
 const novelFile = computed<NovelFileSource | null>(() => {
-	const textFiles = appearNote.value?.files?.filter(f => f.type === 'text/plain' || f.name.toLowerCase().endsWith('.txt')) ?? [];
-	const file = textFiles.find(f => f.isNovel) ?? textFiles[0] ?? null;
+	const textFiles = appearNote.value?.files?.filter(isNovelTextFile) ?? [];
+	const file = (props.fileId != null ? textFiles.find(f => f.id === props.fileId) : null) ?? textFiles.find(f => f.isNovel) ?? textFiles[0] ?? null;
 	if (file == null) return null;
 	// 投稿者がダウンロードさせないことにしたtxtは、投稿者以外にはファイルのURLが無いので、本文をAPIで読む(投稿者も同じく)
-	if (file.novelDownloadDisabled && appearNote.value != null) return { protectedNoteId: appearNote.value.id };
+	if (file.novelDownloadDisabled && appearNote.value != null) return { protectedNoteId: appearNote.value.id, fileId: file.id };
 	return file;
 });
 const novelFileContent = ref<string | null>(null);
@@ -283,7 +286,7 @@ async function loadNovelFile(file: NovelFileSource): Promise<void> {
 	try {
 		let buffer: ArrayBuffer;
 		if ('protectedNoteId' in file) {
-			const res = await misskeyApi('notes/novel-text', { noteId: file.protectedNoteId });
+			const res = await misskeyApi('notes/novel-text', { noteId: file.protectedNoteId, fileId: file.fileId });
 			const binary = window.atob(res.data);
 			const bytes = new Uint8Array(binary.length);
 			for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -308,7 +311,7 @@ async function loadNovelFile(file: NovelFileSource): Promise<void> {
 // 中身ではなくファイル(またはノート)のidで見る)
 watch(() => {
 	const file = novelFile.value;
-	return file == null ? null : 'protectedNoteId' in file ? `note:${file.protectedNoteId}` : `file:${file.id}`;
+	return file == null ? null : 'protectedNoteId' in file ? `note:${file.protectedNoteId}:${file.fileId}` : `file:${file.id}`;
 }, () => {
 	const file = novelFile.value;
 	novelFileContent.value = null;
