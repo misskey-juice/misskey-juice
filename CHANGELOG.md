@@ -1,3 +1,11 @@
+## 2026.10.0-juice+4.0
+
+### General
+- 本家Misskey 2026.10.0の変更をすべて取り込み(HTTP Signaturesの`(request-target)`の修正・添付ファイルの配信の修正・fastifyの更新など、セキュリティ修正を含む)。詳細は下記の「2026.10.0」を参照
+
+### Server
+- Fix: ログインしていない人に見せるノートの範囲(本家の「非ログインユーザーに対するUGCの公開範囲」)を、JUICEのリレータイムラインにも反映(JUICE独自)
+
 ## 2026.9.1-juice+3.20
 
 ### Client
@@ -600,6 +608,22 @@
 
 ### Server
 - Fix: `reset-db` がテスト用以外のデータベースを削除しないように
+
+## 2026.10.0
+
+### General
+- Enhance: 翻訳の更新
+
+### Client
+- Fix: ユーザーの「概要」ページで引っ張って更新しても何も更新されない問題を修正  
+  (Cherry-picked from https://github.com/shiroha-a/misskey-ts/commit/c946a42dbb71234dd9d9bbc14474853f0709431c)
+
+### Server
+- Fix: HTTP Signaturesの`(request-target)`にクエリ文字列が含まれない問題を修正
+- Fix: クリップから同じノートを繰り返し削除すると、ノートの被クリップ数が負の値を取る問題を修正
+- Fix: 添付ファイルの配信に関する挙動の修正
+- Fix: セキュリティに関する修正
+
 
 ## 2026.9.1
 

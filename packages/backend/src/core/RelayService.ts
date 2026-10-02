@@ -79,28 +79,28 @@ export class RelayService {
 	}
 
 	@bindThis
-	public async relayAccepted(id: string): Promise<string> {
-		const result = await this.relaysRepository.update(id, {
-			status: 'accepted',
-		});
-
-		// JUICE: 承認済み一覧のキャッシュに即座に反映させる(下のrelayRejectedと同じ理由)
-		this.relaysCache.delete();
-
-		return JSON.stringify(result);
+	public async relayAccepted(id: string, actor: { inbox: string | null; sharedInbox: string | null; }): Promise<string> {
+		return JSON.stringify(await this.updateRequestingRelayStatus(id, actor, 'accepted'));
 	}
 
 	@bindThis
-	public async relayRejected(id: string): Promise<string> {
-		const result = await this.relaysRepository.update(id, {
-			status: 'rejected',
-		});
+	public async relayRejected(id: string, actor: { inbox: string | null; sharedInbox: string | null; }): Promise<string> {
+		return JSON.stringify(await this.updateRequestingRelayStatus(id, actor, 'rejected'));
+	}
 
-		// JUICE: 承認済みだったリレーが却下された場合も、古いキャッシュがgetRelayForActorに
-		// 残り続けないよう即座に無効化する
-		this.relaysCache.delete();
+	@bindThis
+	private async updateRequestingRelayStatus(id: string, actor: { inbox: string | null; sharedInbox: string | null; }, status: 'accepted' | 'rejected') {
+		const relay = await this.relaysRepository.findOneBy({ id });
+		if (relay == null) return { affected: 0 };
+		// 応答してきたのがリレー自身でなければ受け付けない
+		if (actor.inbox !== relay.inbox && actor.sharedInbox !== relay.inbox) return { affected: 0 };
 
-		return JSON.stringify(result);
+		const result = await this.relaysRepository.update({ id, status: 'requesting' }, { status });
+
+		// JUICE: 承認・却下を承認済み一覧のキャッシュ(getRelayForActor等)に即座に反映させる
+		if ((result.affected ?? 0) > 0) this.relaysCache.delete();
+
+		return { affected: result.affected ?? 0 };
 	}
 
 	@bindThis
