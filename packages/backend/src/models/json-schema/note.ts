@@ -220,6 +220,11 @@ export const packedNoteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		// JUICE: 投稿者がダウンロードさせないことにした小説のtxtがあり、その添付を除いてある(本文は notes/novel-text で読む)
+		novelTextProtected: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
 		// JUICE: リモートで編集された投稿の、最後に編集された日時(編集されていなければ無い)
 		updatedAt: {
 			type: 'string',

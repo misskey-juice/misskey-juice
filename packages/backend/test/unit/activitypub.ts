@@ -590,6 +590,62 @@ describe('ActivityPub', () => {
 				visibility: 'followers',
 			} as MiNote);
 		});
+
+		// JUICE: ダウンロードさせない小説のtxtは添付として送らず、小説ビューワーへのリンクにする。
+		// フォロワー限定・指定したユーザー限定の投稿では、リンクを開いても読めないので、このサーバーでだけ読めることを知らせる
+		describe('ダウンロードさせない小説のtxt', () => {
+			const novelNote = (visibility: MiNote['visibility']) => ({
+				id: genAidx(Date.now()),
+				userId: 'author',
+				text: 'あらすじ',
+				cw: null,
+				visibility,
+				visibleUserIds: [],
+				mentions: [],
+				mentionedRemoteUsers: '[]',
+				tags: [],
+				emojis: [],
+				fileIds: ['novelfile', 'image'],
+				isNovel: true,
+				isAIGenerated: false,
+				hasPoll: false,
+				replyId: null,
+				renoteId: null,
+				lang: null,
+				localOnly: false,
+			} as unknown as MiNote);
+			const files = [
+				{ id: 'novelfile', name: 'story.txt', type: 'text/plain', isNovel: true, novelDownloadDisabled: true, isSensitive: false, isAIGenerated: false, url: 'https://host1.test/files/a', comment: null, properties: {} },
+				{ id: 'image', name: 'a.png', type: 'image/png', isNovel: false, novelDownloadDisabled: false, isSensitive: false, isAIGenerated: false, url: 'https://host1.test/files/b', comment: null, properties: {} },
+			];
+
+			beforeEach(() => {
+				const repo = (rendererService as unknown as { driveFilesRepository: { findBy: unknown } }).driveFilesRepository;
+				vi.spyOn(repo as { findBy: (...args: unknown[]) => unknown }, 'findBy').mockResolvedValue(files);
+			});
+
+			test('添付として送らず、小説ビューワーへのリンクを付ける(ほかの添付はそのまま)', async () => {
+				const note = novelNote('public');
+				const rendered = await rendererService.renderNote(note, false) as IPost & { _misskey_content: string; attachment: { url: string }[] };
+				assert.deepStrictEqual(rendered.attachment.map(a => a.url), ['https://host1.test/files/b']);
+				assert.ok((rendered.content as string).includes(`/notes/${note.id}/novel-viewer</a>`));
+				assert.ok(rendered._misskey_content.endsWith(`📖 ${new URL(rendered.id!).origin}/notes/${note.id}/novel-viewer`));
+			});
+
+			test('フォロワー限定・指定したユーザー限定では、リンクの代わりにこのサーバーでだけ読めることを知らせる', async () => {
+				for (const visibility of ['followers', 'specified'] as const) {
+					const note = novelNote(visibility);
+					const rendered = await rendererService.renderNote(note, false) as IPost & { _misskey_content: string; attachment: unknown[] };
+					assert.strictEqual(rendered.attachment.length, 1);
+					assert.ok(!(rendered.content as string).includes('/novel-viewer'), visibility);
+					// 案内の文が入っている(言語の文言が見つからずにキーのまま出ていない)
+					assert.ok(!rendered._misskey_content.includes('_juice.'), rendered._misskey_content);
+					assert.ok(rendered._misskey_content.includes(visibility === 'followers' ? 'フォロワー限定' : '公開範囲を限った'), rendered._misskey_content);
+					assert.ok(!rendered._misskey_content.includes('/novel-viewer'), visibility);
+					assert.match(rendered._misskey_content, /^あらすじ\n\n📖 .+/);
+				}
+			});
+		});
 	});
 
 	describe('Featured', () => {

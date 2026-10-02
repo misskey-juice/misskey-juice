@@ -47,6 +47,7 @@ import { copyToClipboard } from '@/utility/copy-to-clipboard';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import MkDraggable from '@/components/MkDraggable.vue';
 import * as os from '@/os.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
@@ -128,6 +129,20 @@ function toggleAIGenerated(file: Misskey.entities.DriveFile) {
 	});
 }
 
+// JUICE: 小説のtxtを、ほかの人にダウンロードさせない(小説ビューワーで本文だけを読ませる)
+function toggleNovelDownloadDisabled(file: Misskey.entities.DriveFile) {
+	if (mock) return;
+	const value = !file.novelDownloadDisabled;
+	misskeyApi('drive/files/update', {
+		fileId: file.id,
+		novelDownloadDisabled: value,
+	}).then(() => {
+		file.novelDownloadDisabled = value;
+	}).catch(err => {
+		os.alert({ type: 'error', title: i18n.ts.error, text: err.message });
+	});
+}
+
 async function rename(file: Misskey.entities.DriveFile) {
 	if (mock) return;
 
@@ -184,7 +199,12 @@ function showFileMenu(file: Misskey.entities.DriveFile, ev: PointerEvent | Keybo
 		icon: 'ti ti-ai _juiceAiIcon',
 		badge: true,
 		action: () => { toggleAIGenerated(file); },
-	}, {
+	}, ...(isNovelTextFile(file) ? [{
+		text: file.novelDownloadDisabled ? i18n.ts._juice.allowNovelDownload : i18n.ts._juice.disallowNovelDownload,
+		icon: file.novelDownloadDisabled ? 'ti ti-download' : 'ti ti-download-off',
+		badge: true,
+		action: () => { toggleNovelDownloadDisabled(file); },
+	}] : []), {
 		text: i18n.ts.describeFile,
 		icon: 'ti ti-text-caption',
 		action: () => { describe(file); },

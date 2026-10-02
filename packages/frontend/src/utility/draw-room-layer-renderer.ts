@@ -4,7 +4,7 @@
  */
 
 import DrawRoomLayerWorker from '@/workers/draw-room-layer?worker';
-import type { DrawLayerGroup, DrawStroke } from '@/utility/draw-canvas.js';
+import type { CanvasStroke, DrawLayerGroup, DrawStroke } from '@/utility/draw-canvas.js';
 
 // JUICE: 絵チャの部屋を開くときに、レイヤーの線を複数のWorkerで同時に描いて画像にする。
 // 使い終わったらdispose()でWorkerを止める(Workerごとにキャンバス1枚ぶんのメモリを使うため)
@@ -13,7 +13,8 @@ type Job = {
 	id: number;
 	width: number;
 	height: number;
-	strokes: DrawStroke[];
+	strokes: DrawStroke[] | CanvasStroke[];
+	decoded: boolean;
 	groups: DrawLayerGroup[] | undefined;
 	resolve: (bitmap: ImageBitmap | null) => void;
 };
@@ -35,8 +36,11 @@ export class DrawRoomLayerRenderer {
 	private queue: Job[] = [];
 	private nextId = 0;
 
-	constructor() {
-		for (let i = 0; i < workerCount(); i++) {
+	/**
+	 * count: Workerの数(省略すると、端末に合わせて決める)
+	 */
+	constructor(count?: number) {
+		for (let i = 0; i < (count ?? workerCount()); i++) {
 			const worker = new DrawRoomLayerWorker();
 			const slot = { worker, job: null as Job | null };
 			worker.onmessage = (event: MessageEvent<{ id: number; bitmap: ImageBitmap | null }>) => {
@@ -71,7 +75,18 @@ export class DrawRoomLayerRenderer {
 	public render(width: number, height: number, strokes: DrawStroke[], groups?: DrawLayerGroup[]): Promise<ImageBitmap | null> {
 		if (this.workers.length === 0) return Promise.resolve(null);
 		return new Promise(resolve => {
-			this.queue.push({ id: this.nextId++, width, height, strokes, groups, resolve });
+			this.queue.push({ id: this.nextId++, width, height, strokes, decoded: false, groups, resolve });
+			this.dispatch();
+		});
+	}
+
+	/**
+	 * JUICE: 読み込み済みの形の線(CanvasStroke)を描いた画像を作る。Workerで描けなかったときはnull(呼んだ側で描く)
+	 */
+	public renderDecoded(width: number, height: number, strokes: CanvasStroke[], groups?: DrawLayerGroup[]): Promise<ImageBitmap | null> {
+		if (this.workers.length === 0) return Promise.resolve(null);
+		return new Promise(resolve => {
+			this.queue.push({ id: this.nextId++, width, height, strokes, decoded: true, groups, resolve });
 			this.dispatch();
 		});
 	}
@@ -92,7 +107,7 @@ export class DrawRoomLayerRenderer {
 			const job = this.queue.shift();
 			if (job == null) return;
 			slot.job = job;
-			slot.worker.postMessage({ id: job.id, width: job.width, height: job.height, strokes: job.strokes, groups: job.groups });
+			slot.worker.postMessage({ id: job.id, width: job.width, height: job.height, strokes: job.strokes, decoded: job.decoded, groups: job.groups });
 		}
 	}
 

@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-if="note.renoteId" class="rp" :to="`/notes/${note.renoteId}`">RN: ...</MkA>
 		</div>
 		<div v-if="note.files && note.files.length > 0 && (note.cw == null || showContent)" :class="$style.richcontent">
-			<MkMediaList :mediaList="note.files.slice(0, 4)"/>
+			<MkMediaList :mediaList="note.files.slice(0, 4)" :novelNoteId="note.isNovel || note.files.some(f => f.novelDownloadDisabled) ? note.id : null"/>
 		</div>
 		<div v-if="note.reactionCount > 0" :class="$style.reactions">
 			<MkReactionsViewer :note="note" :noteId="note.id" :reactions="note.reactions" :reactionEmojis="note.reactionEmojis" :myReaction="note.myReaction" :maxNumber="16"/>

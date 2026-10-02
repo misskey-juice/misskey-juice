@@ -104,6 +104,11 @@ export const packedUserLiteSchema = {
 						type: 'number',
 						nullable: false, optional: true,
 					},
+					// JUICE: デコレーションの大きさ(0.1〜1。1(既定)のときは無い)
+					scale: {
+						type: 'number',
+						nullable: false, optional: true,
+					},
 				},
 			},
 		},

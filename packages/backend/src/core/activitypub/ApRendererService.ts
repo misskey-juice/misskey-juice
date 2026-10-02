@@ -36,10 +36,20 @@ import { escapeHtml } from '@/misc/escape-html.js';
 import { JsonLdService } from './JsonLdService.js';
 import { ApMfmService } from './ApMfmService.js';
 import { CONTEXT } from './misc/contexts.js';
+import { isNovelTextFile } from '@/misc/novel-text-file.js';
 import type { IAccept, IActivity, IAdd, IAnnounce, IApDocument, IApEmoji, IApHashtag, IApImage, IApMention, IBlock, ICreate, IDelete, IFlag, IFollow, IKey, ILike, IMove, IObject, IPost, IQuestion, IReject, IRemove, ITombstone, IUndo, IUpdate } from './type.js';
 
 // JUICE: ReactionService.decodeCustomEmojiRegexpと同一パターン
 const decodeCustomEmojiRegexp = /^:([\w+-]+)(?:@([\w.-]+))?:$/;
+
+// JUICE: 投稿の言語(BCP47。enやzh-Hantなど)を、文言のある言語(ja-JP・en-US・ko-KR・zh-CN・zh-TW)に寄せる。無ければ英語
+function federationNoticeLang(lang: string): string {
+	const lower = lang.toLowerCase();
+	if (lower.startsWith('ja')) return 'ja-JP';
+	if (lower.startsWith('ko')) return 'ko-KR';
+	if (lower.startsWith('zh')) return /hant|tw|hk|mo/.test(lower) ? 'zh-TW' : 'zh-CN';
+	return 'en-US';
+}
 
 @Injectable()
 export class ApRendererService {
@@ -462,9 +472,26 @@ export class ApRendererService {
 		const hashtagTags = note.tags.map(tag => this.renderHashtag(tag));
 		const mentionTags = mentionedUsers.map(u => this.renderMention(u as MiLocalUser | MiRemoteUser));
 
-		const files = await getPromisedFiles(note.fileIds);
+		const allFiles = await getPromisedFiles(note.fileIds);
+		// JUICE: 投稿者がダウンロードさせないことにした小説のtxtは、添付として送らない(ファイルのURLを渡さない)。
+		// 代わりに、このサーバーの小説ビューワーへのリンクを本文の最後に付ける(連合先の人は、そこで読む)
+		const files = allFiles.filter(file => !(file.novelDownloadDisabled && isNovelTextFile(file)));
+		const novelViewerUrl = files.length !== allFiles.length ? `${this.config.url}/notes/${note.id}/novel-viewer` : null;
+		// フォロワー限定・指定したユーザー限定の投稿は、ほかのサーバーの人はこのサーバーにログインしていないので、
+		// リンクを開いても読めない。リンクの代わりに、このサーバーのアカウントでだけ読めることを知らせる
+		let novelNotice: string | null = null;
+		if (novelViewerUrl != null && (note.visibility === 'followers' || note.visibility === 'specified')) {
+			const key = note.visibility === 'followers' ? '_juice.novelTextFederatedFollowersOnly' : '_juice.novelTextFederatedSpecified';
+			const args = { host: this.config.host };
+			const translate = (lang: string) => {
+				const translated = this.emailI18nService.getI18n(lang).t(key, args);
+				return typeof translated === 'string' && translated !== key ? translated : null;
+			};
+			novelNotice = translate(note.lang != null ? federationNoticeLang(note.lang) : await this.emailI18nService.resolveLang(null)) ?? translate('en-US') ?? translate('ja-JP');
+		}
+		const novelAppendix = novelViewerUrl == null ? null : novelNotice != null ? `📖 ${novelNotice}` : `📖 ${novelViewerUrl}`;
 
-		const text = note.text ?? '';
+		const text = (note.text ?? '') + (novelAppendix != null ? `${note.text ? '\n\n' : ''}${novelAppendix}` : '');
 		let poll: MiPoll | null = null;
 
 		if (note.hasPoll) {
@@ -473,11 +500,17 @@ export class ApRendererService {
 
 		let extraHtml: string | null = null;
 
+		// JUICE: 小説ビューワーへのリンク(ダウンロードさせない小説のtxtの代わり)
+		if (novelViewerUrl != null) {
+			const inner = novelNotice != null ? `📖 ${escapeHtml(novelNotice)}` : `📖 <a href="${escapeHtml(novelViewerUrl)}">${escapeHtml(novelViewerUrl)}</a>`;
+			extraHtml = `${note.text ? '<br><br>' : ''}<span class="juice-novel-viewer">${inner}</span>`;
+		}
+
 		if (quote != null) {
 			// Append quote link as `<br><br><span class="quote-inline">RE: <a href="...">...</a></span>`
 			// the class name `quote-inline` is used in non-misskey clients for styling quote notes.
 			// For compatibility, the span part should be kept as possible.
-			extraHtml = `<br><br><span class="quote-inline">RE: <a href="${escapeHtml(quote)}">${escapeHtml(quote)}</a></span>`;
+			extraHtml = `${extraHtml ?? ''}<br><br><span class="quote-inline">RE: <a href="${escapeHtml(quote)}">${escapeHtml(quote)}</a></span>`;
 		}
 
 		let summary = note.cw === '' ? String.fromCharCode(0x200B) : note.cw;
@@ -491,10 +524,11 @@ export class ApRendererService {
 		// 「AI生成 | 」が本来のCWの前に混入してしまうため)。
 		// ノート本体のisAIGeneratedだけでなく、添付ファイルのうち1件でもAI生成フラグが
 		// 立っていれば対象にする(ノート本体と添付ファイルは独立したフラグのため)
-		const juiceSettings = (note.isAIGenerated || files.some(f => f.isAIGenerated) || note.isNovel) ? await this.juiceSettingsService.fetch() : null;
+		// JUICE: 添付から外したファイル(ダウンロードさせないtxt)も、AI生成の印は見る
+		const juiceSettings = (note.isAIGenerated || allFiles.some(f => f.isAIGenerated) || note.isNovel) ? await this.juiceSettingsService.fetch() : null;
 
 		let summaryIsAIGeneratedFallback = false;
-		if (note.isAIGenerated || files.some(f => f.isAIGenerated)) {
+		if (note.isAIGenerated || allFiles.some(f => f.isAIGenerated)) {
 			const { aiGeneratedFallbackCwEnabled } = resolveAiGeneratedFallbackCwSettings(juiceSettings!);
 			if (aiGeneratedFallbackCwEnabled) {
 				const lang = await this.emailI18nService.resolveLang(note.lang);
@@ -579,7 +613,7 @@ export class ApRendererService {
 			cc,
 			inReplyTo,
 			attachment: files.map(x => this.renderDocument(x)),
-			sensitive: note.cw != null || files.some(file => file.isSensitive),
+			sensitive: note.cw != null || allFiles.some(file => file.isSensitive),
 			tag,
 			...asPoll,
 		};

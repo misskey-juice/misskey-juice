@@ -58,6 +58,9 @@ export const preferState: Record<string, unknown> = {
 	},
 
 	mutingEmojis: [],
+
+	// JUICE: MkMfmで読む(ネコの投稿をネコミミだけにする設定)
+	disableNoteNyaize: false,
 };
 
 export let preferReactive: Record<string, Ref<unknown>> = {};

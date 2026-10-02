@@ -497,6 +497,7 @@ export class WebhookTestService {
 				url: 'https://example.com/dummy-image001.png',
 				offsetX: it.offsetX,
 				offsetY: it.offsetY,
+				scale: it.scale,
 			})),
 			isBot: user.isBot,
 			isCat: user.isCat,

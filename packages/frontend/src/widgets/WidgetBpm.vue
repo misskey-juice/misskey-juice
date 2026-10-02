@@ -39,6 +39,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 			<div :class="$style.hint">{{ i18n.ts._juice.bpmHint }}</div>
 		</template>
+		<!-- JUICE: スライダー・数の入力で、BPMを決める(1〜100000) -->
+		<template v-else-if="isSlider">
+			<MkRange
+				:class="$style.sliderControl"
+				:modelValue="sliderPosition"
+				:min="0"
+				:max="SLIDER_STEPS"
+				:step="1"
+				:continuousUpdate="true"
+				:textConverter="(v) => formatBpm(positionToBpm(v))"
+				@update:modelValue="onSliderInput"
+			>
+				<template #label>{{ i18n.ts._juice.bpmSourceSlider }}</template>
+			</MkRange>
+			<MkInput
+				:key="sliderInputKey"
+				:class="$style.sliderControl"
+				:modelValue="widgetProps.sliderBpm"
+				type="number"
+				:min="SLIDER_MIN_BPM"
+				:max="SLIDER_MAX_BPM"
+				:step="0.1"
+				manualSave
+				@update:modelValue="onSliderBpmInput"
+			>
+				<template #label>BPM</template>
+				<template #caption>{{ i18n.tsx._juice.bpmSliderRange({ min: SLIDER_MIN_BPM, max: SLIDER_MAX_BPM }) }}</template>
+			</MkInput>
+		</template>
 		<template v-else>
 			<div :class="$style.meta">{{ sourceLabel }} · {{ i18n.tsx._juice.bpmEvents({ n: events.length }) }}</div>
 			<div :class="$style.hint">{{ i18n.ts._juice.bpmStreamHint }}</div>
@@ -46,6 +75,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </MkContainer>
 </template>
+
+<script lang="ts">
+// JUICE: メトロノームを鳴らしているBPMウィジェットが、画面の操作を受けたときに音を動かし直すためのもの。
+// 画面全体の操作を見るのは1つだけにする(ウィジェットを複数置いたときに、操作のたびに何度も呼ばれないように)
+const metronomeGestureWatchers = new Set<() => void>();
+let metronomeGestureListening = false;
+
+function onMetronomeGesture(): void {
+	for (const fn of metronomeGestureWatchers) fn();
+}
+
+function updateMetronomeGestureListener(): void {
+	const shouldListen = metronomeGestureWatchers.size > 0;
+	if (shouldListen === metronomeGestureListening) return;
+	metronomeGestureListening = shouldListen;
+	if (shouldListen) {
+		window.addEventListener('pointerdown', onMetronomeGesture, { capture: true });
+		window.addEventListener('keydown', onMetronomeGesture, { capture: true });
+	} else {
+		window.removeEventListener('pointerdown', onMetronomeGesture, { capture: true });
+		window.removeEventListener('keydown', onMetronomeGesture, { capture: true });
+	}
+}
+</script>
 
 <script lang="ts" setup>
 import { computed, onUnmounted, ref, watch } from 'vue';
@@ -58,12 +111,16 @@ import { prefer } from '@/preferences.js';
 import * as sound from '@/utility/sound.js';
 import { soundsTypes } from '@/utility/sound.js';
 import MkContainer from '@/components/MkContainer.vue';
+import MkRange from '@/components/MkRange.vue';
+import MkInput from '@/components/MkInput.vue';
 
 const name = 'bpm';
 
 // JUICE: 何の速さを測るか。タップのほかに、タイムラインに流れてくる投稿・届く通知の速さをBPMにできる
 const sourceOptions = [
 	{ label: i18n.ts._juice.bpmSourceTap, value: 'tap' },
+	// JUICE: 決めたBPMで鳴らす(スライダー・数の入力)
+	{ label: i18n.ts._juice.bpmSourceSlider, value: 'slider' },
 	{ label: i18n.ts._timelines.home, value: 'home' },
 	{ label: i18n.ts._timelines.local, value: 'local' },
 	{ label: i18n.ts._timelines.social, value: 'social' },
@@ -90,6 +147,13 @@ const widgetPropsDef = {
 		enum: [...sourceOptions],
 		default: 'tap' as Source,
 	},
+	// JUICE: 「スライダー」で決めたBPM
+	sliderBpm: {
+		type: 'number',
+		label: i18n.ts._widgetOptions._bpm.sliderBpm,
+		default: 120,
+		step: 0.1,
+	},
 	metronome: {
 		type: 'boolean',
 		label: i18n.ts._widgetOptions._bpm.metronome,
@@ -115,6 +179,65 @@ const { widgetProps, configure, save } = useWidgetPropsManager(name,
 );
 
 const isTap = computed(() => widgetProps.source === 'tap');
+const isSlider = computed(() => widgetProps.source === 'slider');
+
+//#region スライダー
+// JUICE: 1〜100000BPMを、スライダーでは対数で動かす(普通の目盛りでは、遅いBPMがほとんど選べないため)
+const SLIDER_MIN_BPM = 1;
+const SLIDER_MAX_BPM = 100000;
+const SLIDER_STEPS = 1000;
+
+function positionToBpm(position: number): number {
+	const bpm = SLIDER_MIN_BPM * Math.pow(SLIDER_MAX_BPM / SLIDER_MIN_BPM, position / SLIDER_STEPS);
+	// 目盛りの細かさに合わせて丸める(100未満は0.1、10000未満は1、それより上は10ずつ)
+	if (bpm < 100) return Math.round(bpm * 10) / 10;
+	if (bpm < 10000) return Math.round(bpm);
+	return Math.round(bpm / 10) * 10;
+}
+
+function bpmToPosition(bpm: number): number {
+	return Math.round(Math.log(bpm / SLIDER_MIN_BPM) / Math.log(SLIDER_MAX_BPM / SLIDER_MIN_BPM) * SLIDER_STEPS);
+}
+
+function clampSliderBpm(bpm: number): number {
+	if (!Number.isFinite(bpm)) return 120;
+	return Math.min(SLIDER_MAX_BPM, Math.max(SLIDER_MIN_BPM, bpm));
+}
+
+function formatBpm(bpm: number): string {
+	return bpm < 100 ? bpm.toFixed(1) : String(Math.round(bpm));
+}
+
+// スライダーのつまみの位置。BPMから位置に戻すと丸めでずれる(遅いところで、つまみが跳ねる)ので、動かした位置を覚えておき、
+// BPMがほかから変わったときだけ合わせる
+const sliderPosition = ref(bpmToPosition(clampSliderBpm(widgetProps.sliderBpm)));
+watch(() => widgetProps.sliderBpm, (bpm) => {
+	if (positionToBpm(sliderPosition.value) !== clampSliderBpm(bpm)) sliderPosition.value = bpmToPosition(clampSliderBpm(bpm));
+});
+
+function onSliderInput(position: number): void {
+	sliderPosition.value = position;
+	setSliderBpm(positionToBpm(position));
+}
+
+// 数の入力欄。範囲の外の数・空欄は、決めた値に戻して見せる(入れた数が残って見えないように、欄を作り直す)
+const sliderInputKey = ref(0);
+
+function onSliderBpmInput(value: string | number): void {
+	const bpm = typeof value === 'number' ? value : value.trim() === '' ? Number.NaN : Number(value);
+	if (!Number.isFinite(bpm) || clampSliderBpm(bpm) !== bpm) sliderInputKey.value++;
+	setSliderBpm(bpm);
+}
+
+function setSliderBpm(bpm: number): void {
+	if (!Number.isFinite(bpm)) return;
+	const next = clampSliderBpm(bpm);
+	if (next === widgetProps.sliderBpm) return;
+	widgetProps.sliderBpm = next;
+	save();
+}
+//#endregion
+
 const sourceLabel = computed(() => sourceOptions.find(o => o.value === widgetProps.source)?.label ?? '');
 
 //#region タップ
@@ -182,7 +305,7 @@ function connect(source: Source): void {
 	events.value = [];
 	startedAt.value = Date.now();
 	now.value = startedAt.value;
-	if (source === 'tap') return;
+	if (source === 'tap' || source === 'slider') return;
 	if (source === 'notifications') {
 		const connection = stream.useChannel('main');
 		connection.on('notification', onEvent);
@@ -212,7 +335,7 @@ watch([() => prefer.r.mediaTimelineSrc.value, () => prefer.r.relayTimelineFilter
 });
 //#endregion
 
-const bpm = computed(() => (isTap.value ? tapBpm.value : streamBpm.value));
+const bpm = computed(() => (isTap.value ? tapBpm.value : isSlider.value ? clampSliderBpm(widgetProps.sliderBpm) : streamBpm.value));
 const bpmText = computed(() => (bpm.value == null ? '--' : bpm.value.toFixed(1)));
 
 // キーを押しっぱなしにしたときの繰り返しは数えない
@@ -236,14 +359,59 @@ function reset(): void {
 }
 
 //#region メトロノーム
-// 速すぎて音が重なり続けないよう、鳴らすのはこの範囲のBPMだけにする
+// JUICE: 拍は、音の時計(AudioContextのcurrentTime)で少し先まで決めておき、その時刻に鳴らす。
+// setTimeoutで1拍ずつ待つと、待ちの遅れが積み重なって測ったBPMより遅くなり、画面を見ていないタブでは
+// ブラウザがタイマーを1秒に1回ほどに減らすので、BPM60あたりで頭打ちになるため
+// BPMの上限は無い。ただし1秒に100拍(BPM6000)を超える速さでは、音を1拍ずつ作ると重くなり画面が固まるので、
+// 決めきれない分は飛ばす(その速さでは、もう拍ではなく1つの音にしか聞こえない)
 const METRONOME_MIN_BPM = 1;
-const METRONOME_MAX_BPM = 400;
+const METRONOME_MAX_BEATS_PER_SECOND = 100;
+// 同時に鳴らす音の数の上限。音は最後まで鳴らし、速くてこれより多く重なるときだけ、古い音から止める
+// (重なる数に上限が無いと、速いときに何千もの音が同時に鳴って重くなるため)
+const METRONOME_MAX_VOICES = 32;
+// 光らせるのはこの間隔(秒)より拍が長いときだけ(速いときは、光ったままにする)
+const FLASH_MIN_INTERVAL_S = 0.05;
+// 先に決めておく時間(秒)。見ていないタブではタイマーが1秒に1回ほどになるので、それより長くする
+const LOOKAHEAD_VISIBLE_S = 0.1;
+const LOOKAHEAD_HIDDEN_S = 1.5;
+// 拍を決め直す間隔(ms)
+const SCHEDULER_TICK_MS = 25;
 
 const beating = ref(false);
 let beatTimer: number | null = null;
 let metronomeTimer: number | null = null;
 let metronomeBuffer: AudioBuffer | null = null;
+// 次の拍の時刻(秒。clockの時計で)。止めたら・時計を替えたらnull
+let nextBeatAt: number | null = null;
+let clockKind: 'audio' | 'performance' | null = null;
+// 音の時計の動かし直しを最後に頼んだ時刻(画面を操作する前は頼んでも終わらないので、頼みすぎないように)
+let lastResumeRequestAt = 0;
+
+// JUICE: 音の時計が止まっていれば動かし直す。ブラウザは画面を操作した瞬間にしか動かさないので、
+// 画面のどこかを押した・キーを押したときにも呼ぶ(リロードの直後など、操作するまで音が鳴らないため)
+function resumeAudio(): void {
+	const audioCtx = sound.getAudioContext();
+	if (audioCtx == null || audioCtx.state !== 'suspended') return;
+	lastResumeRequestAt = Date.now();
+	audioCtx.resume().catch(() => {});
+}
+
+// 画面の操作を見るのは、メトロノームを鳴らしている間だけ(ウィジェットを複数置いても、1つにまとめる)
+watch(() => widgetProps.metronome, (on) => {
+	if (on) metronomeGestureWatchers.add(resumeAudio);
+	else metronomeGestureWatchers.delete(resumeAudio);
+	updateMetronomeGestureListener();
+}, { immediate: true });
+// 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
+const scheduledSources: AudioBufferSourceNode[] = [];
+// 重なりすぎて、途中で止める時刻を決めた音(メトロノームを止めたときは、その時刻を待たずに止める)
+const evictedSources = new Set<AudioBufferSourceNode>();
+// 光らせる予定のタイマー
+const flashTimers = new Set<number>();
+// JUICE: 鳴らす予定の拍の時刻(clockの時計で)と、その音・光らせるタイマー(速さが変わったら、まだ来ていない拍を取りやめるため)
+const scheduledBeats: { at: number; source: AudioBufferSourceNode | null; timer: number | null }[] = [];
+// 予定を決めたときの拍の間隔(秒)
+let scheduledInterval: number | null = null;
 
 watch(() => widgetProps.metronomeSound, (soundType) => {
 	metronomeBuffer = null;
@@ -252,37 +420,147 @@ watch(() => widgetProps.metronomeSound, (soundType) => {
 	}).catch(() => {});
 }, { immediate: true });
 
-function beat(): void {
+function flash(): void {
 	beating.value = true;
 	if (beatTimer != null) window.clearTimeout(beatTimer);
 	beatTimer = window.setTimeout(() => {
 		beating.value = false;
 	}, 100);
+}
+
+// 今の時刻(秒)。音が鳴らせる(AudioContextが動いている)ならその時計、まだ動いていなければ画面の時計(光らせるだけ)
+function currentClock(): { kind: 'audio' | 'performance'; now: number; ctx: AudioContext | null } {
+	const ctx = sound.getAudioContext();
+	if (ctx != null && ctx.state === 'running') return { kind: 'audio', now: ctx.currentTime, ctx };
+	return { kind: 'performance', now: performance.now() / 1000, ctx: null };
+}
+
+// 1拍を、時計の時刻atに鳴らす(光らせる)
+function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null, withFlash: boolean): void {
+	const beat: (typeof scheduledBeats)[number] = { at, source: null, timer: null };
+	scheduledBeats.push(beat);
+	if (withFlash) {
+		const delayMs = Math.max(0, (at - now) * 1000);
+		const timer = window.setTimeout(() => {
+			flashTimers.delete(timer);
+			flash();
+		}, delayMs);
+		flashTimers.add(timer);
+		beat.timer = timer;
+	}
 
 	const masterVolume = prefer.s['sound.masterVolume'];
-	if (metronomeBuffer != null && masterVolume > 0 && !sound.isMute()) {
-		sound.createSourceNode(metronomeBuffer, { volume: masterVolume }).soundSource.start();
+	if (ctx == null || metronomeBuffer == null || masterVolume <= 0 || sound.isMute()) return;
+	const source = sound.createSourceNode(metronomeBuffer, { volume: masterVolume }).soundSource;
+	source.start(at);
+	beat.source = source;
+	// 重なりすぎるときは、一番古い音をこの拍で止める
+	if (scheduledSources.length >= METRONOME_MAX_VOICES) {
+		const oldest = scheduledSources.shift()!;
+		try {
+			oldest.stop(at);
+			evictedSources.add(oldest);
+			oldest.addEventListener('ended', () => evictedSources.delete(oldest), { once: true });
+		} catch {
+			// もう止まっている
+		}
+	}
+	scheduledSources.push(source);
+	source.addEventListener('ended', () => {
+		const index = scheduledSources.indexOf(source);
+		if (index >= 0) scheduledSources.splice(index, 1);
+	}, { once: true });
+}
+
+// まだ来ていない拍を取りやめる(音と、光らせるタイマー)
+function cancelBeat(beat: (typeof scheduledBeats)[number]): void {
+	if (beat.timer != null) {
+		window.clearTimeout(beat.timer);
+		flashTimers.delete(beat.timer);
+	}
+	if (beat.source != null) {
+		try {
+			beat.source.stop();
+		} catch {
+			// もう止まっている
+		}
+		const index = scheduledSources.indexOf(beat.source);
+		if (index >= 0) scheduledSources.splice(index, 1);
 	}
 }
 
-// 1拍ごとに、その時のBPMで次の拍までの間を決める(BPMが変わってもすぐ付いていく)
-function scheduleBeat(): void {
+function stopMetronome(): void {
 	if (metronomeTimer != null) window.clearTimeout(metronomeTimer);
+	metronomeTimer = null;
+	nextBeatAt = null;
+	clockKind = null;
+	scheduledBeats.length = 0;
+	scheduledInterval = null;
+	for (const timer of flashTimers) window.clearTimeout(timer);
+	flashTimers.clear();
+	for (const source of [...scheduledSources, ...evictedSources]) {
+		try {
+			source.stop();
+		} catch {
+			// 鳴らし始める前に止めた等(もう止まっている)
+		}
+	}
+	scheduledSources.length = 0;
+	evictedSources.clear();
+}
+
+// 少し先までの拍を、その時のBPMで決めていく(BPMが変わっても、先に決めた分の後からすぐ付いていく)
+function tickMetronome(): void {
 	metronomeTimer = null;
 	if (!widgetProps.metronome) return;
 	const value = bpm.value;
-	if (value == null || value < METRONOME_MIN_BPM) {
+	if (value == null || !Number.isFinite(value) || value < METRONOME_MIN_BPM) {
 		// まだ測れていなければ、測れるまで待つ
-		metronomeTimer = window.setTimeout(scheduleBeat, 500);
+		nextBeatAt = null;
+		metronomeTimer = window.setTimeout(tickMetronome, 250);
 		return;
 	}
-	metronomeTimer = window.setTimeout(() => {
-		beat();
-		scheduleBeat();
-	}, 60000 / Math.min(value, METRONOME_MAX_BPM));
+	const { kind, now, ctx } = currentClock();
+	// 鳴らす前に止まっていたら動かし直す(画面を操作した後なら動く。動くまでは光らせるだけ)。
+	// 画面を操作する前は動かし直しが終わらずに待たされるので、頼むのは1秒に1回まで(頼みが溜まり続けないように)
+	if (Date.now() - lastResumeRequestAt >= 1000) resumeAudio();
+	const interval = 60 / value;
+	// 済んだ拍は忘れる(最後の1つは、速さが変わったときに次の拍を決めるのに使う)
+	while (scheduledBeats.length > 1 && scheduledBeats[1].at <= now) scheduledBeats.shift();
+	// JUICE: 速さが変わったら、まだ来ていない拍を取りやめ、最後に鳴った拍から新しい間隔で数え直す
+	// (前の速さで先に決めた拍を待つと、遅い速さから速くしたときに、しばらく新しい速さにならないため)
+	if (nextBeatAt != null && clockKind === kind && scheduledInterval != null && Math.abs(scheduledInterval - interval) > 1e-9) {
+		const lastPlayed = scheduledBeats.length > 0 && scheduledBeats[0].at <= now ? scheduledBeats[0].at : null;
+		for (const beat of scheduledBeats.filter(b => b.at > now)) cancelBeat(beat);
+		scheduledBeats.splice(0, scheduledBeats.length, ...(lastPlayed != null ? [scheduledBeats[0]] : []));
+		nextBeatAt = lastPlayed != null ? Math.max(lastPlayed + interval, now + 0.005) : now + 0.05;
+	}
+	scheduledInterval = interval;
+	// 始めたとき・時計を替えたとき・止まっていて大きく遅れたとき(スリープ等)は、今から数え直す
+	if (nextBeatAt == null || clockKind !== kind || nextBeatAt < now - interval) {
+		// 時計が替わったら、前の時計で覚えた拍の時刻は使えない
+		if (clockKind !== kind) scheduledBeats.length = 0;
+		nextBeatAt = now + 0.05;
+		clockKind = kind;
+	}
+	const lookahead = window.document.visibilityState === 'visible' ? LOOKAHEAD_VISIBLE_S : LOOKAHEAD_HIDDEN_S;
+	const horizon = now + lookahead;
+	const withFlash = interval >= FLASH_MIN_INTERVAL_S;
+	if (!withFlash) flash();
+	let budget = Math.ceil(METRONOME_MAX_BEATS_PER_SECOND * lookahead);
+	while (nextBeatAt < horizon && budget-- > 0) {
+		scheduleBeatAt(nextBeatAt, now, ctx, withFlash);
+		nextBeatAt += interval;
+	}
+	// 決めきれなかった分は飛ばす
+	if (nextBeatAt < horizon) nextBeatAt = horizon;
+	metronomeTimer = window.setTimeout(tickMetronome, SCHEDULER_TICK_MS);
 }
 
-watch(() => widgetProps.metronome, scheduleBeat, { immediate: true });
+watch(() => widgetProps.metronome, (on) => {
+	stopMetronome();
+	if (on) tickMetronome();
+}, { immediate: true });
 
 // 設定を開かなくても、ウィジェットからすぐ切り替えられるように
 function toggleMetronome(): void {
@@ -292,8 +570,10 @@ function toggleMetronome(): void {
 //#endregion
 
 onUnmounted(() => {
+	metronomeGestureWatchers.delete(resumeAudio);
+	updateMetronomeGestureListener();
 	window.clearInterval(clock);
-	if (metronomeTimer != null) window.clearTimeout(metronomeTimer);
+	stopMetronome();
 	if (beatTimer != null) window.clearTimeout(beatTimer);
 	if (flashTimer != null) window.clearTimeout(flashTimer);
 	disconnect?.();
@@ -313,6 +593,11 @@ defineExpose<WidgetComponentExpose>({
 	align-items: center;
 	gap: 6px;
 	padding: 12px 16px 16px;
+}
+
+.sliderControl {
+	// 中身は真ん中に寄せているが、スライダー・入力欄は横いっぱいに広げる
+	align-self: stretch;
 }
 
 .value {

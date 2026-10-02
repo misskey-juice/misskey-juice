@@ -189,6 +189,16 @@ export const PREF_DEF = definePreferences({
 		default: false,
 	},
 
+	// JUICE: ネコのアカウントの投稿の文字を置き換えない(nyaizeしない。ネコミミは出す。misskey-tempuraを参考)
+	disableNoteNyaize: {
+		default: false,
+	},
+
+	// JUICE: 投稿フォームで小説のtxtを添付したとき、初めからほかの人にダウンロードさせないようにする
+	novelTextDownloadDisabledByDefault: {
+		default: false,
+	},
+
 	// JUICE: 小説ビューワーの表示(以前は端末ごとのstoreにあった。バックアップ・復元で戻るようプロファイルへ移した)
 	novelViewerWritingMode: {
 		default: 'vertical' as 'vertical' | 'horizontal',
@@ -210,6 +220,10 @@ export const PREF_DEF = definePreferences({
 	},
 	novelViewerFontFamily: {
 		default: 'default' as 'default' | 'mincho' | 'gothic',
+	},
+	// 縦書きで、半角の英単語を1文字ずつ縦に並べず、横向きのまま(90度回して)組み込む(2桁の数字は縦中横)
+	novelViewerLatinSideways: {
+		default: false,
 	},
 	// カスタムテーマ(novelViewerTheme: 'custom' のときに使う文字色・背景色)
 	novelViewerCustomTextColor: {

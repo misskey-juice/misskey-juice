@@ -98,6 +98,7 @@ function createRender(params: {
 							isSensitive: false,
 							isAIGenerated: false,
 							isNovel: false,
+							novelDownloadDisabled: false,
 							blurhash: null,
 							properties: {},
 							url: base64,

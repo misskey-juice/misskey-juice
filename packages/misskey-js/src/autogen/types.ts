@@ -3682,6 +3682,15 @@ export type paths = {
          */
         post: operations['notes___mentions'];
     };
+    '/notes/novel-text': {
+        /**
+         * notes/novel-text
+         * @description No description provided.
+         *
+         *     **Credential required**: *No*
+         */
+        post: operations['notes___novel-text'];
+    };
     '/notes/polls/recommendation': {
         /**
          * notes/polls/recommendation
@@ -4625,6 +4634,7 @@ export type components = {
                 url: string;
                 offsetX?: number;
                 offsetY?: number;
+                scale?: number;
             }[];
             isBot?: boolean;
             isCat?: boolean;
@@ -5218,6 +5228,7 @@ export type components = {
             isAIGenerated: boolean;
             hideFromMediaTimeline: boolean;
             isNovel: boolean;
+            novelTextProtected?: boolean;
             /** Format: date-time */
             updatedAt?: string;
             /**
@@ -5688,6 +5699,7 @@ export type components = {
             isSensitive: boolean;
             isAIGenerated: boolean;
             isNovel: boolean;
+            novelDownloadDisabled: boolean;
             blurhash: string | null;
             properties: {
                 /** @example 1280 */
@@ -24425,6 +24437,7 @@ export interface operations {
                     isSensitive?: boolean;
                     isAIGenerated?: boolean;
                     isNovel?: boolean;
+                    novelDownloadDisabled?: boolean;
                     comment?: string | null;
                 };
             };
@@ -32775,6 +32788,7 @@ export interface operations {
                         flipH?: boolean | null;
                         offsetX?: number | null;
                         offsetY?: number | null;
+                        scale?: number | null;
                     }[];
                     /** Format: misskey:id */
                     bannerId?: string | null;
@@ -36032,6 +36046,77 @@ export interface operations {
                 };
                 content: {
                     'application/json': components['schemas']['Note'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'notes___novel-text': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    noteId: string;
+                    /** Format: misskey:id */
+                    fileId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        name: string;
+                        data: string;
+                    };
                 };
             };
             /** @description Client error */

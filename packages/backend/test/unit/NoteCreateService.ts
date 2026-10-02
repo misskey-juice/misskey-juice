@@ -120,6 +120,7 @@ describe('NoteCreateService', () => {
 			isSensitive: false,
 			isAIGenerated: false,
 			isNovel: false,
+			novelDownloadDisabled: false,
 			maybeSensitive: false,
 			maybePorn: false,
 			isLink: false,

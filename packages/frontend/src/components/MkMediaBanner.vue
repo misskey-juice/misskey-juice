@@ -10,11 +10,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<b>{{ i18n.ts.sensitive }}</b>
 		<span>{{ i18n.ts.clickToShow }}</span>
 	</div>
-	<!-- JUICE: 小説の投稿に添付されたテキストファイルは、小説ビューワーで開く。保存もできるよう、右端に保存のボタンを置く -->
+	<!-- JUICE: 小説の投稿に添付されたテキストファイルは、小説ビューワーで開く。保存もできるよう、右端に保存のボタンを置く
+	(投稿者がダウンロードさせないことにしたファイルは、保存のボタンを出さない。投稿者にも、ダウンロードさせていないことが分かるよう出さない) -->
 	<div v-else-if="novelNoteId != null && isTextFile" :class="$style.novelRow">
 		<MkA
 			:class="[$style.download, $style.novelLink]"
-			:to="`/notes/${novelNoteId}/novel-viewer`"
+			:to="`/notes/${novelNoteId}/novel-viewer?file=${media.id}`"
 			:title="media.name"
 		>
 			<i :class="[fileTypeIcon(media.type), $style.typeIcon]" aria-hidden="true"></i>
@@ -22,6 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span :class="$style.novelLabel"><i class="ti ti-book"></i> {{ i18n.ts._juice.readAsNovel }}</span>
 		</MkA>
 		<a
+			v-if="!downloadDisabled"
 			v-tooltip="i18n.ts.download"
 			:class="$style.novelDownload"
 			:href="media.url"
@@ -49,6 +51,7 @@ import * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
 import { shouldHideFileByDefault, canRevealFile } from '@/utility/sensitive-file.js';
 import { fileTypeIcon } from '@/utility/file-type-icon.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 
 const props = defineProps<{
 	media: Misskey.entities.DriveFile;
@@ -57,7 +60,9 @@ const props = defineProps<{
 }>();
 
 // JUICE: 小説ビューワーで読めるテキストファイルか(ビューワーと同じ判定。MIMEタイプが付いていないことがあるため、拡張子が.txtのものも含める)
-const isTextFile = computed(() => props.media.type === 'text/plain' || /\.txt$/i.test(props.media.name));
+const isTextFile = computed(() => isNovelTextFile(props.media));
+// JUICE: 投稿者がダウンロードさせないことにした小説のtxt
+const downloadDisabled = computed(() => props.media.novelDownloadDisabled);
 
 const hide = ref(shouldHideFileByDefault(props.media));
 

@@ -13,6 +13,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 
 function rename(file: Misskey.entities.DriveFile) {
 	os.inputText({
@@ -106,6 +107,22 @@ function toggleNovel(file: Misskey.entities.DriveFile) {
 	});
 }
 
+// JUICE: 小説のtxtを、ほかの人にダウンロードさせない(小説ビューワーで本文だけを読ませる)
+function toggleNovelDownloadDisabled(file: Misskey.entities.DriveFile) {
+	misskeyApi('drive/files/update', {
+		fileId: file.id,
+		novelDownloadDisabled: !file.novelDownloadDisabled,
+	}).then(updated => {
+		globalEvents.emit('driveFilesUpdated', [updated]);
+	}).catch(err => {
+		os.alert({
+			type: 'error',
+			title: i18n.ts.error,
+			text: err.message,
+		});
+	});
+}
+
 function copyUrl(file: Misskey.entities.DriveFile) {
 	copyToClipboard(file.url);
 }
@@ -130,10 +147,6 @@ async function deleteFile(file: Misskey.entities.DriveFile) {
 }
 
 // JUICE: 小説ビューワーが本文として読み込める.txtファイルかどうか(novel-viewer.vueと同じ判定)
-function isTextFile(file: Misskey.entities.DriveFile): boolean {
-	return file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-}
-
 /** 自分のドライブファイルを操作する際のメニュー */
 export function getDriveFileMenu(file: Misskey.entities.DriveFile, folder?: Misskey.entities.DriveFolder | null): MenuItem[] {
 	const _isImage = file.type.startsWith('image/');
@@ -162,11 +175,16 @@ export function getDriveFileMenu(file: Misskey.entities.DriveFile, folder?: Miss
 		icon: 'ti ti-ai _juiceAiIcon',
 		badge: true,
 		action: () => toggleAIGenerated(file),
-	}, ...(isTextFile(file) ? [{
+	}, ...(isNovelTextFile(file) ? [{
 		text: file.isNovel ? i18n.ts._juice.unmarkAsNovel : i18n.ts._juice.markAsNovel,
 		icon: 'ti ti-book',
 		badge: true,
 		action: () => toggleNovel(file),
+	}, {
+		text: file.novelDownloadDisabled ? i18n.ts._juice.allowNovelDownload : i18n.ts._juice.disallowNovelDownload,
+		icon: file.novelDownloadDisabled ? 'ti ti-download' : 'ti ti-download-off',
+		badge: true,
+		action: () => toggleNovelDownloadDisabled(file),
 	}] : []), {
 		text: i18n.ts.describeFile,
 		icon: 'ti ti-text-caption',

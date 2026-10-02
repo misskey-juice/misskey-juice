@@ -9946,6 +9946,30 @@ export interface Locale extends ILocale {
          */
         "debugRender": string;
         /**
+         * 移動: つかんでから動き始めるまで
+         */
+        "debugMoveGrab": string;
+        /**
+         * 移動: 離してから反映されるまで
+         */
+        "debugMoveRelease": string;
+        /**
+         * 移動: つかんだ後、正しい絵に差し替わるまで
+         */
+        "debugMoveGrabExact": string;
+        /**
+         * Workerでの描き直し
+         */
+        "debugRegionRedraw": string;
+        /**
+         * {n}か所を描き直し中
+         */
+        "debugRegionRedrawPending": ParameterizedString<"n">;
+        /**
+         * キャンバスのメモリ(見積もり)
+         */
+        "debugCanvasMemory": string;
+        /**
          * 部屋を開いている人
          */
         "debugOnline": string;
@@ -12186,6 +12210,10 @@ export interface Locale extends ILocale {
              * 測るもの
              */
             "source": string;
+            /**
+             * スライダーのBPM
+             */
+            "sliderBpm": string;
             /**
              * メトロノームを鳴らす
              */
@@ -16155,6 +16183,38 @@ export interface Locale extends ILocale {
          */
         "unmarkAsNovel": string;
         /**
+         * ほかの人にダウンロードさせない
+         */
+        "disallowNovelDownload": string;
+        /**
+         * ほかの人にダウンロードさせる
+         */
+        "allowNovelDownload": string;
+        /**
+         * ネコの投稿の文字を置き換えない(ネコミミだけにする)
+         */
+        "disableNoteNyaize": string;
+        /**
+         * ネコのアカウントの投稿で、「な」を「にゃ」にするなどの文字の置き換えをせずに表示します。ネコミミはそのまま出ます。この端末の表示だけが変わります
+         */
+        "disableNoteNyaizeCaption": string;
+        /**
+         * 小説のtxtを添付したとき、初めからダウンロードさせない
+         */
+        "novelTextDownloadDisabledByDefault": string;
+        /**
+         * ダウンロードさせないtxtは、ダウンロードのボタンを出さず、ファイルのURLも渡しません。小説ビューワーで本文だけを読めます(ほかのサーバーには、小説ビューワーへのリンクを送ります)。読める以上、本文の取り出しを完全には防げません。添付したファイルごとに、メニューから切り替えられます
+         */
+        "novelTextDownloadDisabledByDefaultCaption": string;
+        /**
+         * フォロワー限定の投稿のため、小説の本文は{host}のアカウントでのみ読めます
+         */
+        "novelTextFederatedFollowersOnly": ParameterizedString<"host">;
+        /**
+         * 公開範囲を限った投稿のため、小説の本文は{host}のアカウントでのみ読めます
+         */
+        "novelTextFederatedSpecified": ParameterizedString<"host">;
+        /**
          * 小説ビューワー
          */
         "novelViewer": string;
@@ -16238,6 +16298,46 @@ export interface Locale extends ILocale {
          * ｜漢字《かんじ》のルビや［＃ここからN字下げ］等、青空文庫形式のテキストによくある入力者注記を解釈して反映します(対応しきれない注記は非表示にします)。
          */
         "novelViewerAozoraNotationCaption": string;
+        /**
+         * しおり
+         */
+        "novelViewerBookmarks": string;
+        /**
+         * 今読んでいる所にしおりを挟む
+         */
+        "novelViewerBookmarkHere": string;
+        /**
+         * 選んだ行にしおりを挟む
+         */
+        "novelViewerBookmarkSelected": string;
+        /**
+         * しおりを挟みました
+         */
+        "novelViewerBookmarkAdded": string;
+        /**
+         * しおりを挟む行が見つかりませんでした
+         */
+        "novelViewerBookmarkFailed": string;
+        /**
+         * しおりを外す
+         */
+        "novelViewerRemoveBookmark": string;
+        /**
+         * (空いている行)
+         */
+        "novelViewerBookmarkEmptyLine": string;
+        /**
+         * 本文の文字を選んでから開くと、その行にしおりを挟めます。挟んだ行には色が付き、ここから飛べます
+         */
+        "novelViewerBookmarkHint": string;
+        /**
+         * 半角の英単語を横向きのまま組み込む
+         */
+        "novelViewerLatinSideways": string;
+        /**
+         * 縦書きで、半角の英単語や3桁以上の数字を1文字ずつ縦に並べず、横向きのまま(90度回して)組み込みます。2桁の半角数字は縦中横(横に並べて1文字分に収める)にします。
+         */
+        "novelViewerLatinSidewaysCaption": string;
         /**
          * 書体
          */
@@ -17066,6 +17166,14 @@ export interface Locale extends ILocale {
          * タップ
          */
         "bpmSourceTap": string;
+        /**
+         * スライダー
+         */
+        "bpmSourceSlider": string;
+        /**
+         * {min}〜{max}BPMの間で決められます
+         */
+        "bpmSliderRange": ParameterizedString<"min" | "max">;
         /**
          * 直近1分で{n}件
          */

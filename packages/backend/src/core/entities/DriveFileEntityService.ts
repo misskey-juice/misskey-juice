@@ -209,6 +209,7 @@ export class DriveFileEntityService {
 			isSensitive: file.isSensitive,
 			isAIGenerated: file.isAIGenerated,
 			isNovel: file.isNovel, // JUICE
+			novelDownloadDisabled: file.novelDownloadDisabled, // JUICE
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
 			url: opts.self ? file.url : this.getPublicUrl(file),
@@ -250,6 +251,7 @@ export class DriveFileEntityService {
 			isSensitive: file.isSensitive,
 			isAIGenerated: file.isAIGenerated,
 			isNovel: file.isNovel, // JUICE
+			novelDownloadDisabled: file.novelDownloadDisabled, // JUICE
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
 			url: opts.self ? file.url : this.getPublicUrl(file),

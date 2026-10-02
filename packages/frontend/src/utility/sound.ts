@@ -197,6 +197,15 @@ export async function playUrl(url: string, opts: {
 	createSourceNode(buffer, opts).soundSource.start();
 }
 
+/**
+ * JUICE: 音を鳴らすAudioContext(まだ一度も音を読み込んでいなければnull)。
+ * 決まった時刻に鳴らしたいとき(メトロノーム等)に、その時計(currentTime)を使う
+ */
+export function getAudioContext(): AudioContext | null {
+	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+	return ctx ?? null;
+}
+
 export function createSourceNode(buffer: AudioBuffer, opts: {
 	volume?: number;
 	pan?: number;

@@ -127,6 +127,7 @@ import {
 } from '@/utility/novel-draft.js';
 import { novelEditorExtensions } from '@/utility/novel-editor-extensions.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
+import { isNovelTextFile } from '@/utility/novel-text-file.js';
 
 const XNovelViewer = defineAsyncComponent(() => import('@/pages/novel-viewer.vue'));
 
@@ -534,7 +535,7 @@ function openWorkFromText(name: string, buffer: ArrayBuffer): void {
 }
 
 function isTextFile(name: string, type: string): boolean {
-	return type === 'text/plain' || name.toLowerCase().endsWith('.txt');
+	return isNovelTextFile({ name, type });
 }
 
 function importFromDevice(): void {

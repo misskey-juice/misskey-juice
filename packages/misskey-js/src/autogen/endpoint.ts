@@ -608,6 +608,8 @@ import type {
 	NotesLocalTimelineResponse,
 	NotesMentionsRequest,
 	NotesMentionsResponse,
+	NotesNovelTextRequest,
+	NotesNovelTextResponse,
 	NotesPollsRecommendationRequest,
 	NotesPollsRecommendationResponse,
 	NotesPollsVoteRequest,
@@ -1164,6 +1166,7 @@ export type Endpoints = {
 	'notes/juice/update-novel': { req: NotesJuiceUpdateNovelRequest; res: NotesJuiceUpdateNovelResponse };
 	'notes/local-timeline': { req: NotesLocalTimelineRequest; res: NotesLocalTimelineResponse };
 	'notes/mentions': { req: NotesMentionsRequest; res: NotesMentionsResponse };
+	'notes/novel-text': { req: NotesNovelTextRequest; res: NotesNovelTextResponse };
 	'notes/polls/recommendation': { req: NotesPollsRecommendationRequest; res: NotesPollsRecommendationResponse };
 	'notes/polls/vote': { req: NotesPollsVoteRequest; res: EmptyResponse };
 	'notes/reactions': { req: NotesReactionsRequest; res: NotesReactionsResponse };

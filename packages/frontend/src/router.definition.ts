@@ -47,6 +47,10 @@ export const ROUTE_DEF = [{
 	name: 'novel-viewer',
 	path: '/notes/:noteId/novel-viewer',
 	component: page(() => import('@/pages/novel-viewer.vue')),
+	// JUICE: txtが複数あるとき、どれを読むか
+	query: {
+		file: 'fileId',
+	},
 }, {
 	name: 'note',
 	path: '/notes/:noteId/:initialTab?',

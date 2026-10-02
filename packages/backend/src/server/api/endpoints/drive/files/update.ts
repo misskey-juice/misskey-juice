@@ -67,6 +67,8 @@ export const paramDef = {
 		isSensitive: { type: 'boolean' },
 		isAIGenerated: { type: 'boolean' },
 		isNovel: { type: 'boolean' }, // JUICE
+		// JUICE: 小説のtxtを、ほかの人にダウンロードさせない
+		novelDownloadDisabled: { type: 'boolean' },
 		comment: { type: 'string', nullable: true, maxLength: 512 },
 	},
 	required: ['fileId'],
@@ -100,6 +102,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					isSensitive: ps.isSensitive,
 					isAIGenerated: ps.isAIGenerated,
 					isNovel: ps.isNovel,
+					novelDownloadDisabled: ps.novelDownloadDisabled,
 					comment: ps.comment,
 				}, me);
 			} catch (e) {

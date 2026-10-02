@@ -168,6 +168,12 @@ export class MiDriveFile {
 	})
 	public isNovel: boolean;
 
+	@Column('boolean', {
+		default: false,
+		comment: 'Whether other users may not download this novel text file; only its text is shown in the novel viewer (JUICE).',
+	})
+	public novelDownloadDisabled: boolean;
+
 	@Index()
 	@Column('boolean', {
 		default: false,
