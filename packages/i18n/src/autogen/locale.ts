@@ -12211,6 +12211,10 @@ export interface Locale extends ILocale {
              */
             "source": string;
             /**
+             * スライダーのBPM
+             */
+            "sliderBpm": string;
+            /**
              * メトロノームを鳴らす
              */
             "metronome": string;
@@ -17162,6 +17166,14 @@ export interface Locale extends ILocale {
          * タップ
          */
         "bpmSourceTap": string;
+        /**
+         * スライダー
+         */
+        "bpmSourceSlider": string;
+        /**
+         * {min}〜{max}BPMの間で決められます
+         */
+        "bpmSliderRange": ParameterizedString<"min" | "max">;
         /**
          * 直近1分で{n}件
          */

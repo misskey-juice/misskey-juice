@@ -3139,6 +3139,7 @@ _widgetOptions:
     showLabel: "顯示標記"
   _bpm:
     source: "測量對象"
+    sliderBpm: "滑桿的 BPM"
     metronome: "播放節拍器"
     metronomeSound: "播放的聲音"
   _jobQueue:
@@ -4430,6 +4431,8 @@ _juice:
   bpmReset: "重設"
   bpmTaps: "{n} 次"
   bpmSourceTap: "點擊"
+  bpmSourceSlider: "滑桿"
+  bpmSliderRange: "可在 {min}～{max} BPM 之間設定"
   bpmEvents: "最近 1 分鐘 {n} 則"
   bpmStreamHint: "將推送速度換算為每分鐘的數量"
   bpmMetronome: "節拍器"

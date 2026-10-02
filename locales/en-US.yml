@@ -2768,6 +2768,7 @@ _widgetOptions:
     showLabel: "Show Label"
   _bpm:
     source: "Measure"
+    sliderBpm: "Slider BPM"
     metronome: "Play metronome"
     metronomeSound: "Metronome sound"
   _jobQueue:
@@ -4605,6 +4606,8 @@ _juice:
   bpmReset: "Reset"
   bpmTaps: "{n} taps"
   bpmSourceTap: "Tap"
+  bpmSourceSlider: "Slider"
+  bpmSliderRange: "Set a value between {min} and {max} BPM"
   bpmEvents: "{n} in the last minute"
   bpmStreamHint: "Shows how many arrive per minute"
   bpmMetronome: "Metronome"

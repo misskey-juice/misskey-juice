@@ -2768,6 +2768,7 @@ _widgetOptions:
     showLabel: "레이블 표시"
   _bpm:
     source: "측정 대상"
+    sliderBpm: "슬라이더의 BPM"
     metronome: "메트로놈 울리기"
     metronomeSound: "울릴 소리"
   _jobQueue:
@@ -4605,6 +4606,8 @@ _juice:
   bpmReset: "초기화"
   bpmTaps: "{n}회"
   bpmSourceTap: "탭"
+  bpmSourceSlider: "슬라이더"
+  bpmSliderRange: "{min}~{max}BPM 사이에서 정할 수 있습니다"
   bpmEvents: "최근 1분 동안 {n}건"
   bpmStreamHint: "들어오는 속도를 1분당 개수로 나타냅니다"
   bpmMetronome: "메트로놈"

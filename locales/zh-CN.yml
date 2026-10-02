@@ -2768,6 +2768,7 @@ _widgetOptions:
     showLabel: "显示标签"
   _bpm:
     source: "测量对象"
+    sliderBpm: "滑块的 BPM"
     metronome: "播放节拍器"
     metronomeSound: "节拍器声音"
   _jobQueue:
@@ -4605,6 +4606,8 @@ _juice:
   bpmReset: "重置"
   bpmTaps: "{n}次"
   bpmSourceTap: "点击"
+  bpmSourceSlider: "滑块"
+  bpmSliderRange: "可在 {min}～{max} BPM 之间设置"
   bpmEvents: "最近1分钟 {n} 条"
   bpmStreamHint: "以每分钟的数量表示到达的速度"
   bpmMetronome: "节拍器"
