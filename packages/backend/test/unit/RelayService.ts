@@ -98,7 +98,7 @@ describe('RelayService', () => {
 
 	test('getRelayForActor (JUICE)', async () => {
 		const relay = await relayService.addRelay('https://relay-for-actor.example.com');
-		await relayService.relayAccepted(relay.id);
+		await relayService.relayAccepted(relay.id, { inbox: relay.inbox, sharedInbox: null });
 
 		const matchedByInbox = await relayService.getRelayForActor({ inbox: 'https://relay-for-actor.example.com', sharedInbox: null });
 		expect(matchedByInbox?.id).toBe(relay.id);
@@ -114,7 +114,7 @@ describe('RelayService', () => {
 
 	test('getRelayForActorのキャッシュは削除・再登録のたびに即座に反映される (JUICE)', async () => {
 		const relay = await relayService.addRelay('https://cache-invalidation.example.com');
-		await relayService.relayAccepted(relay.id);
+		await relayService.relayAccepted(relay.id, { inbox: relay.inbox, sharedInbox: null });
 
 		const matchedBefore = await relayService.getRelayForActor({ inbox: 'https://cache-invalidation.example.com', sharedInbox: null });
 		expect(matchedBefore?.id).toBe(relay.id);
@@ -128,7 +128,7 @@ describe('RelayService', () => {
 		// 同じホストを再登録すると新しいIDが発行される。承認直後からキャッシュ待ちせず認識できることを確認する
 		const readded = await relayService.addRelay('https://cache-invalidation.example.com');
 		expect(readded.id).not.toBe(relay.id);
-		await relayService.relayAccepted(readded.id);
+		await relayService.relayAccepted(readded.id, { inbox: readded.inbox, sharedInbox: null });
 
 		const matchedAfterReadd = await relayService.getRelayForActor({ inbox: 'https://cache-invalidation.example.com', sharedInbox: null });
 		expect(matchedAfterReadd?.id).toBe(readded.id);
