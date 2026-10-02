@@ -731,20 +731,42 @@ function updatePageCount(): void {
 // 縦書きはページ番号ではなく本文全体のうちの位置(割合)で覚える(文字サイズ・画面の幅が変わるとページの区切りが
 // 変わり、同じページ番号でも別の箇所になるため)。横書きは[newpage]のページと、そのページの中の位置で覚える。
 // 本文を測れないとき(読み込み中・画面から外れた後など)は、前に覚えた位置を消さないよう何もしない
+// JUICE: 今読んでいる位置を測る(本文を測れないときはnull)
+function measureProgress(): { page: number; ratio: number } | { section: number; sectionRatio: number } | null {
+	if (writingMode.value === 'vertical') {
+		const inner = primaryInnerEl();
+		if (inner == null || inner.scrollWidth <= 0) return null;
+		return { page: currentPage.value, ratio: currentReadingRatio() };
+	}
+	const ratio = horizontalReadingRatio();
+	if (ratio == null) return null;
+	return { section: currentSection.value, sectionRatio: ratio };
+}
+
+// JUICE: 最後に測れた位置。別のページへ移るとき(KeepAliveで外された後・画面から消えた後)は本文を測れないので、
+// これを覚える(スクロールしてすぐ移ったときも、最後の位置が残るように)
+let lastMeasuredProgress: { noteId: string; mode: string; data: NonNullable<ReturnType<typeof measureProgress>> } | null = null;
+
+function rememberProgress(): void {
+	const id = appearNote.value?.id;
+	if (!id || isPreview.value || novelFileLoading.value || restoringProgress) return;
+	const data = measureProgress();
+	if (data != null) lastMeasuredProgress = { noteId: id, mode: writingMode.value, data };
+}
+
 function saveProgress(): void {
 	const id = appearNote.value?.id;
 	if (!id || isPreview.value || novelFileLoading.value || restoringProgress) return;
 	const prev = store.s.novelViewerProgress[id];
-	let entry: NonNullable<typeof prev>;
-	if (writingMode.value === 'vertical') {
-		const inner = primaryInnerEl();
-		if (inner == null || inner.scrollWidth <= 0) return;
-		entry = { ...prev, page: currentPage.value, ratio: currentReadingRatio(), updatedAt: Date.now() };
+	let data = measureProgress();
+	if (data != null) {
+		lastMeasuredProgress = { noteId: id, mode: writingMode.value, data };
+	} else if (lastMeasuredProgress != null && lastMeasuredProgress.noteId === id && lastMeasuredProgress.mode === writingMode.value) {
+		data = lastMeasuredProgress.data;
 	} else {
-		const ratio = horizontalReadingRatio();
-		if (ratio == null) return;
-		entry = { ...prev, section: currentSection.value, sectionRatio: ratio, updatedAt: Date.now() };
+		return;
 	}
+	const entry: NonNullable<typeof prev> = { ...prev, ...data, updatedAt: Date.now() };
 	const rest = Object.entries(store.s.novelViewerProgress)
 		.filter(([key]) => key !== id)
 		.sort((a, b) => b[1].updatedAt - a[1].updatedAt)
@@ -872,9 +894,11 @@ function addBookmark(target: { chapter: number; line: number } | null): void {
 	}
 	const excerpt = lineExcerpt(chapterLines.value[target.chapter]?.[target.line] ?? '');
 	const others = bookmarks.value.filter(b => !(b.chapter === target.chapter && b.line === target.line));
+	// 多すぎるときは、挟んだのが古いものから外す(位置順で外すと、前の方に挟んだしおりがすぐ消えてしまうため)
 	bookmarks.value = [...others, { ...target, excerpt, createdAt: Date.now() }]
-		.sort((a, b) => a.chapter - b.chapter || a.line - b.line)
-		.slice(-NOVEL_BOOKMARK_MAX);
+		.sort((a, b) => b.createdAt - a.createdAt)
+		.slice(0, NOVEL_BOOKMARK_MAX)
+		.sort((a, b) => a.chapter - b.chapter || a.line - b.line);
 	saveBookmarks();
 	updateBookmarkHighlights();
 	os.toast(i18n.ts._juice.novelViewerBookmarkAdded);
@@ -995,6 +1019,8 @@ let progressSaveTimer: number | null = null;
 
 function onAnyScroll(): void {
 	if (writingMode.value !== 'horizontal') return;
+	// 位置はすぐ測っておく(保存の前に別のページへ移っても、最後の位置を覚えられるように)
+	rememberProgress();
 	if (progressSaveTimer != null) return;
 	progressSaveTimer = window.setTimeout(() => {
 		progressSaveTimer = null;
@@ -1211,6 +1237,9 @@ function applyLayout(target: number | { ratio: number }): void {
 			syncSecondaryPanel();
 			pendingLayoutTarget = null;
 			updateBookmarkHighlights();
+			// JUICE: 移動(しおり・目次)した先の位置を覚える(移動を頼んだ時点ではまだページが決まっていないため)
+			if (typeof target === 'number') saveProgress();
+			else rememberProgress();
 		});
 	});
 }
@@ -1893,7 +1922,7 @@ if (!props.embedded) {
 
 // JUICE: しおりを挟んだ行の印(updateBookmarkHighlights。CSS Custom Highlight APIの名前で指定する)
 ::highlight(juice-novel-bookmark) {
-	background-color: rgba(255, 196, 0, 0.28);
+	background-color: color-mix(in srgb, var(--MI_THEME-accent, #ffc400) 28%, transparent);
 }
 
 // JUICE: 縦中横(2桁の半角数字を横に並べて1文字分に収める。rotateLatinRuns参照)
