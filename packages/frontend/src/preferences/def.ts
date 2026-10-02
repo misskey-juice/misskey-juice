@@ -189,6 +189,16 @@ export const PREF_DEF = definePreferences({
 		default: false,
 	},
 
+	// JUICE: ネコのアカウントの投稿の文字を置き換えない(nyaizeしない。ネコミミは出す。misskey-tempuraを参考)
+	disableNoteNyaize: {
+		default: false,
+	},
+
+	// JUICE: 投稿フォームで小説のtxtを添付したとき、初めからほかの人にダウンロードさせないようにする
+	novelTextDownloadDisabledByDefault: {
+		default: false,
+	},
+
 	// JUICE: 小説ビューワーの表示(以前は端末ごとのstoreにあった。バックアップ・復元で戻るようプロファイルへ移した)
 	novelViewerWritingMode: {
 		default: 'vertical' as 'vertical' | 'horizontal',

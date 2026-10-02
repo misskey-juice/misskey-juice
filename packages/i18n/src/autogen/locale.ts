@@ -16179,6 +16179,38 @@ export interface Locale extends ILocale {
          */
         "unmarkAsNovel": string;
         /**
+         * ほかの人にダウンロードさせない
+         */
+        "disallowNovelDownload": string;
+        /**
+         * ほかの人にダウンロードさせる
+         */
+        "allowNovelDownload": string;
+        /**
+         * ネコの投稿の文字を置き換えない(ネコミミだけにする)
+         */
+        "disableNoteNyaize": string;
+        /**
+         * ネコのアカウントの投稿で、「な」を「にゃ」にするなどの文字の置き換えをせずに表示します。ネコミミはそのまま出ます。この端末の表示だけが変わります
+         */
+        "disableNoteNyaizeCaption": string;
+        /**
+         * 小説のtxtを添付したとき、初めからダウンロードさせない
+         */
+        "novelTextDownloadDisabledByDefault": string;
+        /**
+         * ダウンロードさせないtxtは、ダウンロードのボタンを出さず、ファイルのURLも渡しません。小説ビューワーで本文だけを読めます(ほかのサーバーには、小説ビューワーへのリンクを送ります)。読める以上、本文の取り出しを完全には防げません。添付したファイルごとに、メニューから切り替えられます
+         */
+        "novelTextDownloadDisabledByDefaultCaption": string;
+        /**
+         * フォロワー限定の投稿のため、小説の本文は{host}のアカウントでのみ読めます
+         */
+        "novelTextFederatedFollowersOnly": ParameterizedString<"host">;
+        /**
+         * 公開範囲を限った投稿のため、小説の本文は{host}のアカウントでのみ読めます
+         */
+        "novelTextFederatedSpecified": ParameterizedString<"host">;
+        /**
          * 小説ビューワー
          */
         "novelViewer": string;

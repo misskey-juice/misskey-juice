@@ -139,6 +139,7 @@ export function file(isSensitive = false): entities.DriveFile {
 		isSensitive,
 		isAIGenerated: false,
 		isNovel: false,
+		novelDownloadDisabled: false,
 		blurhash: 'eQAmoa^-MH8w9ZIvNLSvo^$*MwRPbwtSxutRozjEiwR.RjWBoeozog',
 		properties: {
 			width: 1024,

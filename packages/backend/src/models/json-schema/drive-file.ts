@@ -50,6 +50,11 @@ export const packedDriveFileSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		// JUICE: 小説のtxtを、ほかの人にダウンロードさせない(小説ビューワーで本文だけを読ませる)
+		novelDownloadDisabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		blurhash: {
 			type: 'string',
 			optional: false, nullable: true,

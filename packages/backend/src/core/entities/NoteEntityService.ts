@@ -7,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EntityNotFoundError, In } from 'typeorm';
 import { ModuleRef } from '@nestjs/core';
 import { DI } from '@/di-symbols.js';
+import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { MiUser } from '@/models/User.js';
@@ -23,6 +24,7 @@ import type { CustomEmojiService } from '../CustomEmojiService.js';
 import type { ReactionService } from '../ReactionService.js';
 import type { UserEntityService } from './UserEntityService.js';
 import type { DriveFileEntityService } from './DriveFileEntityService.js';
+import { isNovelTextFile } from '@/misc/novel-text-file.js';
 
 // is-renote.tsとよしなにリンク
 function isPureRenote(note: MiNote): note is MiNote & { renoteId: MiNote['id']; renote: MiNote } {
@@ -75,6 +77,9 @@ export class NoteEntityService implements OnModuleInit {
 
 		@Inject(DI.meta)
 		private meta: MiMeta,
+
+		@Inject(DI.config)
+		private config: Config,
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
@@ -470,6 +475,20 @@ export class NoteEntityService implements OnModuleInit {
 		});
 
 		this.treatVisibility(packed);
+
+		// JUICE: 投稿者がダウンロードさせないことにした小説のtxtは、投稿者以外にはファイルのURLを渡さない。
+		// 添付としては出したまま(ファイル名などは見える)、URLはこのノートの小説ビューワーのページにする
+		// (ダウンロードのボタンは出さない。本文は小説ビューワーが notes/novel-text で読む)
+		if (note.isNovel && note.userId !== meId && packed.files != null && packed.files.length > 0) {
+			const viewerUrl = `${this.config.url}/notes/${note.id}/novel-viewer`;
+			let protectedAny = false;
+			packed.files = packed.files.map(file => {
+				if (!file.novelDownloadDisabled || !isNovelTextFile(file)) return file;
+				protectedAny = true;
+				return { ...file, url: viewerUrl, thumbnailUrl: null };
+			});
+			if (protectedAny) packed.novelTextProtected = true;
+		}
 
 		if (!opts.skipHide && (await this.shouldHideNote(packed, meId))) {
 			this.hideNote(packed);

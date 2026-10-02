@@ -258,9 +258,15 @@ watch(() => currentWork.value.text, (text) => {
 // JUICE: 添付された.txtファイルがあれば、本文の代わりにそちらを小説の本体として読む。
 // ノート本文だけだと文字数上限に収まらない長編を投稿できないための機能
 // .txtが複数添付されている場合は、ドライブで「小説」フラグを付けたファイルを優先する
-const novelFile = computed(() => {
+// JUICE: 投稿者がダウンロードさせないことにしたtxtは、添付に入っていない(ファイルのURLが無い)ので、本文をAPIで読む
+type NovelFileSource = Misskey.entities.DriveFile | { protectedNoteId: string };
+const novelFile = computed<NovelFileSource | null>(() => {
 	const textFiles = appearNote.value?.files?.filter(f => f.type === 'text/plain' || f.name.toLowerCase().endsWith('.txt')) ?? [];
-	return textFiles.find(f => f.isNovel) ?? textFiles[0] ?? null;
+	const file = textFiles.find(f => f.isNovel) ?? textFiles[0] ?? null;
+	if (file == null) return null;
+	// 投稿者がダウンロードさせないことにしたtxtは、投稿者以外にはファイルのURLが無いので、本文をAPIで読む(投稿者も同じく)
+	if (file.novelDownloadDisabled && appearNote.value != null) return { protectedNoteId: appearNote.value.id };
+	return file;
 });
 const novelFileContent = ref<string | null>(null);
 const novelFileLoading = ref(false);
@@ -270,14 +276,24 @@ const novelFileError = ref<unknown>(null);
 // 後から終わっても本文を上書きしないよう、最新の読み込み要求かどうかを世代番号で確認する
 let novelFileLoadGeneration = 0;
 
-async function loadNovelFile(file: Misskey.entities.DriveFile): Promise<void> {
+async function loadNovelFile(file: NovelFileSource): Promise<void> {
 	const generation = ++novelFileLoadGeneration;
 	novelFileLoading.value = true;
 	novelFileError.value = null;
 	try {
-		const res = await window.fetch(file.url);
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const content = decodeTextFile(await res.arrayBuffer());
+		let buffer: ArrayBuffer;
+		if ('protectedNoteId' in file) {
+			const res = await misskeyApi('notes/novel-text', { noteId: file.protectedNoteId });
+			const binary = window.atob(res.data);
+			const bytes = new Uint8Array(binary.length);
+			for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+			buffer = bytes.buffer;
+		} else {
+			const res = await window.fetch(file.url);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			buffer = await res.arrayBuffer();
+		}
+		const content = decodeTextFile(buffer);
 		if (generation !== novelFileLoadGeneration) return;
 		novelFileContent.value = content;
 	} catch (err) {
@@ -288,7 +304,13 @@ async function loadNovelFile(file: Misskey.entities.DriveFile): Promise<void> {
 	}
 }
 
-watch(novelFile, (file) => {
+// 読み込むファイルが変わったときだけ読み直す(本文をAPIで読むときは、ノートの情報が更新されるたびに作り直されるため、
+// 中身ではなくファイル(またはノート)のidで見る)
+watch(() => {
+	const file = novelFile.value;
+	return file == null ? null : 'protectedNoteId' in file ? `note:${file.protectedNoteId}` : `file:${file.id}`;
+}, () => {
+	const file = novelFile.value;
 	novelFileContent.value = null;
 	if (file) {
 		loadNovelFile(file);

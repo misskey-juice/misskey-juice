@@ -212,6 +212,15 @@ const isNovel = ref<boolean>(false);
 watch(() => files.value.map(f => f.id), (ids, oldIds) => {
 	const added = files.value.filter(f => !(oldIds ?? []).includes(f.id));
 	if (added.some(f => f.isNovel)) isNovel.value = true;
+	// JUICE: 設定で決めていれば、新しく添付した小説のtxtを初めからダウンロードさせない(下書きから戻したものは除く)
+	if (oldIds != null && prefer.s.novelTextDownloadDisabledByDefault) {
+		for (const file of added) {
+			if (file.novelDownloadDisabled || !(file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt'))) continue;
+			misskeyApi('drive/files/update', { fileId: file.id, novelDownloadDisabled: true }).then(() => {
+				file.novelDownloadDisabled = true;
+			}).catch(() => {});
+		}
+	}
 }, { immediate: true });
 const mediaTimelineEnabled = ref(false);
 juicePublicSettingsCache.fetch().then(res => {

@@ -60,6 +60,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkPreferenceContainer>
 					</SearchMarker>
 
+					<!-- JUICE: ネコのアカウントの投稿の文字を置き換えない(ネコミミだけにする。misskey-tempuraを参考) -->
+					<SearchMarker :keywords="['cat', 'nyaize', 'disable', 'ear']">
+						<MkPreferenceContainer k="disableNoteNyaize">
+							<MkSwitch v-model="disableNoteNyaize">
+								<template #label><SearchLabel>{{ i18n.ts._juice.disableNoteNyaize }}</SearchLabel></template>
+								<template #caption>{{ i18n.ts._juice.disableNoteNyaizeCaption }}</template>
+							</MkSwitch>
+						</MkPreferenceContainer>
+					</SearchMarker>
+
 					<SearchMarker :keywords="['reaction', 'quick', 'button', 'note', 'footer', 'heart']">
 						<div class="_gaps_s">
 							<MkPreferenceContainer k="showQuickReactionButton">
@@ -237,6 +247,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #caption>{{ i18n.ts._juice.autoLocalOnlyForFnMfmCaption }}</template>
 					</MkSwitch>
 				</div>
+			</MkFolder>
+		</SearchMarker>
+
+		<!-- JUICE: 小説のtxtを添付したとき、初めからダウンロードさせない -->
+		<SearchMarker :keywords="['novel', 'text', 'download', 'attach']">
+			<MkFolder>
+				<template #label><SearchLabel>{{ i18n.ts._juice.novelTextDownloadDisabledByDefault }}</SearchLabel></template>
+				<MkPreferenceContainer k="novelTextDownloadDisabledByDefault">
+					<MkSwitch v-model="novelTextDownloadDisabledByDefault">
+						<template #label>{{ i18n.ts._juice.novelTextDownloadDisabledByDefault }}</template>
+						<template #caption>{{ i18n.ts._juice.novelTextDownloadDisabledByDefaultCaption }}</template>
+					</MkSwitch>
+				</MkPreferenceContainer>
 			</MkFolder>
 		</SearchMarker>
 
@@ -421,6 +444,8 @@ const widgetsSide = prefer.model('widgetsSide');
 
 // JUICE: ノートの画面にお気に入りのボタンを置くか
 const showFavoriteButtonInNoteFooter = prefer.model('showFavoriteButtonInNoteFooter');
+const disableNoteNyaize = prefer.model('disableNoteNyaize');
+const novelTextDownloadDisabledByDefault = prefer.model('novelTextDownloadDisabledByDefault');
 
 // JUICE: ノートの画面の「+」の左に置く、決めたリアクションを付けるボタン
 const QUICK_REACTION_DEFAULT = '🧡';

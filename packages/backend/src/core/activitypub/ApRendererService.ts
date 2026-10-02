@@ -36,6 +36,7 @@ import { escapeHtml } from '@/misc/escape-html.js';
 import { JsonLdService } from './JsonLdService.js';
 import { ApMfmService } from './ApMfmService.js';
 import { CONTEXT } from './misc/contexts.js';
+import { isNovelTextFile } from '@/misc/novel-text-file.js';
 import type { IAccept, IActivity, IAdd, IAnnounce, IApDocument, IApEmoji, IApHashtag, IApImage, IApMention, IBlock, ICreate, IDelete, IFlag, IFollow, IKey, ILike, IMove, IObject, IPost, IQuestion, IReject, IRemove, ITombstone, IUndo, IUpdate } from './type.js';
 
 // JUICE: ReactionService.decodeCustomEmojiRegexpと同一パターン
@@ -462,9 +463,26 @@ export class ApRendererService {
 		const hashtagTags = note.tags.map(tag => this.renderHashtag(tag));
 		const mentionTags = mentionedUsers.map(u => this.renderMention(u as MiLocalUser | MiRemoteUser));
 
-		const files = await getPromisedFiles(note.fileIds);
+		const allFiles = await getPromisedFiles(note.fileIds);
+		// JUICE: 投稿者がダウンロードさせないことにした小説のtxtは、添付として送らない(ファイルのURLを渡さない)。
+		// 代わりに、このサーバーの小説ビューワーへのリンクを本文の最後に付ける(連合先の人は、そこで読む)
+		const files = note.isNovel ? allFiles.filter(file => !(file.novelDownloadDisabled && isNovelTextFile(file))) : allFiles;
+		const novelViewerUrl = files.length !== allFiles.length ? `${this.config.url}/notes/${note.id}/novel-viewer` : null;
+		// フォロワー限定・指定したユーザー限定の投稿は、ほかのサーバーの人はこのサーバーにログインしていないので、
+		// リンクを開いても読めない。リンクの代わりに、このサーバーのアカウントでだけ読めることを知らせる
+		let novelNotice: string | null = null;
+		if (novelViewerUrl != null && (note.visibility === 'followers' || note.visibility === 'specified')) {
+			const key = note.visibility === 'followers' ? '_juice.novelTextFederatedFollowersOnly' : '_juice.novelTextFederatedSpecified';
+			const args = { host: this.config.host };
+			const translate = (lang: string) => {
+				const translated = this.emailI18nService.getI18n(lang).t(key, args);
+				return typeof translated === 'string' && translated !== key ? translated : null;
+			};
+			novelNotice = translate(await this.emailI18nService.resolveLang(note.lang)) ?? translate('en-US') ?? translate('ja-JP');
+		}
+		const novelAppendix = novelViewerUrl == null ? null : novelNotice != null ? `📖 ${novelNotice}` : `📖 ${novelViewerUrl}`;
 
-		const text = note.text ?? '';
+		const text = (note.text ?? '') + (novelAppendix != null ? `${note.text ? '\n\n' : ''}${novelAppendix}` : '');
 		let poll: MiPoll | null = null;
 
 		if (note.hasPoll) {
@@ -473,11 +491,17 @@ export class ApRendererService {
 
 		let extraHtml: string | null = null;
 
+		// JUICE: 小説ビューワーへのリンク(ダウンロードさせない小説のtxtの代わり)
+		if (novelViewerUrl != null) {
+			const inner = novelNotice != null ? `📖 ${escapeHtml(novelNotice)}` : `📖 <a href="${escapeHtml(novelViewerUrl)}">${escapeHtml(novelViewerUrl)}</a>`;
+			extraHtml = `${note.text ? '<br><br>' : ''}<span class="juice-novel-viewer">${inner}</span>`;
+		}
+
 		if (quote != null) {
 			// Append quote link as `<br><br><span class="quote-inline">RE: <a href="...">...</a></span>`
 			// the class name `quote-inline` is used in non-misskey clients for styling quote notes.
 			// For compatibility, the span part should be kept as possible.
-			extraHtml = `<br><br><span class="quote-inline">RE: <a href="${escapeHtml(quote)}">${escapeHtml(quote)}</a></span>`;
+			extraHtml = `${extraHtml ?? ''}<br><br><span class="quote-inline">RE: <a href="${escapeHtml(quote)}">${escapeHtml(quote)}</a></span>`;
 		}
 
 		let summary = note.cw === '' ? String.fromCharCode(0x200B) : note.cw;

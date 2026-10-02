@@ -68,7 +68,8 @@ export default function (props: MfmProps, { emit }: { emit: SetupContext<MfmEven
 	//provide('linkNavigationBehavior', props.linkNavigationBehavior);
 
 	const isNote = props.isNote ?? true;
-	const shouldNyaize = props.nyaize ? props.nyaize === 'respect' ? props.author?.isCat : false : false;
+	// JUICE: 設定でnyaize(ネコのアカウントの文字の置き換え)をしないようにしていれば、ネコミミだけにする(misskey-tempuraを参考)
+	const shouldNyaize = prefer.r.disableNoteNyaize.value ? false : props.nyaize ? props.nyaize === 'respect' ? props.author?.isCat : false : false;
 
 	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 	if (props.text == null || props.text === '') return;

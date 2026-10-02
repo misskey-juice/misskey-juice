@@ -106,6 +106,22 @@ function toggleNovel(file: Misskey.entities.DriveFile) {
 	});
 }
 
+// JUICE: 小説のtxtを、ほかの人にダウンロードさせない(小説ビューワーで本文だけを読ませる)
+function toggleNovelDownloadDisabled(file: Misskey.entities.DriveFile) {
+	misskeyApi('drive/files/update', {
+		fileId: file.id,
+		novelDownloadDisabled: !file.novelDownloadDisabled,
+	}).then(updated => {
+		globalEvents.emit('driveFilesUpdated', [updated]);
+	}).catch(err => {
+		os.alert({
+			type: 'error',
+			title: i18n.ts.error,
+			text: err.message,
+		});
+	});
+}
+
 function copyUrl(file: Misskey.entities.DriveFile) {
 	copyToClipboard(file.url);
 }
@@ -167,6 +183,11 @@ export function getDriveFileMenu(file: Misskey.entities.DriveFile, folder?: Miss
 		icon: 'ti ti-book',
 		badge: true,
 		action: () => toggleNovel(file),
+	}, {
+		text: file.novelDownloadDisabled ? i18n.ts._juice.allowNovelDownload : i18n.ts._juice.disallowNovelDownload,
+		icon: file.novelDownloadDisabled ? 'ti ti-download' : 'ti ti-download-off',
+		badge: true,
+		action: () => toggleNovelDownloadDisabled(file),
 	}] : []), {
 		text: i18n.ts.describeFile,
 		icon: 'ti ti-text-caption',

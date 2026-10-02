@@ -383,6 +383,7 @@ export * as 'notes/juice/update-ai-generated' from './endpoints/notes/juice/upda
 export * as 'notes/juice/update-novel' from './endpoints/notes/juice/update-novel.js';
 export * as 'notes/local-timeline' from './endpoints/notes/local-timeline.js';
 export * as 'notes/mentions' from './endpoints/notes/mentions.js';
+export * as 'notes/novel-text' from './endpoints/notes/novel-text.js';
 export * as 'notes/polls/recommendation' from './endpoints/notes/polls/recommendation.js';
 export * as 'notes/polls/vote' from './endpoints/notes/polls/vote.js';
 export * as 'notes/reactions' from './endpoints/notes/reactions.js';
