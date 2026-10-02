@@ -9946,6 +9946,30 @@ export interface Locale extends ILocale {
          */
         "debugRender": string;
         /**
+         * 移動: つかんでから動き始めるまで
+         */
+        "debugMoveGrab": string;
+        /**
+         * 移動: 離してから反映されるまで
+         */
+        "debugMoveRelease": string;
+        /**
+         * 移動: つかんだ後、正しい絵に差し替わるまで
+         */
+        "debugMoveGrabExact": string;
+        /**
+         * Workerでの描き直し
+         */
+        "debugRegionRedraw": string;
+        /**
+         * {n}か所を描き直し中
+         */
+        "debugRegionRedrawPending": ParameterizedString<"n">;
+        /**
+         * キャンバスのメモリ(見積もり)
+         */
+        "debugCanvasMemory": string;
+        /**
          * 部屋を開いている人
          */
         "debugOnline": string;

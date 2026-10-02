@@ -323,6 +323,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div>{{ i18n.ts._drawRoom.debugCanvas }}: {{ room.canvasWidth }}×{{ room.canvasHeight }} / {{ Math.round(view.scale * 100) }}% / {{ rotationDegrees }}°</div>
 					<div>{{ i18n.ts._drawRoom.debugRedraw }}: {{ debugInfo.lastRedrawMs.toFixed(1) }}ms ({{ debugInfo.lastRedrawFull ? i18n.ts._drawRoom.debugRedrawFull : i18n.ts._drawRoom.debugRedrawRegion }})</div>
 					<div>{{ i18n.ts._drawRoom.debugRender }}: {{ debugInfo.lastRenderMs.toFixed(1) }}ms</div>
+					<!-- JUICE: 移動ツールの重さ(実機で確かめる用)。つかんで・離してから画面に出るまでと、Workerで描いた正しい絵に差し替わるまで -->
+					<div>{{ i18n.ts._drawRoom.debugMoveGrab }}: {{ formatDebugMs(debugInfo.moveGrabMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMoveRelease }}: {{ formatDebugMs(debugInfo.moveReleaseMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugMoveGrabExact }}: {{ formatDebugMs(debugInfo.grabExactMs) }}</div>
+					<div>{{ i18n.ts._drawRoom.debugRegionRedraw }}: {{ formatDebugMs(debugInfo.regionRedrawMs) }}<template v-if="debugInfo.pendingRegionRedraws > 0"> ({{ i18n.tsx._drawRoom.debugRegionRedrawPending({ n: debugInfo.pendingRegionRedraws }) }})</template></div>
+					<div>{{ i18n.ts._drawRoom.debugCanvasMemory }}: ≈{{ formatMegabytes(debugInfo.canvasMemoryBytes) }}</div>
 					<div>{{ i18n.ts._drawRoom.debugOnline }}: {{ onlineUserIds.size }}</div>
 				</div>
 				<!-- JUICE: ほかの人のカーソル(位置の点と、丸いアイコン) -->
@@ -719,7 +725,7 @@ import { pleaseLogin } from '@/utility/please-login.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { floodFillMask, enclosedFillMask, dilateMask, maskToFillPoints } from '@/utility/draw-fill.js';
 import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DrawCanvasEngine, drawLayerKey, POINT_SCALE, encodeStroke, transformPoints, DRAW_STROKE_MAX_SIZE, THUMBNAIL_MAX_SIZE, brushSizeRange, clampCanvasSize, clampMaxMembers, decodePoints, decodeStroke, encodePoints } from '@/utility/draw-canvas.js';
-import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool } from '@/utility/draw-canvas.js';
+import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool, Rect } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
 
@@ -781,6 +787,8 @@ const connection = shallowRef<Misskey.IChannelConnection<Misskey.Channels['drawR
 
 // JUICE: スポイトは線を描かず、キャンバスの色を拾ってペンに戻る
 const tool = ref<DrawTool | 'eyedropper' | 'select' | 'lasso' | 'move' | 'hand' | 'bucket'>('pen');
+// JUICE: 移動ツールで描き直すときに使うWorker
+let regionRenderer: DrawRoomLayerRenderer | null = null;
 const color = ref('#000000');
 // JUICE: 太さはペンと消しゴムで別々に覚えておき、スライダーは今の道具の太さを変える
 const penSize = ref(6);
@@ -1315,6 +1323,13 @@ async function init(): Promise<void> {
 		}
 		e.myUserId = $i.id;
 		e.activeKey = activeKey.value;
+		// JUICE: 移動ツールで線の多い範囲を描き直すときは、Workerで描く(画面が固まらないように)。Workerは初めて使うときに作る
+		if (canRenderLayersInWorker()) {
+			e.regionRenderer = (width, height, strokes, groups) => {
+				regionRenderer ??= new DrawRoomLayerRenderer(1);
+				return regionRenderer.renderDecoded(width, height, strokes, groups);
+			};
+		}
 		e.myLayerOnTop = myLayerOnTop.value;
 		engine.value = e;
 		await nextTick();
@@ -1749,6 +1764,8 @@ function disposeRoom(): void {
 	connection.value = null;
 	engine.value?.dispose();
 	engine.value = null;
+	regionRenderer?.dispose();
+	regionRenderer = null;
 }
 
 function scrollChatToBottom(): void {
@@ -1997,8 +2014,26 @@ type DebugInfo = {
 	lastRedrawMs: number;
 	lastRedrawFull: boolean;
 	lastRenderMs: number;
+	moveGrabMs: number | null;
+	moveReleaseMs: number | null;
+	grabExactMs: number | null;
+	regionRedrawMs: number | null;
+	pendingRegionRedraws: number;
+	canvasMemoryBytes: number;
 };
 const debugInfo = ref<DebugInfo | null>(null);
+
+// JUICE: 移動ツールで、つかんで(離して)から画面に出るまでの時間(デバッグ情報の表示用。まだ測っていなければnull)
+const moveTiming: { grabMs: number | null; releaseMs: number | null } = { grabMs: null, releaseMs: null };
+
+// 操作を始めた時刻から、次の画面の更新までの時間を測る(表示の描き直しは、その前に頼んである)
+function measureUntilNextFrame(startedAt: number, done: (ms: number) => void): void {
+	window.requestAnimationFrame(() => done(performance.now() - startedAt));
+}
+
+function formatDebugMs(ms: number | null): string {
+	return ms == null ? '-' : `${Math.round(ms)}ms`;
+}
 
 // JUICE: 部屋全体の線のデータ量の上限(MB。JUICEの設定)。デバッグ情報を出すときに読む
 const roomMegabytesLimit = ref<number | null>(null);
@@ -2049,6 +2084,12 @@ function updateDebugInfo(): void {
 		lastRedrawMs: e.stats.lastRedrawMs,
 		lastRedrawFull: e.stats.lastRedrawFull,
 		lastRenderMs: e.stats.lastRenderMs,
+		moveGrabMs: moveTiming.grabMs,
+		moveReleaseMs: moveTiming.releaseMs,
+		grabExactMs: e.stats.grabExactMs,
+		regionRedrawMs: e.stats.regionRedrawMs,
+		pendingRegionRedraws: e.pendingRegionRedraws,
+		canvasMemoryBytes: e.canvasMemoryBytes(),
 	};
 }
 
@@ -2531,10 +2572,14 @@ function onPointerDown(ev: PointerEvent): void {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		const [x, y] = toCanvasPoint(ev);
 		// 選んでいれば、選んだ形の境目で線を切ってから、囲んだ部分だけを動かす(選んでいなければレイヤー全体)
-		const prepared = strokeSelection.value.size > 0 ? prepareSelection() : null;
+		// JUICE: 切った線の描き直しは、動かさない線の絵を作るときにまとめて行う(線の多い絵で何度も描き直さないように)
+		const prepared = strokeSelection.value.size > 0 ? prepareSelection({ deferRedraw: true }) : null;
 		const ids = prepared?.ids ?? null;
 		moveDrag = { startX: x, startY: y, pointerId: ev.pointerId, ids, splits: prepared?.splits ?? [] };
-		engine.value.beginMove(activeKey.value, ids);
+		engine.value.beginMove(activeKey.value, ids, prepared?.staleRect ?? null, ids != null ? selectionShapes.value : undefined);
+		// 押した時刻(イベントの時刻)から測る(その前に画面が止まっていた分も入れる)。イベントの時刻が使えなければ今から
+		const pressedAt = ev.timeStamp > 0 && ev.timeStamp <= performance.now() ? ev.timeStamp : performance.now();
+		measureUntilNextFrame(pressedAt, ms => { moveTiming.grabMs = ms; });
 		return;
 	}
 	// スポイト(またはAltを押しながらクリック)は、その位置の色を拾う
@@ -2955,14 +3000,15 @@ function clearStrokeSelection(): void {
  * 選んだ形の境目で線を切り(自分の画面にはすぐ反映する)、動かす・消す線のidを返す。
  * 切った内容は、動かす・消す操作と一緒にサーバーへ送る(サーバーが順に処理するように)
  */
-function prepareSelection(): { ids: Set<string>; splits: SelectionSplit[] } {
+function prepareSelection(options?: { deferRedraw?: boolean }): { ids: Set<string>; splits: SelectionSplit[]; staleRect: Rect | null } {
 	const e = engine.value;
-	if (!selectionNeedsSplit || e == null) return { ids: new Set(strokeSelection.value), splits: [] };
+	if (!selectionNeedsSplit || e == null) return { ids: new Set(strokeSelection.value), splits: [], staleRect: null };
 	const { selected, splits } = e.splitByShapes(activeKey.value, selectionShapes.value, newStrokeId);
-	e.replaceStrokes(activeKey.value, splits);
+	// deferRedraw なら描き直さず、描き直す範囲を返す(すぐ後の beginMove に渡すこと)
+	const staleRect = e.replaceStrokes(activeKey.value, splits, { redraw: !options?.deferRedraw });
 	strokeSelection.value = selected;
 	selectionNeedsSplit = false;
-	return { ids: new Set(selected), splits };
+	return { ids: new Set(selected), splits, staleRect };
 }
 
 function encodeSplits(splits: SelectionSplit[]): { id: string; pieces: Misskey.entities.DrawStroke[] }[] {
@@ -2991,8 +3037,11 @@ function finishMove(apply: boolean): void {
 	const dy = Math.round(moveOffset.y * POINT_SCALE) / POINT_SCALE;
 	moveOffset.x = 0;
 	moveOffset.y = 0;
-	e.endMove();
 	const moved = apply && (dx !== 0 || dy !== 0);
+	const endedAt = performance.now();
+	// 自分の画面には、ドラッグ中に作った絵を使ってすぐ反映する
+	e.endMove(moved ? { dx, dy } : undefined);
+	if (moved) measureUntilNextFrame(endedAt, ms => { moveTiming.releaseMs = ms; });
 	// 境目で線を切っただけでも(動かさなかった・取りやめた場合も)、切った内容はほかの人にも届ける
 	if (!moved && drag.splits.length === 0) return;
 	// 自分の画面にはすぐ反映し、ほかの人にはサーバー経由で届ける
@@ -3003,7 +3052,6 @@ function finishMove(apply: boolean): void {
 		if (drag.splits.length > 0) connection.value?.send('replaceStrokes', { replacements: encodeSplits(drag.splits) });
 		return;
 	}
-	if (moved) e.moveStrokes(activeKey.value, drag.ids, dx, dy);
 	connection.value?.send('moveStrokes', {
 		strokeIds,
 		dx: moved ? dx : 0,
