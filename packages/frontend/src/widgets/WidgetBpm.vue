@@ -239,10 +239,10 @@ function reset(): void {
 // JUICE: 拍は、音の時計(AudioContextのcurrentTime)で少し先まで決めておき、その時刻に鳴らす。
 // setTimeoutで1拍ずつ待つと、待ちの遅れが積み重なって測ったBPMより遅くなり、画面を見ていないタブでは
 // ブラウザがタイマーを1秒に1回ほどに減らすので、BPM60あたりで頭打ちになるため
-// BPMの上限は無い。ただしタップの間がほぼ0だった時など、ありえないほど速い(1秒に1万拍を超える)ときは、
-// 音を作りきれず画面が固まるので、決めきれない分は飛ばす(もう拍ではなく1つの音にしか聞こえない速さ)
+// BPMの上限は無い。ただし1秒に100拍(BPM6000)を超える速さでは、音を1拍ずつ作ると重くなり画面が固まるので、
+// 決めきれない分は飛ばす(その速さでは、もう拍ではなく1つの音にしか聞こえない)
 const METRONOME_MIN_BPM = 1;
-const METRONOME_MAX_BEATS_PER_SECOND = 10000;
+const METRONOME_MAX_BEATS_PER_SECOND = 100;
 // 同時に鳴らす音の数の上限。音は最後まで鳴らし、速くてこれより多く重なるときだけ、古い音から止める
 // (重なる数に上限が無いと、速いときに何千もの音が同時に鳴って重くなるため)
 const METRONOME_MAX_VOICES = 32;
@@ -261,6 +261,8 @@ let metronomeBuffer: AudioBuffer | null = null;
 // 次の拍の時刻(秒。clockの時計で)。止めたら・時計を替えたらnull
 let nextBeatAt: number | null = null;
 let clockKind: 'audio' | 'performance' | null = null;
+// 音の時計を動かし直している途中か
+let resuming = false;
 // 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
 const scheduledSources: AudioBufferSourceNode[] = [];
 // 光らせる予定のタイマー
@@ -348,9 +350,15 @@ function tickMetronome(): void {
 		return;
 	}
 	const { kind, now, ctx } = currentClock();
-	// 鳴らす前に止まっていたら動かし直す(画面を操作した後なら動く。動くまでは光らせるだけ)
+	// 鳴らす前に止まっていたら動かし直す(画面を操作した後なら動く。動くまでは光らせるだけ)。
+	// 画面を操作する前は動かし直しが終わらずに待たされるので、待っている間は頼み直さない(頼みが溜まり続けないように)
 	const audioCtx = sound.getAudioContext();
-	if (audioCtx != null && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+	if (audioCtx != null && audioCtx.state === 'suspended' && !resuming) {
+		resuming = true;
+		audioCtx.resume().catch(() => {}).finally(() => {
+			resuming = false;
+		});
+	}
 	const interval = 60 / value;
 	// 始めたとき・時計を替えたとき・止まっていて大きく遅れたとき(スリープ等)は、今から数え直す
 	if (nextBeatAt == null || clockKind !== kind || nextBeatAt < now - interval) {
