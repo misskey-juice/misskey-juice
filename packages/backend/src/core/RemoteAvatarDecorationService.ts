@@ -121,10 +121,12 @@ export class RemoteAvatarDecorationService {
 		const decorations: RemoteDecoration[] = [];
 		for (const item of raw.slice(0, MAX_DECORATIONS)) {
 			if (item == null || typeof item !== 'object') continue;
-			const { id, url, angle, flipH, offsetX, offsetY } = item as Record<string, unknown>;
+			const { id, url, angle, flipH, offsetX, offsetY, scale } = item as Record<string, unknown>;
 			if (typeof id !== 'string' || id.length === 0 || id.length > 64) continue;
 			if (typeof url !== 'string' || url.length > 2048 || !/^https:\/\//.test(url)) continue;
 			const num = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined);
+			// 大きさ(mk-go・JUICEのサーバーが出す。1(既定)なら持たない)
+			const size = num(scale, 0.1, 1);
 			decorations.push({
 				id,
 				url,
@@ -132,6 +134,7 @@ export class RemoteAvatarDecorationService {
 				...(flipH === true ? { flipH: true } : {}),
 				...(num(offsetX, -0.25, 0.25) ? { offsetX: num(offsetX, -0.25, 0.25) } : {}),
 				...(num(offsetY, -0.25, 0.25) ? { offsetY: num(offsetY, -0.25, 0.25) } : {}),
+				...(size != null && size !== 1 ? { scale: size } : {}),
 			});
 		}
 		return decorations;

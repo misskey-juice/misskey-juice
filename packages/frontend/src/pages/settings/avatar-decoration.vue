@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:flipH="avatarDecoration.flipH"
 						:offsetX="avatarDecoration.offsetX"
 						:offsetY="avatarDecoration.offsetY"
+						:scale="avatarDecoration.scale"
 						:active="true"
 						@click="openAttachedDecoration(i)"
 					/>
@@ -96,6 +97,8 @@ async function openDecoration(avatarDecoration: {
 				flipH: payload.flipH,
 				offsetX: payload.offsetX,
 				offsetY: payload.offsetY,
+				// JUICE: 既定(1)なら送らない
+				...(payload.scale !== 1 ? { scale: payload.scale } : {}),
 			};
 			const update = [...$i.avatarDecorations, decoration];
 			await os.apiWithDialog('i/update', {
@@ -111,6 +114,8 @@ async function openDecoration(avatarDecoration: {
 				flipH: payload.flipH,
 				offsetX: payload.offsetX,
 				offsetY: payload.offsetY,
+				// JUICE: 既定(1)なら送らない
+				...(payload.scale !== 1 ? { scale: payload.scale } : {}),
 			};
 			const update = [...$i.avatarDecorations];
 			update[index!] = decoration;

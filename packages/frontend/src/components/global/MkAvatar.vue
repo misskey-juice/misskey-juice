@@ -107,8 +107,10 @@ function getDecorationAngle(decoration: Decoration | DecorationEditorDecoration)
 }
 
 function getDecorationScale(decoration: Decoration | DecorationEditorDecoration) {
-	const scaleX = decoration.flipH ? -1 : 1;
-	return scaleX === 1 ? undefined : `${scaleX} 1`;
+	// JUICE: デコレーションの大きさ(無ければ1)を、左右反転と一緒に掛ける
+	const size = decoration.scale ?? 1;
+	const scaleX = (decoration.flipH ? -1 : 1) * size;
+	return scaleX === 1 && size === 1 ? undefined : `${scaleX} ${size}`;
 }
 
 function getDecorationOffset(decoration: Decoration | DecorationEditorDecoration) {

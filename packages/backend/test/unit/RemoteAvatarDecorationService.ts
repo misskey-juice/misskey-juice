@@ -67,6 +67,33 @@ describe('RemoteAvatarDecorationService', () => {
 		expect(publish).toHaveBeenCalledWith('remoteUserUpdated', { id: 'u1' });
 	});
 
+	// JUICE: 大きさ(scale)はmk-goと同じ形。0.1〜1に収め、1(今までと同じ大きさ)は持たない。数でないものは捨てる
+	test('大きさ(scale)を0.1〜1に収め、1と数でないものは持たない', async () => {
+		responseBody = {
+			avatarDecorations: [
+				{ id: 'd1', url: 'https://remote.example.com/d1.png', scale: 0.5 },
+				{ id: 'd2', url: 'https://remote.example.com/d2.png', scale: 5 },
+				{ id: 'd3', url: 'https://remote.example.com/d3.png', scale: 0 },
+				{ id: 'd4', url: 'https://remote.example.com/d4.png', scale: -2 },
+				{ id: 'd5', url: 'https://remote.example.com/d5.png', scale: '0.5' },
+				{ id: 'd6', url: 'https://remote.example.com/d6.png', scale: Number.NaN },
+				{ id: 'd7', url: 'https://remote.example.com/d7.png', scale: 1 },
+			],
+		};
+		await service.refresh(user);
+		const saved = update.mock.calls[0][1].avatarDecorations as { id: string; scale?: number }[];
+		expect(saved.map(d => [d.id, d.scale])).toEqual([
+			['d1', 0.5],
+			['d2', undefined],
+			['d3', 0.1],
+			['d4', 0.1],
+			['d5', undefined],
+			['d6', undefined],
+			['d7', undefined],
+		]);
+		for (const d of saved) if (d.scale === undefined) expect('scale' in d).toBe(false);
+	});
+
 	test('変わっていなければ書き込まない', async () => {
 		await service.refresh(user);
 		expect(send).toHaveBeenCalled();

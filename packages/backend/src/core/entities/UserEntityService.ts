@@ -518,6 +518,7 @@ export class UserEntityService implements OnModuleInit {
 				flipH: ud.flipH || undefined,
 				offsetX: ud.offsetX || undefined,
 				offsetY: ud.offsetY || undefined,
+				scale: ud.scale != null && ud.scale !== 1 ? ud.scale : undefined,
 				url: this.remoteAvatarDecorationService.getProxiedUrl(ud.url!),
 			})) : [])) : this.avatarDecorationService.getAll().then(decorations => user.avatarDecorations.filter(ud => decorations.some(d => d.id === ud.id)).map(ud => ({
 				id: ud.id,
@@ -525,6 +526,7 @@ export class UserEntityService implements OnModuleInit {
 				flipH: ud.flipH || undefined,
 				offsetX: ud.offsetX || undefined,
 				offsetY: ud.offsetY || undefined,
+				scale: ud.scale != null && ud.scale !== 1 ? ud.scale : undefined,
 				url: decorations.find(d => d.id === ud.id)!.url,
 			}))),
 			isBot: user.isBot,

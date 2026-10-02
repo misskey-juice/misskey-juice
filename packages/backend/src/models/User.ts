@@ -151,6 +151,8 @@ export class MiUser {
 		flipH?: boolean;
 		offsetX?: number;
 		offsetY?: number;
+		// JUICE: デコレーションの大きさ(0.1〜1。無ければ1)
+		scale?: number;
 		// JUICE: リモートのユーザーのデコレーションの画像のURL(相手のサーバーのもの。このサーバーのデコレーションとしては登録しない)
 		url?: string;
 	}[];
