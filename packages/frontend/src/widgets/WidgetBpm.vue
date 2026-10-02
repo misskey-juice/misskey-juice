@@ -236,14 +236,39 @@ function reset(): void {
 }
 
 //#region メトロノーム
-// 速すぎて音が重なり続けないよう、鳴らすのはこの範囲のBPMだけにする
+// JUICE: 拍は、音の時計(AudioContextのcurrentTime)で少し先まで決めておき、その時刻に鳴らす。
+// setTimeoutで1拍ずつ待つと、待ちの遅れが積み重なって測ったBPMより遅くなり、画面を見ていないタブでは
+// ブラウザがタイマーを1秒に1回ほどに減らすので、BPM60あたりで頭打ちになるため
+// BPMの上限は無い。ただし1秒に100拍(BPM6000)を超える速さでは、音を1拍ずつ作ると重くなり画面が固まるので、
+// 決めきれない分は飛ばす(その速さでは、もう拍ではなく1つの音にしか聞こえない)
 const METRONOME_MIN_BPM = 1;
-const METRONOME_MAX_BPM = 400;
+const METRONOME_MAX_BEATS_PER_SECOND = 100;
+// 同時に鳴らす音の数の上限。音は最後まで鳴らし、速くてこれより多く重なるときだけ、古い音から止める
+// (重なる数に上限が無いと、速いときに何千もの音が同時に鳴って重くなるため)
+const METRONOME_MAX_VOICES = 32;
+// 光らせるのはこの間隔(秒)より拍が長いときだけ(速いときは、光ったままにする)
+const FLASH_MIN_INTERVAL_S = 0.05;
+// 先に決めておく時間(秒)。見ていないタブではタイマーが1秒に1回ほどになるので、それより長くする
+const LOOKAHEAD_VISIBLE_S = 0.1;
+const LOOKAHEAD_HIDDEN_S = 1.5;
+// 拍を決め直す間隔(ms)
+const SCHEDULER_TICK_MS = 25;
 
 const beating = ref(false);
 let beatTimer: number | null = null;
 let metronomeTimer: number | null = null;
 let metronomeBuffer: AudioBuffer | null = null;
+// 次の拍の時刻(秒。clockの時計で)。止めたら・時計を替えたらnull
+let nextBeatAt: number | null = null;
+let clockKind: 'audio' | 'performance' | null = null;
+// 音の時計を動かし直している途中か
+let resuming = false;
+// 鳴らす予定・鳴っている音(鳴らし始める順。止めるときは、まだ鳴っていない分も止める)
+const scheduledSources: AudioBufferSourceNode[] = [];
+// 重なりすぎて、途中で止める時刻を決めた音(メトロノームを止めたときは、その時刻を待たずに止める)
+const evictedSources = new Set<AudioBufferSourceNode>();
+// 光らせる予定のタイマー
+const flashTimers = new Set<number>();
 
 watch(() => widgetProps.metronomeSound, (soundType) => {
 	metronomeBuffer = null;
@@ -252,37 +277,117 @@ watch(() => widgetProps.metronomeSound, (soundType) => {
 	}).catch(() => {});
 }, { immediate: true });
 
-function beat(): void {
+function flash(): void {
 	beating.value = true;
 	if (beatTimer != null) window.clearTimeout(beatTimer);
 	beatTimer = window.setTimeout(() => {
 		beating.value = false;
 	}, 100);
-
-	const masterVolume = prefer.s['sound.masterVolume'];
-	if (metronomeBuffer != null && masterVolume > 0 && !sound.isMute()) {
-		sound.createSourceNode(metronomeBuffer, { volume: masterVolume }).soundSource.start();
-	}
 }
 
-// 1拍ごとに、その時のBPMで次の拍までの間を決める(BPMが変わってもすぐ付いていく)
-function scheduleBeat(): void {
+// 今の時刻(秒)。音が鳴らせる(AudioContextが動いている)ならその時計、まだ動いていなければ画面の時計(光らせるだけ)
+function currentClock(): { kind: 'audio' | 'performance'; now: number; ctx: AudioContext | null } {
+	const ctx = sound.getAudioContext();
+	if (ctx != null && ctx.state === 'running') return { kind: 'audio', now: ctx.currentTime, ctx };
+	return { kind: 'performance', now: performance.now() / 1000, ctx: null };
+}
+
+// 1拍を、時計の時刻atに鳴らす(光らせる)
+function scheduleBeatAt(at: number, now: number, ctx: AudioContext | null, withFlash: boolean): void {
+	if (withFlash) {
+		const delayMs = Math.max(0, (at - now) * 1000);
+		const timer = window.setTimeout(() => {
+			flashTimers.delete(timer);
+			flash();
+		}, delayMs);
+		flashTimers.add(timer);
+	}
+
+	const masterVolume = prefer.s['sound.masterVolume'];
+	if (ctx == null || metronomeBuffer == null || masterVolume <= 0 || sound.isMute()) return;
+	const source = sound.createSourceNode(metronomeBuffer, { volume: masterVolume }).soundSource;
+	source.start(at);
+	// 重なりすぎるときは、一番古い音をこの拍で止める
+	if (scheduledSources.length >= METRONOME_MAX_VOICES) {
+		const oldest = scheduledSources.shift()!;
+		try {
+			oldest.stop(at);
+			evictedSources.add(oldest);
+			oldest.addEventListener('ended', () => evictedSources.delete(oldest), { once: true });
+		} catch {
+			// もう止まっている
+		}
+	}
+	scheduledSources.push(source);
+	source.addEventListener('ended', () => {
+		const index = scheduledSources.indexOf(source);
+		if (index >= 0) scheduledSources.splice(index, 1);
+	}, { once: true });
+}
+
+function stopMetronome(): void {
 	if (metronomeTimer != null) window.clearTimeout(metronomeTimer);
+	metronomeTimer = null;
+	nextBeatAt = null;
+	clockKind = null;
+	for (const timer of flashTimers) window.clearTimeout(timer);
+	flashTimers.clear();
+	for (const source of [...scheduledSources, ...evictedSources]) {
+		try {
+			source.stop();
+		} catch {
+			// 鳴らし始める前に止めた等(もう止まっている)
+		}
+	}
+	scheduledSources.length = 0;
+	evictedSources.clear();
+}
+
+// 少し先までの拍を、その時のBPMで決めていく(BPMが変わっても、先に決めた分の後からすぐ付いていく)
+function tickMetronome(): void {
 	metronomeTimer = null;
 	if (!widgetProps.metronome) return;
 	const value = bpm.value;
-	if (value == null || value < METRONOME_MIN_BPM) {
+	if (value == null || !Number.isFinite(value) || value < METRONOME_MIN_BPM) {
 		// まだ測れていなければ、測れるまで待つ
-		metronomeTimer = window.setTimeout(scheduleBeat, 500);
+		nextBeatAt = null;
+		metronomeTimer = window.setTimeout(tickMetronome, 250);
 		return;
 	}
-	metronomeTimer = window.setTimeout(() => {
-		beat();
-		scheduleBeat();
-	}, 60000 / Math.min(value, METRONOME_MAX_BPM));
+	const { kind, now, ctx } = currentClock();
+	// 鳴らす前に止まっていたら動かし直す(画面を操作した後なら動く。動くまでは光らせるだけ)。
+	// 画面を操作する前は動かし直しが終わらずに待たされるので、待っている間は頼み直さない(頼みが溜まり続けないように)
+	const audioCtx = sound.getAudioContext();
+	if (audioCtx != null && audioCtx.state === 'suspended' && !resuming) {
+		resuming = true;
+		audioCtx.resume().catch(() => {}).finally(() => {
+			resuming = false;
+		});
+	}
+	const interval = 60 / value;
+	// 始めたとき・時計を替えたとき・止まっていて大きく遅れたとき(スリープ等)は、今から数え直す
+	if (nextBeatAt == null || clockKind !== kind || nextBeatAt < now - interval) {
+		nextBeatAt = now + 0.05;
+		clockKind = kind;
+	}
+	const lookahead = window.document.visibilityState === 'visible' ? LOOKAHEAD_VISIBLE_S : LOOKAHEAD_HIDDEN_S;
+	const horizon = now + lookahead;
+	const withFlash = interval >= FLASH_MIN_INTERVAL_S;
+	if (!withFlash) flash();
+	let budget = Math.ceil(METRONOME_MAX_BEATS_PER_SECOND * lookahead);
+	while (nextBeatAt < horizon && budget-- > 0) {
+		scheduleBeatAt(nextBeatAt, now, ctx, withFlash);
+		nextBeatAt += interval;
+	}
+	// 決めきれなかった分は飛ばす
+	if (nextBeatAt < horizon) nextBeatAt = horizon;
+	metronomeTimer = window.setTimeout(tickMetronome, SCHEDULER_TICK_MS);
 }
 
-watch(() => widgetProps.metronome, scheduleBeat, { immediate: true });
+watch(() => widgetProps.metronome, (on) => {
+	stopMetronome();
+	if (on) tickMetronome();
+}, { immediate: true });
 
 // 設定を開かなくても、ウィジェットからすぐ切り替えられるように
 function toggleMetronome(): void {
@@ -293,7 +398,7 @@ function toggleMetronome(): void {
 
 onUnmounted(() => {
 	window.clearInterval(clock);
-	if (metronomeTimer != null) window.clearTimeout(metronomeTimer);
+	stopMetronome();
 	if (beatTimer != null) window.clearTimeout(beatTimer);
 	if (flashTimer != null) window.clearTimeout(flashTimer);
 	disconnect?.();
