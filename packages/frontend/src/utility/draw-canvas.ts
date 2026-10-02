@@ -281,6 +281,8 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 }
 
 // JUICE: 移動ツールで、描き直す範囲にかかる線がこの数以上なら、Workerで描き直す(少なければその場で描き直すほうが速い)
+// JUICE: Workerでの描き直しを、描いている間に線が変わったために頼み直す回数の上限(超えたらその場で描き直す)
+const REGION_REDRAW_MAX_RETRIES = 3;
 const ASYNC_REDRAW_MIN_STROKES = 300;
 
 // JUICE: キャンバスを小さくして、その場でメモリを返す(Safariは、使い終わったキャンバスもガベージコレクションまでメモリを持ち続け、
@@ -1876,6 +1878,11 @@ export class DrawCanvasEngine {
 		pivotY: number;
 		// 前に表示した、動かす線の範囲(nullなら全体を描き直す)
 		lastRect: Rect | null;
+		// JUICE: つかんだときのレイヤーの線・まとまり。離したときに変わっていたら(ドラッグ中の取り消し・ほかから届いた操作など)、
+		// ドラッグ中に作った絵は古いので使わず、線から描き直す
+		strokesRef: CanvasStroke[];
+		strokeCount: number;
+		groupsRef: Map<string, DrawLayerGroup>;
 	} | null = null;
 
 	/**
@@ -1886,9 +1893,9 @@ export class DrawCanvasEngine {
 	public beginMove(userId: string, ids: Set<string> | null, staleRect: Rect | null = null, shapes?: readonly number[][]): void {
 		const layer = this.layers.get(userId);
 		if (layer == null) return;
-		// Workerで描き直している途中の範囲があれば、先に描き直しておく(描き終わった絵から、動かす絵を作るため)
-		this.flushRegionRedraw(layer);
 		if (ids == null) {
+			// Workerで描き直している途中の範囲があれば、先に描き直しておく(描き終わった絵から、動かす絵を作るため)
+			this.flushRegionRedraw(layer);
 			// レイヤー全体: 描き終わった絵を、線のある範囲だけ写して動かす
 			// JUICE: キャンバス全体の大きさで作ると、大きなキャンバス(3840×3840で約59MB)ではドラッグのたびにメモリを大きく使い、
 			// iPad等(Safari)ではキャンバスのメモリの上限を超えて画面が真っ黒になるため
@@ -1900,7 +1907,7 @@ export class DrawCanvasEngine {
 			const h = Math.max(1, Math.min(this.height, Math.ceil(content?.y1 ?? 1)) - y0);
 			const moving = createCanvas(w, h);
 			moving.getContext('2d')!.drawImage(layer.committed, x0, y0, w, h, 0, 0, w, h);
-			this.moving = { userId, ids: null, staleRect: null, stillExact: true, movingExact: true, still: null, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
+			this.moving = { userId, ids: null, staleRect: null, stillExact: true, movingExact: true, still: null, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null, strokesRef: layer.strokes, strokeCount: layer.strokes.length, groupsRef: layer.groups };
 			this.requestRender();
 			return;
 		}
@@ -1918,12 +1925,16 @@ export class DrawCanvasEngine {
 			? this.moveStillSpare
 			: createCanvas(this.width, this.height);
 		this.moveStillSpare = null;
+		// 動かす線の範囲(と、線を切ってまだ描き直していない範囲)だけ、動かさない線で描き直す
+		const redrawRect = unionRect({ x0, y0, x1: x0 + moving.width, y1: y0 + moving.height }, staleRect)!;
+		// JUICE: Workerで描き直している途中の範囲が、使う範囲にかかるときだけ先に描き直す(続けてつかみ直したときに、
+		// 関係ない範囲までその場で描き直して固まらないように)。かからない範囲は、描き終わり次第そのまま差し替わる
+		const pendingRedraw = this.regionRedraws.get(layer);
+		if (pendingRedraw != null && rectsIntersect(pendingRedraw.rect, redrawRect)) this.flushRegionRedraw(layer);
 		const stillCtx = still.getContext('2d')!;
 		stillCtx.globalCompositeOperation = 'copy';
 		stillCtx.drawImage(layer.committed, 0, 0);
 		stillCtx.globalCompositeOperation = 'source-over';
-		// 動かす線の範囲(と、線を切ってまだ描き直していない範囲)だけ、動かさない線で描き直す
-		const redrawRect = unionRect({ x0, y0, x1: x0 + moving.width, y1: y0 + moving.height }, staleRect)!;
 		const rx = Math.max(0, Math.floor(redrawRect.x0));
 		const ry = Math.max(0, Math.floor(redrawRect.y0));
 		const rw = Math.max(0, Math.min(this.width, Math.ceil(redrawRect.x1)) - rx);
@@ -1950,7 +1961,7 @@ export class DrawCanvasEngine {
 			drawStrokesInGroups(stillCtx, stillStrokes, layer.groups, this.groupPool, { x0: rx, y0: ry, x1: rx + rw, y1: ry + rh });
 			this.releaseGroupPoolLater();
 			stillCtx.restore();
-			this.moving = { userId, ids, staleRect, stillExact: true, movingExact: true, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
+			this.moving = { userId, ids, staleRect, stillExact: true, movingExact: true, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null, strokesRef: layer.strokes, strokeCount: layer.strokes.length, groupsRef: layer.groups };
 			this.stats.grabExactMs = null;
 			this.requestRender();
 			return;
@@ -1972,7 +1983,7 @@ export class DrawCanvasEngine {
 		stillCtx.globalCompositeOperation = 'destination-out';
 		stillCtx.drawImage(moving, x0, y0);
 		stillCtx.restore();
-		const session = { userId, ids, staleRect, stillExact: false, movingExact: false, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null };
+		const session = { userId, ids, staleRect, stillExact: false, movingExact: false, still, moving, originX: x0, originY: y0, dx: 0, dy: 0, angle: 0, scaleX: 1, scaleY: 1, pivotX: 0, pivotY: 0, lastRect: null, strokesRef: layer.strokes, strokeCount: layer.strokes.length, groupsRef: layer.groups };
 		this.moving = session;
 		const approximatedAt = performance.now();
 		this.stats.grabExactMs = null;
@@ -2086,6 +2097,28 @@ export class DrawCanvasEngine {
 		const startedAt = performance.now();
 		const ids = m.ids;
 		const shift = (stroke: CanvasStroke) => shiftStroke(stroke, dx, dy);
+		// JUICE: ドラッグしている間にレイヤーの線が変わっていたら(取り消し・やり直し・ほかから届いた操作など)、
+		// ドラッグ中に作った絵は古いので使わず、線から描き直す
+		if (layer.strokes !== m.strokesRef || layer.strokes.length !== m.strokeCount || layer.groups !== m.groupsRef) {
+			let before: Rect | null = null;
+			let after: Rect | null = null;
+			layer.strokes = layer.strokes.map(stroke => {
+				if (ids != null && !ids.has(stroke.id)) return stroke;
+				const next = shift(stroke);
+				before = unionRect(before, strokeRect(stroke));
+				after = unionRect(after, strokeRect(next));
+				return next;
+			});
+			const changed = unionRect(unionRect(before, after), m.staleRect);
+			if (changed != null) {
+				if (this.canRenderRegionAsync(layer, changed)) this.scheduleRegionRedraw(layer, changed);
+				else this.redrawCommitted(layer, changed);
+			}
+			this.requestRender();
+			this.stats.lastRedrawMs = performance.now() - startedAt;
+			this.stats.lastRedrawFull = ids == null;
+			return;
+		}
 		const ctx = layer.committed.getContext('2d')!;
 		const integer = Number.isInteger(dx) && Number.isInteger(dy);
 		const bounds = { x0: 0, y0: 0, x1: this.width, y1: this.height };
@@ -2215,7 +2248,7 @@ export class DrawCanvasEngine {
 	 */
 	public regionRenderer: ((width: number, height: number, strokes: CanvasStroke[], groups: DrawLayerGroup[] | undefined) => Promise<ImageBitmap | null>) | null = null;
 	// レイヤーごとの、Workerで描き直している範囲
-	private regionRedraws = new Map<Layer, { rect: Rect; token: number }>();
+	private regionRedraws = new Map<Layer, { rect: Rect; token: number; inflight: boolean; again: boolean; retries: number }>();
 	private regionRedrawToken = 0;
 	// Workerでの描き直しを頼み始めた時刻(デバッグ情報の表示用。全て差し替え終わったらnull)
 	private regionRedrawStartedAt: number | null = null;
@@ -2261,13 +2294,26 @@ export class DrawCanvasEngine {
 
 	/**
 	 * 描き終わった絵の範囲を、Workerで描き直して差し替える(それまでは今の絵のまま)。
-	 * 描いている間に線が変わったら描き直し、Workerで描けなければその場で描き直す
+	 * JUICE: レイヤーごとにWorkerへ頼むのは1つずつにし、描いている間に頼まれた範囲は、描き終わってからまとめて頼み直す
+	 * (古い頼みがWorkerに溜まって遅れないように)。描いている間に線が足されただけなら、足された線を上に描き足して使う。
+	 * それ以外で線が変わったら頼み直し、何度も変わり続けるならその場で描き直す(いつまでも差し替わらないことが無いように)。
+	 * Workerで描けなければ、その場で描き直す
 	 */
 	private scheduleRegionRedraw(layer: Layer, rect: Rect): void {
-		const full = unionRect(this.regionRedraws.get(layer)?.rect ?? null, rect)!;
+		const entry = this.regionRedraws.get(layer);
+		if (entry?.inflight) {
+			entry.rect = unionRect(entry.rect, rect)!;
+			entry.again = true;
+			return;
+		}
+		this.startRegionRedraw(layer, unionRect(entry?.rect ?? null, rect)!, entry?.retries ?? 0);
+	}
+
+	private startRegionRedraw(layer: Layer, full: Rect, retries: number): void {
 		const token = ++this.regionRedrawToken;
 		this.regionRedrawStartedAt ??= performance.now();
-		this.regionRedraws.set(layer, { rect: full, token });
+		const entry = { rect: full, token, inflight: true, again: false, retries };
+		this.regionRedraws.set(layer, entry);
 		const strokesRef = layer.strokes;
 		const count = strokesRef.length;
 		const groupsRef = layer.groups;
@@ -2282,36 +2328,60 @@ export class DrawCanvasEngine {
 			return;
 		}
 		void request.then(result => {
+			// その場で描き直された(flushRegionRedraw)・レイヤーが消えた
 			if (this.regionRedraws.get(layer)?.token !== token || this.layers.get(layer.key) !== layer) {
 				result?.bitmap.close();
 				return;
 			}
+			entry.inflight = false;
 			if (result == null) {
 				this.finishRegionRedraw(layer);
-				this.redrawStrokesRegion(layer, full);
+				this.redrawStrokesRegion(layer, entry.rect);
 				return;
 			}
-			if (layer.strokes !== strokesRef || layer.strokes.length !== count || layer.groups !== groupsRef) {
-				// 描いている間に線が変わった: 今の線で描き直す
+			// 描いている間に線が足されただけ(同じ並びの後ろに足された)なら、足された線を上に描き足せば今の線と同じになる
+			// (結合したまとまりの線は、まとまりごとに重ね直す必要があるので除く)
+			const appended = layer.strokes === strokesRef && layer.groups === groupsRef && layer.strokes.length >= count
+				? layer.strokes.slice(count)
+				: null;
+			if (appended == null || appended.some(stroke => stroke.g != null && layer.groups.has(stroke.g))) {
+				// 描いている間に線が変わった: 今の線で描き直す(変わり続けるなら、その場で描き直す)
 				result.bitmap.close();
-				this.regionRedraws.delete(layer);
-				this.scheduleRegionRedraw(layer, full);
+				if (entry.retries >= REGION_REDRAW_MAX_RETRIES) {
+					this.finishRegionRedraw(layer);
+					this.redrawStrokesRegion(layer, entry.rect);
+				} else {
+					this.startRegionRedraw(layer, entry.rect, entry.retries + 1);
+				}
 				return;
 			}
-			this.finishRegionRedraw(layer);
 			this.markLayerRegion(layer, full);
 			this.invalidateLive(layer, full);
 			const ctx = layer.committed.getContext('2d')!;
 			ctx.save();
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.globalAlpha = 1;
+			const region = { x0: result.x, y0: result.y, x1: result.x + result.bitmap.width, y1: result.y + result.bitmap.height };
 			ctx.clearRect(result.x, result.y, result.bitmap.width, result.bitmap.height);
 			ctx.drawImage(result.bitmap, result.x, result.y);
-			ctx.restore();
 			result.bitmap.close();
+			const added = appended.filter(stroke => {
+				const r = strokeRect(stroke);
+				return r != null && rectsIntersect(r, region);
+			});
+			if (added.length > 0) {
+				ctx.beginPath();
+				ctx.rect(region.x0, region.y0, region.x1 - region.x0, region.y1 - region.y0);
+				ctx.clip();
+				for (const stroke of added) drawStroke(ctx, stroke, region);
+			}
+			ctx.restore();
 			this.redrawThumb(layer, full);
 			this.committedChanged();
 			this.requestRender(full);
+			// 描いている間に、ほかの範囲も頼まれていたら続けて頼む
+			if (entry.again) this.startRegionRedraw(layer, entry.rect, 0);
+			else this.finishRegionRedraw(layer);
 		});
 	}
 
