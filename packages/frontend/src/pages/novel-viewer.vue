@@ -155,7 +155,7 @@ import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { store } from '@/store.js';
 import type { MenuItem } from '@/types/menu.js';
-import { caretAtPoint, chapterElementOf, lineAtPosition, lineExcerpt, lineRange, rangeStartRect, resolveBookmark } from '@/utility/novel-bookmark.js';
+import { caretAtPoint, chapterElementOf, lineAtPosition, lineExcerpt, lineRange, rangeStartRect, resolveBookmark, setNovelBookmarkHighlight } from '@/utility/novel-bookmark.js';
 import type { NovelBookmark } from '@/utility/novel-bookmark.js';
 import { prefer } from '@/preferences.js';
 import { getAppearNote } from '@/utility/get-appear-note.js';
@@ -815,7 +815,8 @@ function restoreHorizontalProgress(): void {
 // 本文の行(改行で区切った行)にしおりを挟み、あとからその行へ飛べるようにする(縦書き・横書きどちらでも)。
 // しおりはノートごとに、このブラウザに覚える(続きから読む位置と同じく、直近50作品まで)
 const NOVEL_BOOKMARK_MAX = 100;
-const BOOKMARK_HIGHLIGHT = 'juice-novel-bookmark';
+// このビューワーの印の範囲(ほかのビューワーの印と一緒に付ける)
+const highlightViewer = Symbol('novel-viewer');
 
 const bookmarks = ref<NovelBookmark[]>([]);
 
@@ -958,7 +959,7 @@ function jumpToBookmark(bookmark: NovelBookmark): void {
 // しおりを挟んだ行に、薄い色を付ける(CSS Custom Highlight API。本文の要素を増やさないので、ページの区切りが変わらない)。
 // 使えないブラウザでは色を付けないだけ
 function clearBookmarkHighlights(): void {
-	if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete(BOOKMARK_HIGHLIGHT);
+	setNovelBookmarkHighlight(highlightViewer, []);
 }
 
 function updateBookmarkHighlights(): void {
@@ -974,8 +975,7 @@ function updateBookmarkHighlights(): void {
 			if (range != null && !range.collapsed) ranges.push(range);
 		}
 	}
-	if (ranges.length === 0) CSS.highlights.delete(BOOKMARK_HIGHLIGHT);
-	else CSS.highlights.set(BOOKMARK_HIGHLIGHT, new Highlight(...ranges));
+	setNovelBookmarkHighlight(highlightViewer, ranges);
 }
 
 // 本文を描き直したら(横書きのページ替え・表示の設定・見開きの切り替えなど)、印を付け直す

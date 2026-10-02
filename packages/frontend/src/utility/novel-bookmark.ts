@@ -138,3 +138,17 @@ export function chapterElementOf(root: HTMLElement, node: Node): HTMLElement | n
 	const chapterEl = el?.closest<HTMLElement>('[data-novel-chapter]') ?? null;
 	return chapterEl != null && root.contains(chapterEl) ? chapterEl : null;
 }
+
+// JUICE: しおりを挟んだ行の印(CSS Custom Highlight API)。印の名前はページ全体で1つなので、
+// 小説ビューワーを同時に複数開いたとき(デッキなど)に上書きし合わないよう、ビューワーごとの範囲をまとめて付ける
+export const NOVEL_BOOKMARK_HIGHLIGHT = 'juice-novel-bookmark';
+const highlightRangesByViewer = new Map<symbol, Range[]>();
+
+export function setNovelBookmarkHighlight(viewer: symbol, ranges: Range[]): void {
+	if (typeof CSS === 'undefined' || !('highlights' in CSS) || typeof Highlight === 'undefined') return;
+	if (ranges.length === 0) highlightRangesByViewer.delete(viewer);
+	else highlightRangesByViewer.set(viewer, ranges);
+	const all = [...highlightRangesByViewer.values()].flat();
+	if (all.length === 0) CSS.highlights.delete(NOVEL_BOOKMARK_HIGHLIGHT);
+	else CSS.highlights.set(NOVEL_BOOKMARK_HIGHLIGHT, new Highlight(...all));
+}
