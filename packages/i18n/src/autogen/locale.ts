@@ -9822,6 +9822,46 @@ export interface Locale extends ILocale {
          */
         "shortBucket": string;
         /**
+         * 図形
+         */
+        "shapeTool": string;
+        /**
+         * 図形(ドラッグした範囲に描く。Shiftを押しながらで正方形・正円・縦横同じ長さの三角、直線は45°ごとの向き)
+         */
+        "shapeToolHint": string;
+        /**
+         * 直線
+         */
+        "shapeLine": string;
+        /**
+         * 四角
+         */
+        "shapeRect": string;
+        /**
+         * 丸
+         */
+        "shapeEllipse": string;
+        /**
+         * 三角
+         */
+        "shapeTriangle": string;
+        /**
+         * 線だけ(中はくり抜き。太さを変えられる)
+         */
+        "shapeOutline": string;
+        /**
+         * 中も塗る
+         */
+        "shapeFilled": string;
+        /**
+         * 線だけ
+         */
+        "shortShapeOutline": string;
+        /**
+         * 塗る
+         */
+        "shortShapeFilled": string;
+        /**
          * 普通
          */
         "shortBrushNormal": string;
@@ -16410,6 +16450,74 @@ export interface Locale extends ILocale {
          * 小説エディター
          */
         "novelEditor": string;
+        /**
+         * 落書き
+         */
+        "doodle": string;
+        /**
+         * 1人で描く落書きです。絵チャと同じ道具で描けます。描いた絵はこのブラウザに自動で保存され、サーバーには送られません(ドライブへの保存・投稿をしたときだけ送られます)
+         */
+        "doodleDescription": string;
+        /**
+         * 新しい落書き
+         */
+        "doodleNew": string;
+        /**
+         * 名前
+         */
+        "doodleTitle": string;
+        /**
+         * 名前を変更
+         */
+        "doodleRename": string;
+        /**
+         * 落書きの設定
+         */
+        "doodleSettings": string;
+        /**
+         * 続きを描く
+         */
+        "doodleRecent": string;
+        /**
+         * まだ落書きはありません
+         */
+        "doodleEmpty": string;
+        /**
+         * 「{name}」を削除しますか？このブラウザからも消え、元に戻せません
+         */
+        "doodleDeleteConfirm": ParameterizedString<"name">;
+        /**
+         * ノートに添付
+         */
+        "doodleAttach": string;
+        /**
+         * 落書きをこのブラウザに保存できませんでした
+         */
+        "doodleSaveFailed": string;
+        /**
+         * 線の数
+         */
+        "debugDoodleStrokes": string;
+        /**
+         * 線のデータ量
+         */
+        "debugDoodleBytes": string;
+        /**
+         * 取り消し / やり直しできる回数
+         */
+        "debugDoodleHistory": string;
+        /**
+         * ブラウザへの保存
+         */
+        "debugDoodleSave": string;
+        /**
+         * 保存済み
+         */
+        "debugDoodleSaved": string;
+        /**
+         * 保存待ち
+         */
+        "debugDoodleUnsaved": string;
         /**
          * 題名
          */

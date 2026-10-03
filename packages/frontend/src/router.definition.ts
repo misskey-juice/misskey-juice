@@ -702,6 +702,15 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/novel-editor.vue')),
 	loginRequired: true,
 }, {
+	// JUICE: 落書き(1人で描く絵チャ。作品はこのブラウザに保存する)の一覧と、描く画面(絵チャの部屋の画面を使う)
+	path: '/doodle',
+	component: page(() => import('@/pages/doodle.vue')),
+	loginRequired: true,
+}, {
+	path: '/doodle/:doodleId',
+	component: page(() => import('@/pages/draw-room/room.vue')),
+	loginRequired: true,
+}, {
 	path: '/novel-editor/preview',
 	component: page(() => import('@/pages/novel-viewer.vue')),
 	loginRequired: true,

@@ -54,6 +54,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button v-tooltip="i18n.ts._drawRoom.handToolHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: tool === 'hand' }]" :aria-label="i18n.ts._drawRoom.handTool" :aria-pressed="tool === 'hand'" @click="tool = 'hand'"><i class="ti ti-hand-grab"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.handTool }}</span></button>
 						<!-- JUICE: バケツ(塗りつぶし)。囲って塗るのは筆の種類の1つ(ペンなら塗る、消しゴムなら消す) -->
 						<button v-tooltip="i18n.ts._drawRoom.bucketFill" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: tool === 'bucket' }]" :aria-label="i18n.ts._drawRoom.bucketFill" :aria-pressed="tool === 'bucket'" @click="tool = 'bucket'"><i class="ti ti-bucket-droplet"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortBucket }}</span></button>
+						<!-- JUICE: 図形(四角・丸・三角)。ドラッグした範囲に描く。Shiftを押しながらで正方形・正円など -->
+						<button v-tooltip="i18n.ts._drawRoom.shapeToolHint" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: tool === 'shape' }]" :aria-label="i18n.ts._drawRoom.shapeTool" :aria-pressed="tool === 'shape'" @click="tool = 'shape'"><i class="ti ti-triangle-square-circle"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shapeTool }}</span></button>
 						<!-- JUICE: スマホでは色・太さ・濃さをまとめたボタンにし、押すとキャンバスの上に選ぶ欄を出す -->
 						<button
 							class="_button"
@@ -63,7 +65,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							@click="brushPanelOpen = !brushPanelOpen"
 						>
 							<span :class="$style.brushPreview" :style="{ background: color, opacity: opacity / 100 }"></span>
-							<span v-if="usesBrushSize" :class="$style.sizeValue">{{ sizePercent }}%</span>
+							<span v-if="usesBrushSize || usesShapeLineSize" :class="$style.sizeValue">{{ sizePercent }}%</span>
 						</button>
 						<div :class="[$style.brushOptions, { [$style.brushOptionsOpen]: brushPanelOpen }]">
 						<span :class="$style.toolSeparator"></span>
@@ -87,8 +89,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 							@click="openColorPicker"
 						><span :class="$style.colorButtonInner"><span :class="$style.colorButtonSwatch" :style="{ background: color }"></span><i class="ti ti-palette"></i></span><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortPalette }}</span></button>
 						<!-- JUICE: 太さ・濃さ・筆の種類は、それを使う道具のときだけ出す(スポイト・選択・移動などでは出さない) -->
-						<span v-if="usesBrushSize || usesOpacity" :class="$style.toolSeparator"></span>
-						<label v-if="usesBrushSize" :class="$style.sizeLabel">
+						<!-- JUICE: 図形の形と、線だけか中も塗るか -->
+						<template v-if="tool === 'shape'">
+						<span :class="$style.toolSeparator"></span>
+						<button v-for="kind in SHAPE_KINDS" :key="kind.value" v-tooltip="kind.label()" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: shapeKind === kind.value }]" :aria-label="kind.label()" :aria-pressed="shapeKind === kind.value" @click="shapeKind = kind.value"><i :class="kind.icon"></i><span :class="$style.toolLabel">{{ kind.label() }}</span></button>
+						<template v-if="shapeKind !== 'line'">
+						<button v-tooltip="i18n.ts._drawRoom.shapeOutline" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: shapeFill === 'outline' }]" :aria-label="i18n.ts._drawRoom.shapeOutline" :aria-pressed="shapeFill === 'outline'" @click="shapeFill = 'outline'"><i class="ti ti-border-outer"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortShapeOutline }}</span></button>
+						<button v-tooltip="i18n.ts._drawRoom.shapeFilled" class="_button" :class="[$style.toolButton, { [$style.toolButtonActive]: shapeFill === 'fill' }]" :aria-label="i18n.ts._drawRoom.shapeFilled" :aria-pressed="shapeFill === 'fill'" @click="shapeFill = 'fill'"><i class="ti ti-square-filled"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortShapeFilled }}</span></button>
+						</template>
+						</template>
+						<span v-if="usesBrushSize || usesShapeLineSize || usesOpacity" :class="$style.toolSeparator"></span>
+						<label v-if="usesBrushSize || usesShapeLineSize" :class="$style.sizeLabel">
 							<i class="ti ti-line-dashed"></i>
 							<input v-model.number="sizePercent" type="range" min="1" :max="SIZE_PERCENT_MAX" step="1" :aria-label="i18n.ts._drawRoom.size" :aria-valuetext="`${sizePercent}% (${Math.round(size * 10) / 10}px)`"/>
 							<span v-tooltip="`${Math.round(size * 10) / 10}px`" :class="$style.sizeValue">{{ sizePercent }}%</span>
@@ -129,7 +140,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</template>
 						<!-- JUICE: 透明度ロック(ペン・塗りつぶしのとき。消しゴムには効かない) -->
 						<button
-							v-if="(usesBrushSize && tool !== 'eraser') || tool === 'bucket'"
+							v-if="(usesBrushSize && tool !== 'eraser') || tool === 'bucket' || tool === 'shape'"
 							v-tooltip="i18n.ts._drawRoom.alphaLockHint"
 							class="_button"
 							:class="[$style.toolButton, { [$style.toolButtonActive]: alphaLock }]"
@@ -154,8 +165,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button v-tooltip="i18n.ts._drawRoom.redo" class="_button" :class="$style.toolButton" :aria-label="i18n.ts._drawRoom.redo" @click="redo"><i class="ti ti-arrow-forward-up"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortRedo }}</span></button>
 						<button v-tooltip="i18n.ts._drawRoom.clearMyLayer" class="_button" :class="$style.toolButton" :aria-label="i18n.ts._drawRoom.clearMyLayer" @click="clearMyLayer"><i class="ti ti-trash"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.shortClear }}</span></button>
 					</div>
-					<!-- JUICE: 部屋主も描く人から抜けて観戦できる(部屋主のまま) -->
-					<MkButton small @click="leave">{{ isOwner ? i18n.ts._drawRoom.spectateAsOwner : i18n.ts._drawRoom.leave }}</MkButton>
+					<!-- JUICE: 部屋主も描く人から抜けて観戦できる(部屋主のまま)。落書きは1人で描くので出さない -->
+					<!-- JUICE: 投稿フォームから開いた落書きは、描いた絵をそのフォームに添付する -->
+					<MkButton v-if="isDoodle && attachable" small primary @click="attachDoodle"><i class="ti ti-paperclip"></i> {{ i18n.ts._juice.doodleAttach }}</MkButton>
+					<MkButton v-if="!isDoodle" small @click="leave">{{ isOwner ? i18n.ts._drawRoom.spectateAsOwner : i18n.ts._drawRoom.leave }}</MkButton>
 				</template>
 				<!-- JUICE: スマホでは、レイヤーとチャットを下から出すパネルにする -->
 				<div :class="$style.statusEnd">
@@ -186,6 +199,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						@click="toggleMobilePanel('layers')"
 					><i class="ti ti-stack-2"></i><span :class="$style.toolLabel">{{ i18n.ts._drawRoom.layers }}</span></button>
 					<button
+						v-if="!isDoodle"
 						class="_button"
 						:class="[$style.toolButton, { [$style.toolButtonActive]: mobilePanel === 'chat' }]"
 						:aria-label="i18n.ts._drawRoom.chat"
@@ -268,7 +282,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<path :d="pixelGridPath" :class="$style.pixelGrid" :stroke-opacity="pixelGridOpacity"/>
 					</svg>
 					<!-- JUICE: 選んでいる線の範囲と、投げ縄・範囲選択の途中の線 -->
-					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
+					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || shapePreview != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
 						<!-- 選んだときに囲んだ形(範囲・投げ縄)のまま表示し、移動ツールでずらしている間は一緒に動かす -->
 						<!-- 拡大縮小の途中は、形の座標を拡大して描く(まとめて拡大すると、枠の線・つまみも大きくなるため) -->
 						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0})`">
@@ -304,6 +318,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</g>
 						<!-- 囲って塗っている途中の形 -->
 						<polygon v-if="fillGesture != null" :points="toSvgPoints(fillGesture.points)" :fill="color" :fill-opacity="opacity / 100 * 0.6" :class="$style.selectionOutline"/>
+						<!-- JUICE: 描いている途中の図形(線だけなら線の太さで、中も塗るなら塗った形で) -->
+						<polygon
+							v-if="shapePreview != null && shapePreview.fill"
+							:points="toSvgPoints(shapePreview.points)"
+							:fill="color"
+							:fill-opacity="opacity / 100"
+						/>
+						<polygon
+							v-else-if="shapePreview != null"
+							:points="toSvgPoints(shapePreview.points)"
+							fill="none"
+							:stroke="color"
+							:stroke-opacity="opacity / 100"
+							:stroke-width="size"
+							stroke-linejoin="round"
+							stroke-linecap="round"
+						/>
 						<polygon v-if="selectGesture != null" :points="toSvgPoints(selectGestureShape)" :class="$style.selectionOutline"/>
 						<!-- 保存する範囲(キャンバスと一緒に回転・拡大縮小する) -->
 						<rect v-if="selecting && selection != null" :x="selection.x" :y="selection.y" :width="selection.width" :height="selection.height" :class="$style.selectionOutline"/>
@@ -311,15 +342,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<!-- JUICE: デバッグ情報(表示のメニューでオンにしたとき) -->
 				<div v-if="showDebugInfo && debugInfo != null && room != null" :class="$style.debugInfo" aria-hidden="true">
-					<div>{{ i18n.ts._drawRoom.debugMyStrokes }}: {{ debugInfo.myStrokes }} / {{ strokeLimits.strokes }}</div>
-					<div>{{ i18n.ts._drawRoom.debugMyBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }} / {{ strokeLimits.megabytes }}MB</div>
+					<!-- JUICE: 落書きは1人で描き、このブラウザに保存する。部屋全体・オンラインの人数などの代わりに、取り消せる回数と保存の状態を出す -->
+					<template v-if="debugInfo.doodle != null">
+						<div>{{ i18n.ts._juice.debugDoodleStrokes }}: {{ debugInfo.myStrokes }} / {{ strokeLimits.strokes }}</div>
+						<div>{{ i18n.ts._juice.debugDoodleBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }}</div>
+					</template>
+					<template v-else>
+						<div>{{ i18n.ts._drawRoom.debugMyStrokes }}: {{ debugInfo.myStrokes }} / {{ strokeLimits.strokes }}</div>
+						<div>{{ i18n.ts._drawRoom.debugMyBytes }}: ≈{{ formatMegabytes(debugInfo.myBytes) }} / {{ strokeLimits.megabytes }}MB</div>
+					</template>
 					<template v-if="debugInfo.layers.length > 1">
 						<div v-for="(layer, i) in debugInfo.layers" :key="i">&nbsp;&nbsp;{{ layer.name }}: {{ layer.strokes }}</div>
 					</template>
+					<template v-if="debugInfo.doodle != null">
+						<div>{{ i18n.ts._juice.debugDoodleHistory }}: {{ debugInfo.doodle.undo }} / {{ debugInfo.doodle.redo }}</div>
+						<div>{{ i18n.ts._juice.debugDoodleSave }}: {{ debugInfo.doodle.saved ? i18n.ts._juice.debugDoodleSaved : i18n.ts._juice.debugDoodleUnsaved }}</div>
+					</template>
+					<template v-else>
 					<div>{{ i18n.ts._drawRoom.debugRoomStrokes }}: {{ debugInfo.roomStrokes }} ({{ debugInfo.roomLayers }} {{ i18n.ts._drawRoom.debugLayers }})</div>
 					<!-- JUICE: 部屋全体の線のデータ量(この画面に届いている分からの見積もり。ほかの人の下描きは入らない)と上限 -->
 					<div>{{ i18n.ts._drawRoom.debugRoomBytes }}: ≈{{ formatMegabytes(debugInfo.roomBytes) }}<template v-if="roomMegabytesLimit != null"> / {{ roomMegabytesLimit }}MB</template></div>
 					<div>{{ i18n.ts._drawRoom.debugPending }}: {{ debugInfo.pending }}</div>
+					</template>
 					<div>{{ i18n.ts._drawRoom.debugCanvas }}: {{ room.canvasWidth }}×{{ room.canvasHeight }} / {{ Math.round(view.scale * 100) }}% / {{ rotationDegrees }}°</div>
 					<div>{{ i18n.ts._drawRoom.debugRedraw }}: {{ debugInfo.lastRedrawMs.toFixed(1) }}ms ({{ debugInfo.lastRedrawFull ? i18n.ts._drawRoom.debugRedrawFull : i18n.ts._drawRoom.debugRedrawRegion }})</div>
 					<div>{{ i18n.ts._drawRoom.debugRender }}: {{ debugInfo.lastRenderMs.toFixed(1) }}ms</div>
@@ -329,7 +373,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div>{{ i18n.ts._drawRoom.debugMoveGrabExact }}: {{ formatDebugMs(debugInfo.grabExactMs) }}</div>
 					<div>{{ i18n.ts._drawRoom.debugRegionRedraw }}: {{ formatDebugMs(debugInfo.regionRedrawMs) }}<template v-if="debugInfo.pendingRegionRedraws > 0"> ({{ i18n.tsx._drawRoom.debugRegionRedrawPending({ n: debugInfo.pendingRegionRedraws }) }})</template></div>
 					<div>{{ i18n.ts._drawRoom.debugCanvasMemory }}: ≈{{ formatMegabytes(debugInfo.canvasMemoryBytes) }}</div>
-					<div>{{ i18n.ts._drawRoom.debugOnline }}: {{ onlineUserIds.size }}</div>
+					<div v-if="debugInfo.doodle == null">{{ i18n.ts._drawRoom.debugOnline }}: {{ onlineUserIds.size }}</div>
 				</div>
 				<!-- JUICE: ほかの人のカーソル(位置の点と、丸いアイコン) -->
 				<!-- 表示・濃さは、表示のメニューで変えられる(このブラウザに覚える) -->
@@ -458,12 +502,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.sideHandle"
 			:aria-label="i18n.ts._drawRoom.showSidePanel"
 			@click="sideHidden = false"
-		><i class="ti ti-chevron-left"></i><i class="ti ti-stack-2"></i><i class="ti ti-messages"></i></button>
+		><i class="ti ti-chevron-left"></i><i class="ti ti-stack-2"></i><i v-if="!isDoodle" class="ti ti-messages"></i></button>
 		<div
 			:id="sideId"
 			ref="sideEl"
 			:class="[$style.side, { [$style.sideOpen]: mobilePanel != null, [$style.sideHidden]: sideHidden }]"
-			:style="{ '--juiceSideWidth': `${sideWidth}px`, '--juiceLayersRatio': layersRatio }"
+			:style="{ '--juiceSideWidth': `${sideWidth}px`, '--juiceLayersRatio': isDoodle ? 1 : layersRatio }"
 		>
 			<!-- JUICE: 左端をドラッグしてパネルの幅を変える(PCだけ) -->
 			<div
@@ -485,14 +529,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<!-- 描いている人・レイヤー -->
 			<div :id="layersPanelId" class="_panel" :class="[$style.sidePanel, $style.layers, { [$style.sheetHidden]: mobilePanel !== 'layers' }]">
 				<div :class="$style.sideHeader">
-					<i class="ti ti-stack-2"></i> {{ i18n.ts._drawRoom.layers }} <span v-if="!room.isEnded" :class="$style.memberCount">{{ i18n.tsx._drawRoom.membersCount({ n: room.members.length, max: room.maxMembers }) }}</span>
+					<i class="ti ti-stack-2"></i> {{ i18n.ts._drawRoom.layers }} <span v-if="!room.isEnded && !isDoodle" :class="$style.memberCount">{{ i18n.tsx._drawRoom.membersCount({ n: room.members.length, max: room.maxMembers }) }}</span>
 					<!-- JUICE: PCでは、レイヤーとチャットをまとめて右へしまい、キャンバスを広く使える -->
 					<button v-tooltip="i18n.ts._drawRoom.hideSidePanel" class="_button" :class="$style.sideHideButton" :aria-label="i18n.ts._drawRoom.hideSidePanel" @click="sideHidden = true"><i class="ti ti-layout-sidebar-right-collapse"></i></button>
 					<button class="_button" :class="$style.sheetClose" :aria-label="i18n.ts.close" @click="mobilePanel = null"><i class="ti ti-x"></i></button>
 				</div>
-				<div v-if="!room.isEnded" :class="$style.onlineSummary"><span :class="$style.onlineDotInline"></span> {{ i18n.tsx._drawRoom.onlineCount({ n: onlineUserIds.size }) }}</div>
+				<div v-if="!room.isEnded && !isDoodle" :class="$style.onlineSummary"><span :class="$style.onlineDotInline"></span> {{ i18n.tsx._drawRoom.onlineCount({ n: onlineUserIds.size }) }}</div>
 				<template v-for="userId in listedUserIds" :key="userId">
-				<div :class="[$style.layerRow, { [$style.layerRowOffline]: !room.isEnded && !onlineUserIds.has(userId) }]">
+				<!-- JUICE: 落書きは自分のレイヤーだけなので、描いている人の行は出さない -->
+				<div v-if="!isDoodle" :class="[$style.layerRow, { [$style.layerRowOffline]: !room.isEnded && !onlineUserIds.has(userId) }]">
 					<!-- JUICE: 今この部屋を開いている人は緑の点、閉じている人は薄く表示する -->
 					<span :class="$style.layerAvatarWrap">
 						<!-- JUICE: アイコン・名前からプロフィールを開ける(マウスを乗せると簡単なプロフィール) -->
@@ -597,7 +642,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</label>
 					<div :class="$style.layerActions">
 						<button v-if="myLayers.length < MAX_USER_LAYERS" class="_button" :class="$style.addLayer" @click="addLayer()"><i class="ti ti-plus"></i> {{ i18n.ts._drawRoom.addLayer }}</button>
-						<button v-if="myLayers.length < MAX_USER_LAYERS" v-tooltip="i18n.ts._drawRoom.draftLayerHint" class="_button" :class="$style.addLayer" @click="addLayer(true)"><i class="ti ti-lock"></i> {{ i18n.ts._drawRoom.addDraftLayer }}</button>
+						<button v-if="myLayers.length < MAX_USER_LAYERS && !isDoodle" v-tooltip="i18n.ts._drawRoom.draftLayerHint" class="_button" :class="$style.addLayer" @click="addLayer(true)"><i class="ti ti-lock"></i> {{ i18n.ts._drawRoom.addDraftLayer }}</button>
 						<button class="_button" :class="[$style.addLayer, $style.deleteAllLayers]" @click="deleteAllMyLayers"><i class="ti ti-trash"></i> {{ i18n.ts._drawRoom.deleteAllMyLayers }}</button>
 					</div>
 				</div>
@@ -614,13 +659,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 				</template>
-				<MkSwitch v-model="myLayerOnTop" :class="$style.layerSwitch">
+				<MkSwitch v-if="!isDoodle" v-model="myLayerOnTop" :class="$style.layerSwitch">
 					<template #label>{{ i18n.ts._drawRoom.myLayerOnTop }}</template>
 				</MkSwitch>
 			</div>
 
 			<!-- JUICE: レイヤーとチャットの間をドラッグして、高さの割合を変える(PCだけ) -->
 			<div
+				v-if="!isDoodle"
 				:class="$style.splitResizer"
 				role="separator"
 				aria-orientation="horizontal"
@@ -638,7 +684,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			></div>
 
 			<!-- チャット -->
-			<div :id="chatPanelId" class="_panel" :class="[$style.sidePanel, $style.chat, { [$style.sheetHidden]: mobilePanel !== 'chat' }]">
+			<div v-if="!isDoodle" :id="chatPanelId" class="_panel" :class="[$style.sidePanel, $style.chat, { [$style.sheetHidden]: mobilePanel !== 'chat' }]">
 				<div :class="$style.sideHeader">
 					<i class="ti ti-messages"></i> {{ i18n.ts._drawRoom.chat }}
 					<button class="_button" :class="$style.sheetClose" :aria-label="i18n.ts.close" @click="mobilePanel = null"><i class="ti ti-x"></i></button>
@@ -728,10 +774,27 @@ import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE
 import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool, Rect } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
+import { LocalDrawRoomConnection } from '@/utility/draw-room-local.js';
+import type { LocalDrawRoomState } from '@/utility/draw-room-local.js';
+import { getDoodle, saveDoodleData, updateDoodleMeta } from '@/utility/doodle-storage.js';
 
-const props = defineProps<{
-	roomId: string;
+const props = withDefaults(defineProps<{
+	roomId?: string;
+	// JUICE: 落書き(1人で描く。サーバーを使わず、このブラウザに保存する)の作品のid。指定したら落書きとして開く
+	doodleId?: string;
+	// JUICE: 落書きを投稿フォームから開いたとき。描いた絵をそのフォームに添付できるようにする
+	attachable?: boolean;
+}>(), {
+	roomId: '',
+	doodleId: undefined,
+	attachable: false,
+});
+
+const emit = defineEmits<{
+	(ev: 'attach', file: Misskey.entities.DriveFile): void;
 }>();
+
+const isDoodle = computed(() => props.doodleId != null);
 
 // JUICE: ログインしていない人も、公開の部屋(ローカル全体・NSFWでない)なら見るだけで開ける。そのときは誰とも一致しないidで扱い、
 // 描く・チャットを書く・なでる・通報・ドライブへの保存・投稿は出さない(ロールの値は使わない所だけで使うので、仮の値にしておく)
@@ -786,23 +849,31 @@ const engine = shallowRef<DrawCanvasEngine | null>(null);
 const connection = shallowRef<Misskey.IChannelConnection<Misskey.Channels['drawRoom']> | null>(null);
 
 // JUICE: スポイトは線を描かず、キャンバスの色を拾ってペンに戻る
-const tool = ref<DrawTool | 'eyedropper' | 'select' | 'lasso' | 'move' | 'hand' | 'bucket'>('pen');
+const tool = ref<DrawTool | 'eyedropper' | 'select' | 'lasso' | 'move' | 'hand' | 'bucket' | 'shape'>('pen');
 // JUICE: 移動ツールで描き直すときに使うWorker
 let regionRenderer: DrawRoomLayerRenderer | null = null;
 const color = ref('#000000');
 // JUICE: 太さはペンと消しゴムで別々に覚えておき、スライダーは今の道具の太さを変える
 const penSize = ref(6);
 const eraserSize = ref(20);
+// JUICE: 図形の線の太さも、ペンとは別に覚える
+const shapeSize = ref(6);
 const size = computed({
-	get: () => (tool.value === 'eraser' ? eraserSize.value : penSize.value),
+	get: () => (tool.value === 'eraser' ? eraserSize.value : tool.value === 'shape' ? shapeSize.value : penSize.value),
 	set: (value: number) => {
 		if (tool.value === 'eraser') eraserSize.value = value;
+		else if (tool.value === 'shape') shapeSize.value = value;
 		else penSize.value = value;
 	},
 });
 // JUICE: 太さ・筆の種類・線の中だけ塗るはペンと消しゴム、濃さはそれに加えて塗りのツールだけで使う
 const usesBrushSize = computed(() => tool.value === 'pen' || tool.value === 'eraser');
-const usesOpacity = computed(() => usesBrushSize.value || tool.value === 'bucket');
+// JUICE: 図形ツール。線だけの図形は線の太さ(ペンと同じ太さ)を使う
+const shapeKind = prefer.model('drawRoomShapeKind');
+const shapeFill = prefer.model('drawRoomShapeFill');
+// 直線は塗るものが無いので、いつも線の太さを使う
+const usesShapeLineSize = computed(() => tool.value === 'shape' && (shapeFill.value === 'outline' || shapeKind.value === 'line'));
+const usesOpacity = computed(() => usesBrushSize.value || tool.value === 'bucket' || tool.value === 'shape');
 // 太さの上限。キャンバスの大きさに合わせて決める
 const sizeMax = ref(60);
 // JUICE: 太さを、覚えている値(またはキャンバスに合った値)で決めたか
@@ -864,12 +935,21 @@ const pixelGridPath = computed(() => {
 });
 // 線の不透明度(%)。ペンなら濃さ、消しゴムなら消す強さになる
 // JUICE: 濃さは前に使った値から始める(プロファイルに覚える)
-const opacity = ref(Math.max(5, Math.min(100, prefer.s.drawRoomOpacity)));
+const brushOpacity = ref(Math.max(5, Math.min(100, prefer.s.drawRoomOpacity)));
+// JUICE: 図形の濃さは、ペンとは別に覚える
+const shapeOpacity = ref(Math.max(5, Math.min(100, prefer.s.drawRoomShapeOpacity)));
+const opacity = computed({
+	get: () => (tool.value === 'shape' ? shapeOpacity.value : brushOpacity.value),
+	set: (value: number) => {
+		if (tool.value === 'shape') shapeOpacity.value = value;
+		else brushOpacity.value = value;
+	},
+});
 const myLayerOnTop = ref(true);
 
-// JUICE: ペン・消しゴムの太さ(割合)と濃さを覚える。スライダーを動かしている間は何度も書き込まないよう、止まってから覚える
+// JUICE: ペン・消しゴム・図形の太さ(割合)と濃さを覚える。スライダーを動かしている間は何度も書き込まないよう、止まってから覚える
 let saveBrushTimer: number | null = null;
-watch([penSize, eraserSize, opacity], () => {
+watch([penSize, eraserSize, shapeSize, brushOpacity, shapeOpacity], () => {
 	if (saveBrushTimer != null) window.clearTimeout(saveBrushTimer);
 	saveBrushTimer = window.setTimeout(() => {
 		saveBrushTimer = null;
@@ -877,7 +957,10 @@ watch([penSize, eraserSize, opacity], () => {
 		const eraser = sizeToPercent(eraserSize.value, sizeMax.value);
 		if (prefer.s.drawRoomPenSizePercent !== pen) prefer.commit('drawRoomPenSizePercent', pen);
 		if (prefer.s.drawRoomEraserSizePercent !== eraser) prefer.commit('drawRoomEraserSizePercent', eraser);
-		if (prefer.s.drawRoomOpacity !== opacity.value) prefer.commit('drawRoomOpacity', opacity.value);
+		const shape = sizeToPercent(shapeSize.value, sizeMax.value);
+		if (prefer.s.drawRoomShapeSizePercent !== shape) prefer.commit('drawRoomShapeSizePercent', shape);
+		if (prefer.s.drawRoomOpacity !== brushOpacity.value) prefer.commit('drawRoomOpacity', brushOpacity.value);
+		if (prefer.s.drawRoomShapeOpacity !== shapeOpacity.value) prefer.commit('drawRoomShapeOpacity', shapeOpacity.value);
 	}, 500);
 });
 const hiddenLayers = ref(new Set<string>());
@@ -1092,9 +1175,21 @@ async function mergeMyLayer(meta: LayerMeta, target: LayerMeta): Promise<void> {
 	connection.value?.send('mergeLayer', { from: meta.id, into: target.id });
 }
 
+// JUICE: 区切り線を、項目の間にだけ残す(後ろに何も無い区切り線・続けての区切り線を出さない)
+function tidyDividers(items: MenuItem[]): MenuItem[] {
+	const result: MenuItem[] = [];
+	for (const item of items) {
+		const isDivider = item != null && typeof item === 'object' && 'type' in item && item.type === 'divider';
+		if (isDivider && (result.length === 0 || (result.at(-1) as { type?: string }).type === 'divider')) continue;
+		result.push(item);
+	}
+	while (result.length > 0 && (result.at(-1) as { type?: string }).type === 'divider') result.pop();
+	return result;
+}
+
 function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 	const index = myLayers.value.findIndex(layer => layer.id === meta.id);
-	os.popupMenu([{
+	os.popupMenu(tidyDividers([{
 		text: i18n.ts._drawRoom.renameLayer,
 		icon: 'ti ti-pencil',
 		action: () => renameMyLayer(meta),
@@ -1109,12 +1204,12 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 			active: (meta.blend ?? undefined) === value,
 			action: () => updateMyLayer(meta.id, { blend: value }),
 		})),
-	}, {
-		// JUICE: 下描き(自分だけ) ⇔ みんなに見せる
+	}, ...(isDoodle.value ? [] : [{
+		// JUICE: 下描き(自分だけ) ⇔ みんなに見せる(落書きは1人で描くので出さない)
 		text: meta.private ? i18n.ts._drawRoom.publishLayer : i18n.ts._drawRoom.makeLayerDraft,
 		icon: meta.private ? 'ti ti-world' : 'ti ti-lock',
 		action: () => setMyLayerPrivate(meta, !meta.private),
-	}, { type: 'divider' }, ...(index < myLayers.value.length - 1 ? [{
+	}]), { type: 'divider' as const }, ...(index < myLayers.value.length - 1 ? [{
 		text: i18n.ts._drawRoom.moveLayerUp,
 		icon: 'ti ti-arrow-up',
 		action: () => moveMyLayer(meta.id, 1),
@@ -1127,7 +1222,7 @@ function openLayerMenu(meta: LayerMeta, ev: MouseEvent): void {
 		icon: 'ti ti-trash',
 		danger: true,
 		action: () => deleteMyLayer(meta),
-	}] : [])], (ev.currentTarget ?? ev.target) as HTMLElement);
+	}] : [])]), (ev.currentTarget ?? ev.target) as HTMLElement);
 }
 
 // レイヤー一覧の表示順(描いたことのある人+今のメンバー)
@@ -1188,7 +1283,8 @@ const cursors = reactive(new Map<string, { x: number; y: number; updatedAt: numb
 // JUICE: なでるツール。オンの間は、ドラッグしても描かず・表示も動かさず、なでている位置を送る
 const petting = ref(false);
 // なでられるのは開催中の部屋だけ(終了した部屋・確認のために開いている部屋では、ボタンも出さない)
-const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly && !isGuest);
+// JUICE: 落書きは1人で描くので、なでても誰にも見えない(出さない)
+const canPet = computed(() => room.value != null && !room.value.isEnded && !room.value.viewOnly && !isGuest && !isDoodle.value);
 watch(canPet, (value) => {
 	if (!value) petting.value = false;
 });
@@ -1292,6 +1388,154 @@ function applyEvent(fn: () => void): void {
 	else fn();
 }
 
+//#region 落書き(JUICE)
+// 落書きの作品から読んだ線・レイヤー(手元の部屋につなぐときに渡す)
+let doodleState: LocalDrawRoomState | null = null;
+// 読み込んだ作品のid(別の作品へ移るときに、前の作品の分を前の作品へ保存するため)
+let loadedDoodleId: string | null = null;
+// 保存していない変更(少しまとめてから保存する)
+let doodleDirty: { id: string; state: LocalDrawRoomState } | null = null;
+let doodleSaveTimer: number | null = null;
+let doodleThumbnailTimer: number | null = null;
+const DOODLE_SAVE_DELAY_MS = 500;
+const DOODLE_THUMBNAIL_DELAY_MS = 2000;
+const DOODLE_THUMBNAIL_SIZE = 256;
+
+// 作品を読み、部屋の画面で開けるよう、自分だけが描く開催中の部屋の形にする
+async function loadDoodle(id: string): Promise<Misskey.entities.DrawRoom> {
+	const doodle = await getDoodle(id);
+	if (doodle == null) throw new Error('Doodle not found');
+	doodleState = { strokes: doodle.data.strokes, layers: doodle.data.layers };
+	loadedDoodleId = id;
+	const me = signedInUser!;
+	return {
+		id: doodle.meta.id,
+		createdAt: new Date(doodle.meta.createdAt).toISOString(),
+		ownerId: me.id,
+		owner: me,
+		title: doodle.meta.title,
+		visibility: 'local',
+		maxMembers: 1,
+		canvasWidth: doodle.meta.width,
+		canvasHeight: doodle.meta.height,
+		keepAfterEnd: true,
+		cw: null,
+		isSensitive: false,
+		isEnded: false,
+		endedAt: null,
+		deletesAt: null,
+		members: [me],
+		isMember: true,
+		viewOnly: false,
+	};
+}
+
+function localConnection(): LocalDrawRoomConnection | null {
+	return isDoodle.value && connection.value instanceof LocalDrawRoomConnection ? connection.value : null;
+}
+
+function onDoodleChange(state: LocalDrawRoomState): void {
+	const id = loadedDoodleId;
+	if (id == null) return;
+	doodleState = state;
+	doodleDirty = { id, state };
+	if (doodleSaveTimer != null) window.clearTimeout(doodleSaveTimer);
+	doodleSaveTimer = window.setTimeout(flushDoodle, DOODLE_SAVE_DELAY_MS);
+	// 一覧に出す小さな絵は、描き終わってしばらくしてから作る(描いている間に何度も作らないように)
+	if (doodleThumbnailTimer != null) window.clearTimeout(doodleThumbnailTimer);
+	doodleThumbnailTimer = window.setTimeout(() => {
+		doodleThumbnailTimer = null;
+		updateDoodleThumbnail(id);
+	}, DOODLE_THUMBNAIL_DELAY_MS);
+}
+
+function flushDoodle(): void {
+	if (doodleSaveTimer != null) window.clearTimeout(doodleSaveTimer);
+	doodleSaveTimer = null;
+	const dirty = doodleDirty;
+	doodleDirty = null;
+	if (dirty == null) return;
+	saveDoodleData(dirty.id, { strokes: dirty.state.strokes, layers: dirty.state.layers }).catch(err => {
+		console.error(err);
+		os.toast(i18n.ts._juice.doodleSaveFailed);
+	});
+}
+
+function updateDoodleThumbnail(id: string): void {
+	const e = engine.value;
+	if (e == null || loadedDoodleId !== id) return;
+	const thumbnail = fitCanvas(e.renderImage(), DOODLE_THUMBNAIL_SIZE, DOODLE_THUMBNAIL_SIZE).toDataURL('image/png');
+	updateDoodleMeta(id, { thumbnail }).catch(() => {});
+}
+
+// 画面を離れるときは、まだ保存していない変更と小さな絵を残す
+function flushDoodleOnLeave(): void {
+	flushDoodle();
+	if (doodleThumbnailTimer != null && loadedDoodleId != null) {
+		window.clearTimeout(doodleThumbnailTimer);
+		doodleThumbnailTimer = null;
+		updateDoodleThumbnail(loadedDoodleId);
+	}
+}
+
+// 名前とキャンバスの大きさを変える(サーバーに保存しないので、大きさはロールの上限を使わない)
+async function openDoodleSettings(): Promise<void> {
+	const r = room.value;
+	if (r == null || loadedDoodleId == null) return;
+	const id = loadedDoodleId;
+	const { canceled, result } = await os.form(i18n.ts._juice.doodleSettings, {
+		title: {
+			type: 'string',
+			label: i18n.ts._juice.doodleTitle,
+			required: false,
+			default: r.title,
+		},
+		canvasWidth: {
+			type: 'number',
+			label: i18n.ts._drawRoom.canvasWidth,
+			description: i18n.tsx._drawRoom.canvasResizeCaption({ min: DRAW_ROOM_CANVAS_MIN_SIZE, max: DRAW_ROOM_CANVAS_MAX_SIZE }),
+			default: r.canvasWidth,
+			step: 1,
+		},
+		canvasHeight: {
+			type: 'number',
+			label: i18n.ts._drawRoom.canvasHeight,
+			default: r.canvasHeight,
+			step: 1,
+		},
+	});
+	if (canceled || room.value == null || loadedDoodleId !== id) return;
+	const title = (result.title ?? '').trim().slice(0, 64);
+	const width = clampCanvasSize(result.canvasWidth, r.canvasWidth);
+	const height = clampCanvasSize(result.canvasHeight, r.canvasHeight);
+	const resized = width !== r.canvasWidth || height !== r.canvasHeight;
+	// 小さくすると、はみ出した部分の線が見えなくなる(消えはしない)ので確認する
+	if (width < r.canvasWidth || height < r.canvasHeight) {
+		const { canceled: resizeCanceled } = await os.confirm({ type: 'warning', text: i18n.ts._drawRoom.canvasShrinkConfirm });
+		if (resizeCanceled) return;
+	}
+	if (resized) {
+		// 描いた分を保存してから、新しい大きさで読み込み直す(絵チャで部屋主が大きさを変えたときと同じ。描きかけの線は取りやめる)
+		cancelStroke();
+		flushDoodleOnLeave();
+		await updateDoodleMeta(id, { title, width, height });
+		// 一覧の小さな絵も、新しい大きさにする
+		init().then(() => updateDoodleThumbnail(id));
+	} else {
+		await updateDoodleMeta(id, { title });
+		room.value = { ...room.value, title };
+	}
+}
+
+// 投稿フォームから開いたとき: 描いた絵(全体)をドライブに上げて、そのフォームに添付する
+async function attachDoodle(): Promise<void> {
+	flushDoodleOnLeave();
+	const file = await os.promiseDialog(uploadImage());
+	if (file == null) return;
+	emit('attach', file);
+}
+//#endregion
+
 async function init(): Promise<void> {
 	const generation = ++initGeneration;
 	error.value = null;
@@ -1303,7 +1547,7 @@ async function init(): Promise<void> {
 	layerUserIds.value = [];
 	chatMessages.value = [];
 	try {
-		const r = await misskeyApi('draw-rooms/show', { roomId: props.roomId });
+		const r = isDoodle.value ? await loadDoodle(props.doodleId!) : await misskeyApi('draw-rooms/show', { roomId: props.roomId });
 		if (generation !== initGeneration) return;
 		room.value = r;
 		rememberUsers([r.owner, ...r.members]);
@@ -1320,6 +1564,8 @@ async function init(): Promise<void> {
 			penSize.value = savedPen != null ? percentToSize(savedPen, brush.max) : brush.initial;
 			// 消しゴムは少し太めから始める
 			eraserSize.value = savedEraser != null ? percentToSize(savedEraser, brush.max) : Math.min(brush.max, brush.initial * 3);
+			const savedShape = prefer.s.drawRoomShapeSizePercent;
+			shapeSize.value = savedShape != null ? percentToSize(savedShape, brush.max) : brush.initial;
 		}
 		e.myUserId = $i.id;
 		e.activeKey = activeKey.value;
@@ -1366,10 +1612,14 @@ async function syncState(generation: number): Promise<void> {
 	bufferedEvents = [];
 	if (!r.isEnded && connection.value == null) connect();
 	try {
-		const [layers, chat] = await Promise.all([
-			misskeyApi('draw-rooms/strokes', { roomId: r.id }),
-			misskeyApi('draw-rooms/chat-history', { roomId: r.id }),
-		]);
+		// JUICE: 落書きは、手元の部屋が持っている線を使う(チャットは無い)
+		const local = localConnection();
+		const [layers, chat]: [Misskey.entities.DrawRoomsStrokesResponse, Misskey.entities.DrawRoomsChatHistoryResponse] = local != null
+			? [[{ userId: $i.id, strokes: local.strokes, layers: local.layers }], []]
+			: await Promise.all([
+				misskeyApi('draw-rooms/strokes', { roomId: r.id }),
+				misskeyApi('draw-rooms/chat-history', { roomId: r.id }),
+			]);
 		if (generation !== initGeneration) return;
 		chatMessages.value = chat;
 		rememberUsers(chat.map(item => item.user));
@@ -1493,7 +1743,10 @@ async function syncState(generation: number): Promise<void> {
 }
 
 function connect(): void {
-	const c = markRaw(useStream().useChannel('drawRoom', { roomId: props.roomId }));
+	// JUICE: 落書きは、サーバーの代わりに手元で動く部屋につなぐ(送った操作に、サーバーと同じ出来事を返す)
+	const c = isDoodle.value && doodleState != null
+		? markRaw(new LocalDrawRoomConnection($i.id, doodleState, onDoodleChange, strokeLimits.value.strokes)) as unknown as Misskey.IChannelConnection<Misskey.Channels['drawRoom']>
+		: markRaw(useStream().useChannel('drawRoom', { roomId: props.roomId }));
 	connection.value = c;
 	// JUICE: 描いている途中の線は、サーバーが一定間隔でまとめて送ってくる
 	c.on('strokeParts', payload => applyEvent(() => {
@@ -1722,6 +1975,7 @@ function connect(): void {
 		if (e != null) for (const key of e.layerKeys) e.clearPending(key);
 		selectGesture.value = null;
 		fillGesture.value = null;
+		shapeGesture.value = null;
 		if (moveDrag != null) finishMove(false);
 		cancelRotateDrag();
 		clearStrokeSelection();
@@ -1737,15 +1991,20 @@ function onStreamDisconnected(): void {
 // JUICE: 別のタブ・アプリに移ったら、部屋を開いている人(オンライン)から外してもらう
 function sendVisibility(): void {
 	connection.value?.send('visibility', { visible: window.document.visibilityState === 'visible' });
+	// JUICE: スマホでは裏に回ったタブが知らせ無く閉じられることがあるので、落書きは裏に回った時点で保存する
+	if (isDoodle.value && window.document.visibilityState === 'hidden') flushDoodleOnLeave();
 }
 
 // タブを閉じる・別のサイトへ移るときは、ページが閉じる前に離れたことを知らせる(すぐオフラインになるように)
 function onPageHide(): void {
 	connection.value?.send('visibility', { visible: false });
+	// JUICE: 落書きは、タブを閉じる前に描いた分を保存する
+	if (isDoodle.value) flushDoodleOnLeave();
 }
 
 function onStreamConnected(): void {
-	if (!wasDisconnected) return;
+	// JUICE: 落書きはストリームを使わないので、取り直さない
+	if (!wasDisconnected || isDoodle.value) return;
 	wasDisconnected = false;
 	// つなぎ直した接続は「見ている」状態から始まるので、離れているなら知らせ直す
 	if (window.document.visibilityState !== 'visible') sendVisibility();
@@ -2020,6 +2279,8 @@ type DebugInfo = {
 	regionRedrawMs: number | null;
 	pendingRegionRedraws: number;
 	canvasMemoryBytes: number;
+	// JUICE: 落書きのときだけ。取り消せる・やり直せる回数と、このブラウザに保存し終えたか
+	doodle: { undo: number; redo: number; saved: boolean } | null;
 };
 const debugInfo = ref<DebugInfo | null>(null);
 
@@ -2038,7 +2299,8 @@ function formatDebugMs(ms: number | null): string {
 // JUICE: 部屋全体の線のデータ量の上限(MB。JUICEの設定)。デバッグ情報を出すときに読む
 const roomMegabytesLimit = ref<number | null>(null);
 watch(showDebugInfo, (value) => {
-	if (value && roomMegabytesLimit.value == null) {
+	// JUICE: 落書きは部屋全体の上限を使わないので読まない
+	if (value && roomMegabytesLimit.value == null && !isDoodle.value) {
 		juicePublicSettingsCache.fetch().then(settings => { roomMegabytesLimit.value = settings.drawRoomMaxRoomMegabytes; }).catch(() => {});
 	}
 }, { immediate: true });
@@ -2090,6 +2352,10 @@ function updateDebugInfo(): void {
 		regionRedrawMs: e.stats.regionRedrawMs,
 		pendingRegionRedraws: e.pendingRegionRedraws,
 		canvasMemoryBytes: e.canvasMemoryBytes(),
+		doodle: isDoodle.value ? {
+			...(localConnection()?.historyCounts ?? { undo: 0, redo: 0 }),
+			saved: doodleDirty == null,
+		} : null,
 	};
 }
 
@@ -2228,17 +2494,17 @@ function openViewMenu(ev: MouseEvent): void {
 		type: 'switch',
 		text: i18n.ts.pixelatedZoom,
 		ref: dotView,
-	}, { type: 'divider' }, {
-		// JUICE: ほかの人のカーソルの表示・濃さ
-		type: 'switch',
+	}, ...(isDoodle.value ? [] : [{ type: 'divider' as const }, {
+		// JUICE: ほかの人のカーソルの表示・濃さ(落書きは1人で描くので出さない)
+		type: 'switch' as const,
 		text: i18n.ts._drawRoom.showCursors,
 		ref: showCursors,
 	}, {
-		type: 'radio',
+		type: 'radio' as const,
 		text: i18n.ts._drawRoom.cursorOpacity,
 		ref: cursorOpacity,
 		options: [1, 0.7, 0.4, 0.2].map(value => ({ label: `${value * 100}%`, value })),
-	}, { type: 'divider' }, {
+	}]), { type: 'divider' }, {
 		// JUICE: 線の本数・データ量などのデバッグ情報
 		type: 'switch',
 		text: i18n.ts._drawRoom.showDebugInfo,
@@ -2514,6 +2780,7 @@ function onPointerDown(ev: PointerEvent): void {
 			selectFrom = null;
 			selectGesture.value = null;
 			fillGesture.value = null;
+			shapeGesture.value = null;
 			panFrom = null;
 			if (moveDrag != null) finishMove(false);
 			cancelRotateDrag();
@@ -2560,6 +2827,13 @@ function onPointerDown(ev: PointerEvent): void {
 	}
 	if (tool.value === 'bucket') {
 		bucketFill(ev);
+		return;
+	}
+	// JUICE: 図形ツールは、押した所から離した所までの範囲に図形を描く
+	if (tool.value === 'shape') {
+		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+		const [x, y] = toCanvasPoint(ev);
+		shapeGesture.value = { x0: x, y0: y, x1: x, y1: y, pointerId: ev.pointerId, uniform: ev.shiftKey };
 		return;
 	}
 	if (tool.value === 'select' || tool.value === 'lasso') {
@@ -2739,6 +3013,11 @@ function onPointerMove(ev: PointerEvent): void {
 		fillGesture.value.points = [...fillGesture.value.points, x, y];
 		return;
 	}
+	if (shapeGesture.value != null && shapeGesture.value.pointerId === ev.pointerId) {
+		const [x, y] = toCanvasPoint(ev);
+		shapeGesture.value = { ...shapeGesture.value, x1: x, y1: y, uniform: ev.shiftKey };
+		return;
+	}
 	if (selectGesture.value != null && selectGesture.value.pointerId === ev.pointerId) {
 		const [x, y] = toCanvasPoint(ev);
 		const gesture = selectGesture.value;
@@ -2822,6 +3101,12 @@ function onPointerUp(ev: PointerEvent): void {
 	if (selectFrom != null && selectFrom.pointerId === ev.pointerId) {
 		if (ev.type !== 'pointercancel') updateSelection(ev);
 		selectFrom = null;
+		return;
+	}
+	if (shapeGesture.value != null && shapeGesture.value.pointerId === ev.pointerId) {
+		const gesture = shapeGesture.value;
+		shapeGesture.value = null;
+		if (ev.type !== 'pointercancel') commitShape(gesture);
 		return;
 	}
 	if (fillGesture.value != null && fillGesture.value.pointerId === ev.pointerId) {
@@ -3083,7 +3368,7 @@ async function deleteSelectedStrokes(): Promise<void> {
 
 // 描く道具に持ち替えたら、選択は外す
 watch(tool, (value) => {
-	if (value === 'pen' || value === 'eraser' || value === 'eyedropper' || value === 'bucket') clearStrokeSelection();
+	if (value === 'pen' || value === 'eraser' || value === 'eyedropper' || value === 'bucket' || value === 'shape') clearStrokeSelection();
 });
 
 //#region 選んだ部分の回転(JUICE)
@@ -3303,6 +3588,132 @@ function commitTransform(prepared: { ids: Set<string>; splits: SelectionSplit[] 
 		const y = ((i % 2 === 0 ? shape[i + 1] : v) - pivotY) * t.scaleY;
 		return i % 2 === 0 ? pivotX + x * cos - y * sin : pivotY + x * sin + y * cos;
 	}));
+}
+//#endregion
+
+//#region 図形(JUICE)
+type ShapeKind = 'line' | 'rect' | 'ellipse' | 'triangle';
+const SHAPE_KINDS: { value: ShapeKind; icon: string; label: () => string }[] = [
+	{ value: 'line', icon: 'ti ti-line', label: () => i18n.ts._drawRoom.shapeLine },
+	{ value: 'rect', icon: 'ti ti-square', label: () => i18n.ts._drawRoom.shapeRect },
+	{ value: 'ellipse', icon: 'ti ti-circle', label: () => i18n.ts._drawRoom.shapeEllipse },
+	{ value: 'triangle', icon: 'ti ti-triangle', label: () => i18n.ts._drawRoom.shapeTriangle },
+];
+// 図形を描いている途中(押した所と今の所。uniformはShiftを押していて、縦横を同じ長さにする)
+const shapeGesture = ref<{ x0: number; y0: number; x1: number; y1: number; pointerId: number; uniform: boolean } | null>(null);
+
+// 範囲の角と、角を持つ図形の頂点(丸は輪郭に沿った点)。キャンバス座標の平らな配列 [x, y, …]
+function shapeVertices(kind: ShapeKind, gesture: { x0: number; y0: number; x1: number; y1: number; uniform: boolean }): number[] {
+	let dx = gesture.x1 - gesture.x0;
+	let dy = gesture.y1 - gesture.y0;
+	if (kind === 'line' && gesture.uniform) {
+		// 直線は、Shiftを押しながらで45°ごとの向きにそろえる
+		const angle = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+		const length = Math.hypot(dx, dy);
+		dx = Math.cos(angle) * length;
+		dy = Math.sin(angle) * length;
+	} else if (gesture.uniform) {
+		const d = Math.max(Math.abs(dx), Math.abs(dy));
+		dx = Math.sign(dx || 1) * d;
+		dy = Math.sign(dy || 1) * d;
+	}
+	// キャンバスの外は、サーバーが受け付ける範囲(線の太さの上限まで)に収める
+	const e = engine.value;
+	const margin = DRAW_STROKE_MAX_SIZE - 1;
+	const clampX = (v: number) => (e == null ? v : Math.min(e.width + margin, Math.max(-margin, v)));
+	const clampY = (v: number) => (e == null ? v : Math.min(e.height + margin, Math.max(-margin, v)));
+	const left = clampX(Math.min(gesture.x0, gesture.x0 + dx));
+	const right = clampX(Math.max(gesture.x0, gesture.x0 + dx));
+	const top = clampY(Math.min(gesture.y0, gesture.y0 + dy));
+	const bottom = clampY(Math.max(gesture.y0, gesture.y0 + dy));
+	switch (kind) {
+		case 'line':
+			// 押した所から離した所へ(範囲の角ではなく、向きのまま)
+			return [clampX(gesture.x0), clampY(gesture.y0), clampX(gesture.x0 + dx), clampY(gesture.y0 + dy)];
+		case 'rect':
+			return [left, top, right, top, right, bottom, left, bottom];
+		case 'triangle':
+			return [(left + right) / 2, top, right, bottom, left, bottom];
+		case 'ellipse': {
+			const cx = (left + right) / 2;
+			const cy = (top + bottom) / 2;
+			const rx = (right - left) / 2;
+			const ry = (bottom - top) / 2;
+			// 大きい丸ほど点を増やす(輪郭の長さ6pxごとに1点。少なすぎ・多すぎにならないよう収める)
+			const count = Math.min(720, Math.max(24, Math.ceil(Math.PI * (rx + ry) / 3)));
+			const points: number[] = [];
+			for (let i = 0; i < count; i++) {
+				const a = i / count * Math.PI * 2;
+				points.push(cx + rx * Math.cos(a), cy + ry * Math.sin(a));
+			}
+			return points;
+		}
+	}
+}
+
+// 描いている途中の図形の見た目
+const shapePreview = computed(() => {
+	const gesture = shapeGesture.value;
+	if (gesture == null) return null;
+	return { points: shapeVertices(shapeKind.value, gesture), fill: shapeFill.value === 'fill' && shapeKind.value !== 'line' };
+});
+
+function commitShape(gesture: { x0: number; y0: number; x1: number; y1: number; uniform: boolean }): void {
+	const e = engine.value;
+	if (e == null) return;
+	const vertices = shapeVertices(shapeKind.value, gesture);
+	const xs = vertices.filter((_, i) => i % 2 === 0);
+	const ys = vertices.filter((_, i) => i % 2 === 1);
+	// 押しただけ(ほとんど動かさなかった)なら描かない
+	if (Math.max(...xs) - Math.min(...xs) < 2 && Math.max(...ys) - Math.min(...ys) < 2) return;
+	// 直線は、2点を結ぶペンの線にする
+	if (shapeKind.value === 'line') {
+		commitShapeLine(vertices);
+		return;
+	}
+	if (shapeFill.value === 'fill') {
+		// 中も塗る図形は、囲って塗るのと同じ塗りつぶしの線にする
+		const points: number[] = [];
+		for (let i = 0; i < vertices.length; i += 2) points.push(vertices[i], vertices[i + 1], 1);
+		commitFillStroke(points);
+		return;
+	}
+	// 線だけの図形は、輪郭をなぞるペンの線にする(筆圧は使わず、いつも同じ太さ)。
+	// 線は点と点の間をなめらかにつなぐので、角のある図形は角の点を2回ずつ入れて、角が丸まらないようにする
+	const corner = shapeKind.value !== 'ellipse';
+	const points: number[] = [];
+	const count = vertices.length / 2;
+	for (let i = 0; i <= count; i++) {
+		const x = vertices[(i % count) * 2];
+		const y = vertices[(i % count) * 2 + 1];
+		points.push(x, y, 1);
+		if (corner) points.push(x, y, 1);
+	}
+	// 丸は、描き始めの所でもなめらかにつながるよう、もう1点先まで回る
+	if (!corner) points.push(vertices[2], vertices[3], 1);
+	commitShapeLine(points, true);
+}
+
+// 図形の線(ペンの線。筆圧は使わず、いつも同じ太さ)を描く。xyは [x, y, …](withPressureなら筆圧付きの [x, y, 筆圧, …])
+function commitShapeLine(xy: number[], withPressure = false): void {
+	const e = engine.value;
+	if (e == null) return;
+	const points = withPressure ? xy : xy.flatMap((v, i) => (i % 2 === 1 ? [v, 1] : [v]));
+	const stroke: CanvasStroke = {
+		id: newStrokeId(),
+		tool: 'pen',
+		color: color.value,
+		size: size.value,
+		pressure: 'none',
+		...(opacity.value < 100 ? { opacity: opacity.value / 100 } : {}),
+		...(activeLayerId.value !== '0' ? { layer: activeLayerId.value } : {}),
+		...(alphaLock.value ? { lock: true } : {}),
+		points,
+	};
+	e.addStroke(activeKey.value, stroke);
+	connection.value?.send('stroke', encodeStroke(stroke));
+	rememberRecentColor(stroke.color);
+	if (!layerUserIds.value.includes($i.id)) refreshLayerList();
 }
 //#endregion
 
@@ -3633,7 +4044,8 @@ async function exportImage(area?: ImageArea | null): Promise<{ blob: Blob; ext: 
 
 // 保存するたびに名前が変わるよう、部屋の名前に日時を付ける
 function imageFileName(ext: string): string {
-	const title = (room.value?.title ?? i18n.ts._drawRoom.title).replace(/[\\/:*?"<>|]/g, '_');
+	// JUICE: 名前を付けていない落書きは「落書き」にする
+	const title = (isDoodle.value ? (room.value?.title || i18n.ts._juice.doodle) : (room.value?.title ?? i18n.ts._drawRoom.title)).replace(/[\\/:*?"<>|]/g, '_');
 	const d = new Date();
 	const pad = (n: number) => n.toString().padStart(2, '0');
 	return `${title}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.${ext}`;
@@ -3671,6 +4083,11 @@ async function postImage(area?: ImageArea | null): Promise<void> {
 	const file = await os.promiseDialog(uploadImage(area));
 	if (file == null) return;
 	cancelSelecting();
+	// JUICE: 落書きは、絵だけを付けて投稿する(部屋のURLは無い)
+	if (isDoodle.value) {
+		os.post({ initialFiles: [file] });
+		return;
+	}
 	// JUICE: 注意書き(CW)のある部屋の絵は、同じ注意書きを付けて投稿する
 	os.post({ initialFiles: [file], initialText: roomShareText(), ...(room.value?.cw != null ? { initialCw: room.value.cw } : {}) });
 }
@@ -3707,7 +4124,12 @@ async function downloadImage(area?: ImageArea | null): Promise<void> {
 }
 
 function openImageMenu(ev: MouseEvent): void {
-	os.popupMenu([...(isGuest ? [] : [{
+	os.popupMenu([...(isDoodle.value && props.attachable ? [{
+		// JUICE: 投稿フォームから開いた落書きは、描いた絵をそのフォームに添付する
+		text: i18n.ts._juice.doodleAttach,
+		icon: 'ti ti-paperclip',
+		action: attachDoodle,
+	}] : []), ...(isGuest ? [] : [{
 		text: i18n.ts._drawRoom.saveImage,
 		icon: 'ti ti-cloud-upload',
 		action: () => saveImageToDrive(),
@@ -3813,6 +4235,15 @@ const headerActions = computed(() => {
 		text: i18n.ts._drawRoom.fitToScreen,
 		handler: fitToScreen,
 	}];
+	// JUICE: 落書きは、名前とキャンバスの大きさの設定だけ(共有・通報などは無い)
+	if (isDoodle.value) {
+		actions.push({
+			icon: 'ti ti-settings',
+			text: i18n.ts._juice.doodleSettings,
+			handler: openDoodleSettings,
+		});
+		return collapseHeaderActions(actions, isNarrow.value);
+	}
 	// JUICE: 部屋の共有(保存しないで終了した部屋は、まもなく消えるので出さない)
 	if (room.value != null && !(room.value.isEnded && !room.value.keepAfterEnd)) {
 		actions.push({
@@ -3852,7 +4283,9 @@ const headerActions = computed(() => {
 	return collapseHeaderActions(actions, isNarrow.value);
 });
 
-watch(() => props.roomId, () => {
+watch(() => [props.roomId, props.doodleId], () => {
+	// JUICE: 別の落書きへ移る前に、今の落書きの描いた分を保存する
+	flushDoodleOnLeave();
 	room.value = null;
 	init();
 });
@@ -3908,10 +4341,11 @@ function leavePage(): void {
 	selectFrom = null;
 	selectGesture.value = null;
 	fillGesture.value = null;
+	shapeGesture.value = null;
 	if (moveDrag != null) finishMove(false);
 	cancelRotateDrag();
 	spaceHeld.value = false;
-	// Misskeyの中で別のページへ移ったときも、すぐオフラインになるよう先に知らせる
+	// Misskeyの中で別のページへ移ったときも、すぐオフラインになるよう先に知らせる(落書きは、描いた分を保存する)
 	onPageHide();
 	disposeRoom();
 	// 読み込み途中だった場合も、その続きを捨てる
@@ -3941,8 +4375,8 @@ onUnmounted(() => {
 });
 
 definePage(() => ({
-	title: room.value?.title ?? i18n.ts._drawRoom.title,
-	icon: 'ti ti-palette',
+	title: isDoodle.value ? (room.value?.title || i18n.ts._juice.doodle) : (room.value?.title ?? i18n.ts._drawRoom.title),
+	icon: isDoodle.value ? 'ti ti-scribble' : 'ti ti-palette',
 	// キャンバスを広く使えるよう、横のウィジェット欄を出さない
 	needWideArea: true,
 }));
@@ -4892,7 +5326,8 @@ definePage(() => ({
 
 // JUICE: レイヤー・チャットをしまうボタン(PCだけ)と、しまったときに出すつまみ
 .sideHideButton {
-	margin-left: 6px;
+	// JUICE: 人数を出さないとき(落書き・終了した部屋)も、右に寄せる
+	margin-left: auto;
 	padding: 2px 6px;
 	border-radius: 6px;
 	font-weight: normal;
@@ -4955,6 +5390,11 @@ definePage(() => ({
 
 .memberCount + .sheetClose {
 	margin-left: 4px;
+}
+
+// 人数を出すときは、人数が右に寄せるので、そのとなりに置く
+.memberCount + .sideHideButton {
+	margin-left: 6px;
 }
 
 .layerRow {

@@ -107,6 +107,23 @@ export function addJuiceNavbarItems(): void {
 }
 
 /**
+ * JUICE: 落書きを、前から使っているナビゲーションバーにも1回だけ足す(既定の並びには入れてある)。
+ * 小説エディターの後(無ければ絵チャの前、どちらも無ければ最後)に入れる。足した後に外した人には戻さない
+ */
+export function addJuiceNavbarDoodle(): void {
+	if (prefer.s.juiceNavbarDoodleAdded) return;
+	const menu = [...prefer.s.menu];
+	if (!menu.includes('doodle')) {
+		const novelIndex = menu.indexOf('novelEditor');
+		const drawRoomIndex = menu.indexOf('drawRoom');
+		const insertAt = novelIndex !== -1 ? novelIndex + 1 : drawRoomIndex !== -1 ? drawRoomIndex : menu.length;
+		menu.splice(insertAt, 0, 'doodle');
+		prefer.commit('menu', menu);
+	}
+	prefer.commit('juiceNavbarDoodleAdded', true);
+}
+
+/**
  * 前の保存先(端末ごとのstore・localStorage)にあった表示の好みを、プロファイルへ1回だけ取り込む。
  * 取り込んだかどうかはプロファイルの中に持つ(前の保存先の値は消さずに残す)。store.readyの後に呼ぶ
  */
