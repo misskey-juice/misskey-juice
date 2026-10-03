@@ -156,6 +156,14 @@ export const navbarItemDef = reactive<{
 		to: '/novel-editor',
 		juice: true,
 	},
+	// JUICE: 落書き(1人で描く。サーバーを使わないので、絵チャを無効にしていても使える)
+	doodle: {
+		title: i18n.ts._juice.doodle,
+		icon: 'ti ti-scribble',
+		show: computed(() => $i != null),
+		to: '/doodle',
+		juice: true,
+	},
 	// JUICE: 絵チャ(管理者設定で無効にされていれば出さない)
 	drawRoom: {
 		title: i18n.ts._drawRoom.title,

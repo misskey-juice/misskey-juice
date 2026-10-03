@@ -188,6 +188,10 @@ export const PREF_DEF = definePreferences({
 	juiceNavbarItemsAdded: {
 		default: false,
 	},
+	// JUICE: 落書きを、前からのナビゲーションバーにも1回だけ足したか(外した人には戻さない)
+	juiceNavbarDoodleAdded: {
+		default: false,
+	},
 
 	// JUICE: ネコのアカウントの投稿の文字を置き換えない(nyaizeしない。ネコミミは出す。misskey-tempuraを参考)
 	disableNoteNyaize: {
@@ -273,6 +277,13 @@ export const PREF_DEF = definePreferences({
 	drawRoomOpacity: {
 		default: 100,
 	},
+	// 図形ツールの線の太さ(割合)と濃さ(ペンとは別に覚える)
+	drawRoomShapeSizePercent: {
+		default: null as number | null,
+	},
+	drawRoomShapeOpacity: {
+		default: 100,
+	},
 	// 筆圧で太さを変えるか・濃さを変えるか(ペン・消しゴム)
 	drawRoomPressureSize: {
 		default: true,
@@ -290,6 +301,13 @@ export const PREF_DEF = definePreferences({
 	// 塗りつぶし・線の中だけ塗るの隙間閉じ(この幅より狭い線の隙間は閉じているものとして塗る)
 	drawRoomGapClose: {
 		default: 'off' as 'off' | 'small' | 'medium' | 'large',
+	},
+	// 図形ツールの形(直線・四角・丸・三角)と、線だけ描くか中も塗るか
+	drawRoomShapeKind: {
+		default: 'rect' as 'line' | 'rect' | 'ellipse' | 'triangle',
+	},
+	drawRoomShapeFill: {
+		default: 'outline' as 'outline' | 'fill',
 	},
 	// 線の本数・データ量・描き直しの時間などのデバッグ情報を、キャンバスの上に出す
 	drawRoomShowDebugInfo: {
@@ -413,8 +431,9 @@ export const PREF_DEF = definePreferences({
 			'channels',
 			'search',
 			'-',
-			// JUICE: 小説エディターと絵チャ
+			// JUICE: 小説エディター・落書き・絵チャ
 			'novelEditor',
+			'doodle',
 			'drawRoom',
 			'-',
 			'ui',

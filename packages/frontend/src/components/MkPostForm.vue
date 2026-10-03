@@ -100,6 +100,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button v-tooltip="i18n.ts.useCw" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: useCw }]" @click="useCw = !useCw"><i class="ti ti-eye-off"></i></button>
 			<button v-tooltip="i18n.ts.aiGenerated" class="_button" :class="[$style.footerButton, $style.footerButtonJuice, { [$style.footerButtonActive]: isAIGenerated }]" @click="isAIGenerated = !isAIGenerated"><i class="ti ti-ai" :class="$style.aiGeneratedButtonIcon"></i><img src="/client-assets/juice-glass.svg" alt="" :class="$style.footerButtonJuiceBadge"/></button>
 			<button v-tooltip="i18n.ts._juice.isNovel" class="_button" :class="[$style.footerButton, $style.footerButtonJuice, { [$style.footerButtonActive]: isNovel }]" @click="isNovel = !isNovel"><i class="ti ti-book"></i><img src="/client-assets/juice-glass.svg" alt="" :class="$style.footerButtonJuiceBadge"/></button>
+			<!-- JUICE: 落書き(描いた絵を添付する) -->
+			<button v-tooltip="i18n.ts._juice.doodle" class="_button" :class="[$style.footerButton, $style.footerButtonJuice]" @click="chooseDoodle"><i class="ti ti-scribble"></i><img src="/client-assets/juice-glass.svg" alt="" :class="$style.footerButtonJuiceBadge"/></button>
 			<button v-tooltip="i18n.ts.hashtags" class="_button" :class="[$style.footerButton, { [$style.footerButtonActive]: withHashtags }]" @click="withHashtags = !withHashtags"><i class="ti ti-hash"></i></button>
 			<button v-tooltip="i18n.ts.mention" class="_button" :class="$style.footerButton" @click="insertMention"><i class="ti ti-at"></i></button>
 			<button v-if="showAddMfmFunction" v-tooltip="i18n.ts.addMfmFunction" :class="['_button', $style.footerButton]" @click="insertMfmFunction"><i class="ti ti-palette"></i></button>
@@ -139,6 +141,7 @@ import { formatTimeString } from '@/utility/format-time-string.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import * as os from '@/os.js';
 import { isNovelTextFile } from '@/utility/novel-text-file.js';
+import { pickDoodleToAttach } from '@/utility/doodle.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { chooseDriveFile } from '@/utility/drive.js';
 import { store } from '@/store.js';
@@ -560,6 +563,14 @@ function chooseFileFromDrive(ev: PointerEvent) {
 	chooseDriveFile({ multiple: true }).then(driveFiles => {
 		files.value.push(...driveFiles);
 		applyNovelDownloadDefault(driveFiles);
+	});
+}
+
+// JUICE: 落書きを描いて(続きを描いて)、その絵を添付する
+function chooseDoodle(ev: PointerEvent) {
+	if (props.mock) return;
+	pickDoodleToAttach((ev.currentTarget ?? ev.target) as HTMLElement, (file) => {
+		files.value.push(file);
 	});
 }
 
