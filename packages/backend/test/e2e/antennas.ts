@@ -447,14 +447,14 @@ describe('アンテナ', () => {
 				],
 			},
 			{
-				// BUG e4144a1 以降home指定は壊れている(allと同じ)
-				label: 'ホーム指定はallと同じ',
+				// JUICE: ホーム指定は、フォローしているユーザーのノートだけを拾う
+				label: 'ホーム指定はフォローしているユーザーのノートだけ',
 				parameters: () => ({ src: 'home' }),
 				posts: [
-					{ note: (): Promise<Note> => post(alice, { text: `${keyword}` }), included: true },
+					{ note: (): Promise<Note> => post(alice, { text: `${keyword}` }) },
 					{ note: (): Promise<Note> => post(userFollowedByAlice, { text: `${keyword}` }), included: true },
-					{ note: (): Promise<Note> => post(bob, { text: `test ${keyword}` }), included: true },
-					{ note: (): Promise<Note> => post(carol, { text: `test ${keyword}` }), included: true },
+					{ note: (): Promise<Note> => post(bob, { text: `test ${keyword}` }) },
+					{ note: (): Promise<Note> => post(carol, { text: `test ${keyword}` }) },
 				],
 			},
 			{
