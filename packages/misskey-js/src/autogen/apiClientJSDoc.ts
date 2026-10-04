@@ -635,6 +635,17 @@ declare module '../api.js' {
      * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:federation*
      */
+    request<E extends 'admin/federation/diagnose-instance', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:federation*
+     */
     request<E extends 'admin/federation/refresh-remote-instance-metadata', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,

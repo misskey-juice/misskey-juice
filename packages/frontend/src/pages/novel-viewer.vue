@@ -64,7 +64,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
 										<span v-else-if="i > 0 && chapter.breaksBefore > 0" :class="[$style.novelText, '_selectable']" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
 										<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-										<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+										<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</div>
 							</div>
@@ -85,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<div v-else-if="i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
 											<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
 											<span v-else-if="i > 0 && chapter.breaksBefore > 0" :class="$style.novelText" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
-											<span :class="$style.novelText" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+											<span :class="$style.novelText" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 										</template>
 									</template>
 								</div>
@@ -115,7 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
 									<span v-else-if="writingMode !== 'horizontal' && i > 0 && chapter.breaksBefore > 0" :class="[$style.novelText, '_selectable']" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
 									<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-									<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+									<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :data-novel-emphasis="seg.emphasis" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</template>
 								<div v-if="writingMode === 'horizontal' && sectionCount > 1" :class="$style.chapterNav">
@@ -722,7 +722,7 @@ function applyUniformColumnWidth(inner: HTMLDivElement): number {
 // そのため、ページ幅を機械的な均一割りにするのではなく、各ルビ(<rt>込みの外接矩形)の
 // 本文先頭からの距離の範囲を求め、ページ境界がその範囲の内側に来る場合だけそのページを
 // 少し短く切り上げてルビの手前で区切る(=ページごとに幅が微妙に前後する)
-function getRubyZones(inner: HTMLDivElement): { start: number; end: number }[] {
+function getRubyZones(inner: HTMLDivElement, columnWidth: number): { start: number; end: number }[] {
 	const innerRight = inner.getBoundingClientRect().right;
 	const zones: { start: number; end: number }[] = [];
 	for (const ruby of inner.querySelectorAll('ruby')) {
@@ -737,6 +737,16 @@ function getRubyZones(inner: HTMLDivElement): { start: number; end: number }[] {
 		// JUICE: 距離は「本文の先頭(=innerの右端)からどれだけ離れているか」。vertical-rlは
 		// 右から左へ進むため、leftのほうが先頭からより遠い(distanceが大きい)
 		zones.push({ start: innerRight - right, end: innerRight - left });
+	}
+	// JUICE: 傍点も、ルビと同じく列の右へはみ出して描かれる(文字の矩形には入らない)。ページの先頭の列に傍点があると
+	// 右端で切れるので、ルビと同じように避ける。傍点は列の中(文字と列の右端の間)に収まるので、その列の右端から
+	// 避ける(文字の矩形の幅は書体で変わるので、矩形の真ん中=列の真ん中から、列の幅の半分だけ右を列の右端とする)。
+	// 傍点の付いた文字が列をまたいでいれば、列ごとの矩形で見る
+	for (const el of inner.querySelectorAll<HTMLElement>('[data-novel-emphasis]')) {
+		for (const r of el.getClientRects()) {
+			if (r.width === 0) continue;
+			zones.push({ start: innerRight - (r.left + r.right) / 2 - columnWidth / 2, end: innerRight - r.left });
+		}
 	}
 	zones.sort((a, b) => a.start - b.start);
 	return zones;
@@ -761,11 +771,14 @@ function computePageOffsets(inner: HTMLDivElement, naturalPageWidth: number, rub
 	if (naturalPageWidth <= 0 || (total <= naturalPageWidth && forcedBreaks.length === 0)) return [0];
 	const offsets = [0];
 	let current = 0;
+	// JUICE: ルビを避ける前の、列の区切りに沿った位置。ルビを避けて手前で区切った分を、次のページ以降へ持ち越さない
+	// (持ち越すと、その後の全てのページが同じだけずれて、ページの左端の余白が減ったままになり、文字が見切れることがあった)
+	let grid = 0;
 	// JUICE: 改ページはルビを避けて少し手前で区切ることがあるため、「currentより後ろか」だけでは
 	// 同じ改ページを2回拾ってしまう。使い終わった改ページは先頭から順に捨てていく
 	const pendingBreaks = forcedBreaks.filter(f => f > 1 && f < total - 1);
-	while (current + naturalPageWidth < total || pendingBreaks.length > 0) {
-		let boundary = current + naturalPageWidth;
+	while (grid + naturalPageWidth < total || pendingBreaks.length > 0) {
+		const boundary = grid + naturalPageWidth;
 		// JUICE: このページの範囲内に改ページがあれば、ルビの調整より優先してそこで区切る
 		// (ルビを避けて手前で区切った後は位置が数pxずれているので、その分の余裕を持たせる。そうしないと
 		// 改ページがちょうどページの端に来たとき、幅数pxの空のページが1枚増えてしまう)
@@ -778,14 +791,16 @@ function computePageOffsets(inner: HTMLDivElement, naturalPageWidth: number, rub
 			const cut = Math.max(current + 1, Math.min(forced, ...straddlingStarts));
 			offsets.push(cut);
 			current = cut;
+			grid = forced;
 			continue;
 		}
 		if (boundary >= total) break;
 		const straddling = rubyZones.find(z => z.start > current && z.start < boundary + RUBY_BLEED_MARGIN && z.end > boundary);
-		if (straddling) boundary = straddling.start - RUBY_BLEED_MARGIN;
-		if (boundary <= current) boundary = current + naturalPageWidth;
-		offsets.push(boundary);
-		current = boundary;
+		let cut = straddling ? straddling.start - RUBY_BLEED_MARGIN : boundary;
+		if (cut <= current) cut = boundary;
+		offsets.push(cut);
+		current = cut;
+		grid = boundary;
 	}
 	return offsets;
 }
@@ -810,7 +825,7 @@ function updatePageCount(): void {
 	// 内容が二重に見えていた)。同じCSS値・同じ本文なら実際の描画結果も一致するはず
 	if (isSpread.value && secondaryInner) secondaryInner.style.lineHeight = inner.style.lineHeight;
 	const naturalPageWidth = Math.max(1, Math.floor(outer.clientWidth / columnWidth)) * columnWidth;
-	primaryPageOffsets = computePageOffsets(inner, naturalPageWidth, getRubyZones(inner), getForcedPageBreaks(inner));
+	primaryPageOffsets = computePageOffsets(inner, naturalPageWidth, getRubyZones(inner, columnWidth), getForcedPageBreaks(inner));
 	pageCount.value = Math.max(1, primaryPageOffsets.length);
 }
 
@@ -1985,6 +2000,10 @@ if (!props.embedded) {
 .chapterTitle {
 	font-weight: bold;
 	font-size: 1.15em;
+	// JUICE: 大きい文字の分だけ行(縦書きでは列)が広がらないようにする。書体・文字サイズの組み合わせによっては、
+	// 章タイトルの列だけ1px広がり、ページの区切り(全ての列が同じ幅という前提)がその後ろで1pxずつずれて、
+	// ページの左端の文字が見切れていた
+	line-height: 1;
 }
 
 // 行頭の章タイトルは2字下げる

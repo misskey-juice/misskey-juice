@@ -71,6 +71,7 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { ensureSignin } from '@/i.js';
+import { activeDrawRoomIds } from '@/utility/draw-room-session.js';
 import { clampCanvasSize, clampMaxMembers, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE } from '@/utility/draw-canvas.js';
 
 const $i = ensureSignin();
@@ -234,6 +235,8 @@ async function createRoom(): Promise<void> {
 		cw: result.cw?.trim() ? result.cw.trim().slice(0, 128) : null,
 		isSensitive: result.isSensitive,
 	});
+	// JUICE: 作った直後は、そのまま描ける状態で開く(入り直したときは見学中から始まる)
+	activeDrawRoomIds.add(room.id);
 	router.push('/draw/:roomId', { params: { roomId: room.id } });
 }
 

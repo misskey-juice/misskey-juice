@@ -9734,6 +9734,14 @@ export interface Locale extends ILocale {
          */
         "spectating": string;
         /**
+         * 見学中(描く人として参加しています)
+         */
+        "spectatingAsMember": string;
+        /**
+         * 描き始める
+         */
+        "resumeDrawing": string;
+        /**
          * ログインしていないため、見るだけです
          */
         "spectatingAsGuest": string;
@@ -16515,6 +16523,10 @@ export interface Locale extends ILocale {
          */
         "doodleCrop": string;
         /**
+         * 切り抜き
+         */
+        "doodleCropShort": string;
+        /**
          * 枠・つまみをドラッグ(外へ広げることもできます)
          */
         "doodleCropHint": string;
@@ -16582,6 +16594,250 @@ export interface Locale extends ILocale {
          * 動画を作っている間は、このタブを表示したままにしてください(ほかのタブへ移っている間は止まり、戻ると続きから進みます)
          */
         "doodleTimelapseKeepOpen": string;
+        "_federationDiagnosis": {
+            /**
+             * 診断
+             */
+            "title": string;
+            /**
+             * このサーバーとの連合がうまくいかないとき、どこで止まっているかを確かめます。このサーバーの設定と、相手のサーバーへの実際の問い合わせを順に調べます(相手のサーバーには何も配送しません)。
+             */
+            "description": string;
+            /**
+             * 診断する
+             */
+            "run": string;
+            /**
+             * もう一度診断する
+             */
+            "rerun": string;
+            /**
+             * 診断しています(数十秒かかることがあります)
+             */
+            "running": string;
+            /**
+             * 診断した日時
+             */
+            "checkedAt": string;
+            /**
+             * 連合を妨げる問題は見つかりませんでした
+             */
+            "summaryOk": string;
+            /**
+             * {errors}件の問題と、{warns}件の注意があります
+             */
+            "summaryProblems": ParameterizedString<"errors" | "warns">;
+            /**
+             * このサーバーの設定・状態
+             */
+            "localSection": string;
+            /**
+             * 相手のサーバーへの問い合わせ
+             */
+            "remoteSection": string;
+            "_status": {
+                /**
+                 * 問題なし
+                 */
+                "ok": string;
+                /**
+                 * 注意
+                 */
+                "warn": string;
+                /**
+                 * 問題あり
+                 */
+                "error": string;
+                /**
+                 * 確かめていません
+                 */
+                "skipped": string;
+            };
+            "_checks": {
+                /**
+                 * 連合の範囲
+                 */
+                "federationMode": string;
+                /**
+                 * ブロック
+                 */
+                "blocked": string;
+                /**
+                 * サイレンス
+                 */
+                "silenced": string;
+                /**
+                 * 配送の停止
+                 */
+                "suspension": string;
+                /**
+                 * 相手の応答
+                 */
+                "responding": string;
+                /**
+                 * 相手から最後に届いた日時
+                 */
+                "lastReceived": string;
+                /**
+                 * 再送を待っている配送
+                 */
+                "deliverQueue": string;
+                /**
+                 * 名前解決(DNS)
+                 */
+                "dns": string;
+                /**
+                 * HTTPSでの接続
+                 */
+                "https": string;
+                /**
+                 * NodeInfo(サーバーの情報)
+                 */
+                "nodeinfo": string;
+                /**
+                 * WebFinger(ユーザーの検索)
+                 */
+                "webfinger": string;
+                /**
+                 * 署名付きでのユーザー情報の取得
+                 */
+                "actor": string;
+                /**
+                 * inbox(配送先)の応答
+                 */
+                "inbox": string;
+            };
+            "_codes": {
+                /**
+                 * このサーバーは、連合をしない設定になっています
+                 */
+                "federationDisabled": string;
+                /**
+                 * このサーバーは、決めたサーバーとだけ連合する設定で、相手のサーバーはその一覧に入っていません
+                 */
+                "notInAllowlist": string;
+                /**
+                 * このサーバーが、相手のサーバーをブロックしています
+                 */
+                "blocked": string;
+                /**
+                 * このサーバーが、相手のサーバーをサイレンスしています(連合はしますが、フォローは承認制になります)
+                 */
+                "silenced": string;
+                /**
+                 * このサーバーが、相手のサーバーをメディアサイレンスしています(連合はしますが、添付はセンシティブ扱いになります)
+                 */
+                "mediaSilenced": string;
+                /**
+                 * このサーバーが、相手のサーバーをサイレンス・メディアサイレンスしています
+                 */
+                "silencedAndMediaSilenced": string;
+                /**
+                 * このサーバーから相手のサーバーへの配送を、手動で止めています
+                 */
+                "manuallySuspended": string;
+                /**
+                 * 相手のサーバーが「もう存在しない(410 Gone)」と応答したため、配送を止めています
+                 */
+                "goneSuspended": string;
+                /**
+                 * 相手のサーバーが長い間応答しなかったため、配送を自動で止めています
+                 */
+                "autoSuspendedForNotResponding": string;
+                /**
+                 * 相手のサーバーのソフトウェアが、配送を止める対象になっています
+                 */
+                "softwareSuspended": string;
+                /**
+                 * 相手のサーバーへの配送が失敗し続けています(応答が無くなった日時を表示しています)
+                 */
+                "notResponding": string;
+                /**
+                 * 相手のサーバーからは、まだ何も届いたことがありません
+                 */
+                "neverReceived": string;
+                /**
+                 * 相手のサーバーからは、しばらく何も届いていません(相手側でこのサーバーへの配送が止まっているか、こちらをブロックしている可能性があります)
+                 */
+                "stale": string;
+                /**
+                 * 相手のサーバーへの配送に失敗して、再送を待っているものがあります(件数を表示しています)
+                 */
+                "delayed": string;
+                /**
+                 * プロキシを使う設定のため、名前解決は確かめていません
+                 */
+                "proxy": string;
+                /**
+                 * 相手のサーバーの名前を解決できません(ドメインが無い・DNSの設定に問題がある可能性があります)
+                 */
+                "dnsFailed": string;
+                /**
+                 * 相手のサーバーに接続できません(止まっている・接続を拒否している可能性があります)
+                 */
+                "connectionFailed": string;
+                /**
+                 * 相手のサーバーの証明書に問題があります(期限切れ・名前の不一致など)
+                 */
+                "tlsFailed": string;
+                /**
+                 * 相手のサーバーが時間内に応答しませんでした
+                 */
+                "timeout": string;
+                /**
+                 * 相手のサーバーがエラーを返しました(相手側の不調の可能性があります)
+                 */
+                "serverError": string;
+                /**
+                 * 相手のサーバーが、想定していない応答を返しました
+                 */
+                "httpError": string;
+                /**
+                 * 相手のサーバーに拒否されました(相手がこのサーバーをブロックしている、または署名を受け付けていない可能性があります)
+                 */
+                "rejected": string;
+                /**
+                 * 相手のサーバーに、問い合わせた先が見つかりません
+                 */
+                "notFound": string;
+                /**
+                 * 相手のサーバーが「もう存在しない」と応答しました
+                 */
+                "gone": string;
+                /**
+                 * 相手のサーバーに、問い合わせの回数を制限されています
+                 */
+                "rateLimited": string;
+                /**
+                 * 相手のサーバーの応答を読み取れません(形式が正しくありません)
+                 */
+                "invalidResponse": string;
+                /**
+                 * 相手のサーバーへの問い合わせに失敗しました
+                 */
+                "requestFailed": string;
+                /**
+                 * 相手のサーバーにつながらないため、確かめていません
+                 */
+                "unreachable": string;
+                /**
+                 * このサーバーが知っている相手のサーバーのユーザーがいないため、確かめていません
+                 */
+                "noKnownUser": string;
+                /**
+                 * このサーバーの中で確かめるのに失敗しました
+                 */
+                "internalError": string;
+                /**
+                 * 確かめるのに使ったユーザーが、相手のサーバーにもういません(サーバーそのものの問題とは限りません)
+                 */
+                "userGone": string;
+                /**
+                 * 取得できました(ただし、署名を確かめずに返すサーバーも多いので、相手がこのサーバーをブロックしていても、ここは問題なしになることがあります)
+                 */
+                "actorFetched": string;
+            };
+        };
         /**
          * 続きを描く
          */

@@ -517,6 +517,15 @@ export type paths = {
          */
         post: operations['admin___federation___delete-all-files'];
     };
+    '/admin/federation/diagnose-instance': {
+        /**
+         * admin/federation/diagnose-instance
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:federation*
+         */
+        post: operations['admin___federation___diagnose-instance'];
+    };
     '/admin/federation/refresh-remote-instance-metadata': {
         /**
          * admin/federation/refresh-remote-instance-metadata
@@ -10760,6 +10769,93 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___federation___diagnose-instance': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    host: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        host: string;
+                        /** Format: date-time */
+                        checkedAt: string;
+                        checks: {
+                            /** @enum {string} */
+                            id: 'federationMode' | 'blocked' | 'silenced' | 'suspension' | 'responding' | 'lastReceived' | 'deliverQueue' | 'dns' | 'https' | 'nodeinfo' | 'webfinger' | 'actor' | 'inbox';
+                            /** @enum {string} */
+                            status: 'ok' | 'warn' | 'error' | 'skipped';
+                            code: string | null;
+                            detail: string | null;
+                            elapsedMs: number | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

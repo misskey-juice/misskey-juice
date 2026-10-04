@@ -278,6 +278,12 @@ type AdminEmojiUpdateRequest = operations['admin___emoji___update']['requestBody
 type AdminFederationDeleteAllFilesRequest = operations['admin___federation___delete-all-files']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminFederationDiagnoseInstanceRequest = operations['admin___federation___diagnose-instance']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminFederationDiagnoseInstanceResponse = operations['admin___federation___diagnose-instance']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminFederationRefreshRemoteInstanceMetadataRequest = operations['admin___federation___refresh-remote-instance-metadata']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -2105,6 +2111,8 @@ declare namespace entities {
         AdminEmojiSetLicenseBulkRequest,
         AdminEmojiUpdateRequest,
         AdminFederationDeleteAllFilesRequest,
+        AdminFederationDiagnoseInstanceRequest,
+        AdminFederationDiagnoseInstanceResponse,
         AdminFederationRefreshRemoteInstanceMetadataRequest,
         AdminFederationRemoveAllFollowingRequest,
         AdminFederationUpdateInstanceRequest,
