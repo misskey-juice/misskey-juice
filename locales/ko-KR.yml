@@ -4420,6 +4420,7 @@ _juice:
   doodleSettings: "낙서 설정"
   doodleCrop: "캔버스 자르기"
   doodleCropShort: "자르기"
+  remoteEmojiReaction: "{host}의 이모지"
   doodleCropHint: "테두리·손잡이를 드래그(바깥으로 넓힐 수도 있습니다)"
   doodleCropWhole: "전체"
   doodleCropLeft: "테두리 왼쪽 위치"

@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="buttonEl"
 	v-ripple="canToggle"
 	class="_button"
-	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.remote]: isRemoteCustomEmoji, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -64,6 +64,9 @@ const buttonEl = useTemplateRef('buttonEl');
 const emojiName = computed(() => getEmojiNameFromReaction(props.reaction));
 
 const isLocalCustomEmoji = computed(() => isLocalCustomEmojiReaction(props.reaction));
+
+// JUICE: ほかのサーバーのカスタム絵文字でのリアクション(押すと相乗りになる)。このサーバーの絵文字と見分けられるよう、枠を点線にする
+const isRemoteCustomEmoji = computed(() => props.reaction[0] === ':' && !isLocalCustomEmoji.value);
 
 // JUICE: リモートのカスタム絵文字を使ったリアクションへの相乗り(既存リアクションに便乗して
 // 同じリアクションを付けること)を管理者設定で有効化できるようにする(著作権者の許諾なく
@@ -343,6 +346,17 @@ if (!mock) {
 
 		> .icon {
 			filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+		}
+	}
+
+	// JUICE: ほかのサーバーのカスタム絵文字でのリアクションは、枠を点線にする
+	&.remote {
+		outline: dashed 1px color-mix(in srgb, var(--MI_THEME-fg) 45%, transparent);
+		outline-offset: -1px;
+
+		&.reacted, &.reacted:hover {
+			box-shadow: none;
+			outline-color: var(--MI_THEME-accent);
 		}
 	}
 }

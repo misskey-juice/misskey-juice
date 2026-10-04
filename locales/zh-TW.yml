@@ -4274,6 +4274,7 @@ _juice:
   doodleSettings: "塗鴉設定"
   doodleCrop: "裁切畫布"
   doodleCropShort: "裁切"
+  remoteEmojiReaction: "來自 {host} 的表情"
   doodleCropHint: "拖曳邊框或控制點（也可以向外擴展）"
   doodleCropWhole: "全部"
   doodleCropLeft: "邊框左側位置"

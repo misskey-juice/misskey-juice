@@ -4396,6 +4396,7 @@ _juice:
   doodleSettings: "落書きの設定"
   doodleCrop: "キャンバスを切り抜く"
   doodleCropShort: "切り抜き"
+  remoteEmojiReaction: "{host} の絵文字"
   doodleCropHint: "枠・つまみをドラッグ(外へ広げることもできます)"
   doodleCropWhole: "全体"
   doodleCropLeft: "枠の左の位置"

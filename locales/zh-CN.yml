@@ -4420,6 +4420,7 @@ _juice:
   doodleSettings: "涂鸦设置"
   doodleCrop: "裁剪画布"
   doodleCropShort: "裁剪"
+  remoteEmojiReaction: "来自 {host} 的表情"
   doodleCropHint: "拖动边框或控制点（也可以向外扩展）"
   doodleCropWhole: "全部"
   doodleCropLeft: "边框左侧位置"

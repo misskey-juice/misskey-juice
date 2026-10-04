@@ -4420,6 +4420,7 @@ _juice:
   doodleSettings: "Doodle settings"
   doodleCrop: "Crop canvas"
   doodleCropShort: "Crop"
+  remoteEmojiReaction: "Emoji from {host}"
   doodleCropHint: "Drag the frame or handles (you can also extend outward)"
   doodleCropWhole: "Whole"
   doodleCropLeft: "Frame left position"

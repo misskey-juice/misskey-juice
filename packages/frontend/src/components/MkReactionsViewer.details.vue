@@ -9,6 +9,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.reaction">
 			<MkReactionIcon :reaction="reaction" :class="$style.reactionIcon" :noStyle="true"/>
 			<div :class="$style.reactionName">{{ getReactionName(reaction) }}</div>
+			<!-- JUICE: ほかのサーバーのカスタム絵文字なら、どこの絵文字かを出す -->
+			<div v-if="remoteHost != null" :class="$style.reactionHost">{{ i18n.tsx._juice.remoteEmojiReaction({ host: remoteHost }) }}</div>
 		</div>
 		<div :class="$style.users">
 			<div v-for="u in users" :key="u.id" :class="$style.user">
@@ -22,13 +24,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { } from 'vue';
+import { computed } from 'vue';
 import * as Misskey from 'misskey-js';
 import { getEmojiName } from '@@/js/emojilist.js';
 import MkTooltip from './MkTooltip.vue';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
+import { i18n } from '@/i18n.js';
 
-defineProps<{
+const props = defineProps<{
 	showing: boolean;
 	reaction: string;
 	users: Misskey.entities.UserLite[];
@@ -39,6 +42,12 @@ defineProps<{
 const emit = defineEmits<{
 	(ev: 'closed'): void;
 }>();
+
+// JUICE: `:name@host:` のホスト(このサーバーの絵文字・Unicodeの絵文字ならnull)
+const remoteHost = computed(() => {
+	const host = props.reaction.match(/^:[^@:]+@([^:]+):$/)?.[1];
+	return host != null && host !== '.' ? host : null;
+});
 
 function getReactionName(reaction: string): string {
 	const trimLocal = reaction.replace('@.', '');
@@ -72,6 +81,12 @@ function getReactionName(reaction: string): string {
 
 .reactionName {
 	font-size: 1em;
+}
+
+.reactionHost {
+	font-size: 0.8em;
+	opacity: 0.7;
+	overflow-wrap: anywhere;
 }
 
 .users {

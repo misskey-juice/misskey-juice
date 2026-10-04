@@ -16539,6 +16539,10 @@ export interface Locale extends ILocale {
          */
         "doodleCropShort": string;
         /**
+         * {host} の絵文字
+         */
+        "remoteEmojiReaction": ParameterizedString<"host">;
+        /**
          * 枠・つまみをドラッグ(外へ広げることもできます)
          */
         "doodleCropHint": string;
