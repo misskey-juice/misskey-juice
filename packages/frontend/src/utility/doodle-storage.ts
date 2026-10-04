@@ -87,7 +87,8 @@ export function updateDoodleMeta(id: string, patch: Partial<Omit<DoodleMeta, 'id
 	});
 }
 
-export function saveDoodleData(id: string, data: DoodleData): Promise<void> {
+/** 線・レイヤーを保存する。metaを渡すと、一覧の情報(キャンバスの大きさなど)も続けて変える(ほかの読み書きは間に入らない) */
+export function saveDoodleData(id: string, data: DoodleData, meta?: Partial<Pick<DoodleMeta, 'width' | 'height'>>): Promise<void> {
 	return serialize(async () => {
 		const index = await readIndex();
 		const i = index.findIndex(item => item.id === id);
@@ -95,7 +96,7 @@ export function saveDoodleData(id: string, data: DoodleData): Promise<void> {
 		if (i === -1) return;
 		// 保存する形にそろえる(画面が持っているリアクティブな配列をそのまま入れないように)
 		await set(dataKey(id), JSON.parse(JSON.stringify(data)));
-		index[i] = { ...index[i], updatedAt: Date.now() };
+		index[i] = { ...index[i], ...meta, updatedAt: Date.now() };
 		await set(indexKey(), index);
 	});
 }

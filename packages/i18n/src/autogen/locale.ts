@@ -16475,6 +16475,18 @@ export interface Locale extends ILocale {
          */
         "doodleSettings": string;
         /**
+         * キャンバスを切り抜く
+         */
+        "doodleCrop": string;
+        /**
+         * 枠・つまみをドラッグ(外へ広げることもできます)
+         */
+        "doodleCropHint": string;
+        /**
+         * 全体
+         */
+        "doodleCropWhole": string;
+        /**
          * 続きを描く
          */
         "doodleRecent": string;
