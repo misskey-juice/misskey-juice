@@ -468,7 +468,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<!-- JUICE: 落書きのキャンバスの切り抜き -->
 				<div v-if="cropRect != null" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
-					<span :class="$style.selectionHint"><i class="ti ti-crop"></i> {{ cropRect.right - cropRect.left }}×{{ cropRect.bottom - cropRect.top }}</span>
+					<!-- 大きさと位置(今のキャンバスの左上からのずれ)は、数でも決められる -->
+					<i class="ti ti-crop" :class="$style.selectionHint"></i>
+					<input type="number" :class="$style.cropInput" :value="cropRect.right - cropRect.left" :min="DRAW_ROOM_CANVAS_MIN_SIZE" :max="DRAW_ROOM_CANVAS_MAX_SIZE" step="1" :disabled="cropApplying" :aria-label="i18n.ts._drawRoom.canvasWidth" @change="setCropValue('width', $event)" @keydown.enter="setCropValue('width', $event)"/>
+					<span :class="$style.selectionHint">×</span>
+					<input type="number" :class="$style.cropInput" :value="cropRect.bottom - cropRect.top" :min="DRAW_ROOM_CANVAS_MIN_SIZE" :max="DRAW_ROOM_CANVAS_MAX_SIZE" step="1" :disabled="cropApplying" :aria-label="i18n.ts._drawRoom.canvasHeight" @change="setCropValue('height', $event)" @keydown.enter="setCropValue('height', $event)"/>
+					<label :class="$style.cropField"><span>X</span><input type="number" :class="$style.cropInput" :value="cropRect.left" step="1" :disabled="cropApplying" :aria-label="i18n.ts._juice.doodleCropLeft" @change="setCropValue('left', $event)" @keydown.enter="setCropValue('left', $event)"/></label>
+					<label :class="$style.cropField"><span>Y</span><input type="number" :class="$style.cropInput" :value="cropRect.top" step="1" :disabled="cropApplying" :aria-label="i18n.ts._juice.doodleCropTop" @change="setCropValue('top', $event)" @keydown.enter="setCropValue('top', $event)"/></label>
 					<span :class="[$style.selectionHint, $style.barLabel]">{{ i18n.ts._juice.doodleCropHint }}</span>
 					<button class="_button" :class="$style.selectionAction" :disabled="cropApplying" @click="resetCrop"><i class="ti ti-maximize"></i> {{ i18n.ts._juice.doodleCropWhole }}</button>
 					<button class="_button" :class="[$style.selectionAction, $style.selectionActionPrimary]" :disabled="cropApplying" @click="applyCrop"><i class="ti ti-check"></i> {{ i18n.ts.apply }}</button>
@@ -1628,6 +1634,33 @@ function resetCrop(): void {
 	cropRect.value = { left: 0, top: 0, right: r.canvasWidth, bottom: r.canvasHeight };
 }
 
+// 数で決める。幅・高さは左上を動かさずに変え、X・Yは大きさを変えずに枠を動かす。入れた数は範囲に収めて、欄にも反映する
+function setCropValue(field: 'width' | 'height' | 'left' | 'top', ev: Event): void {
+	const c = cropRect.value;
+	const input = ev.target as HTMLInputElement;
+	if (c == null || cropApplying.value || cropDrag != null) return;
+	const raw = Math.round(input.valueAsNumber);
+	const next = { ...c };
+	if (Number.isFinite(raw)) {
+		if (field === 'width') next.right = c.left + Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, raw));
+		else if (field === 'height') next.bottom = c.top + Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, raw));
+		else {
+			// 枠が今の絵から離れすぎないようにする(キャンバスの大きさの上限まで)
+			const pos = Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(-DRAW_ROOM_CANVAS_MAX_SIZE, raw));
+			if (field === 'left') {
+				next.right = pos + (c.right - c.left);
+				next.left = pos;
+			} else {
+				next.bottom = pos + (c.bottom - c.top);
+				next.top = pos;
+			}
+		}
+		cropRect.value = next;
+	}
+	// 範囲に収めた・変えなかったときも、欄の数を今の値にそろえる
+	input.value = String(field === 'width' ? next.right - next.left : field === 'height' ? next.bottom - next.top : field === 'left' ? next.left : next.top);
+}
+
 // つまみ・枠をつかんだ所(キャンバス座標。キャンバスの外でも収めない)
 function cropPoint(ev: PointerEvent): [number, number] {
 	const rect = viewportEl.value!.getBoundingClientRect();
@@ -1728,6 +1761,26 @@ async function applyCrop(): Promise<void> {
 	init().then(() => updateDoodleThumbnail(id));
 }
 //#endregion
+
+// タイムラプス(描いた線を順に再生する)を開く。今の線・レイヤーを渡す
+function openTimelapse(): void {
+	const r = room.value;
+	const local = localConnection();
+	if (r == null || local == null || cropRect.value != null || canvasLoading.value != null) return;
+	cancelStroke();
+	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkDoodleTimelapseDialog.vue')), {
+		title: r.title,
+		canvasWidth: r.canvasWidth,
+		canvasHeight: r.canvasHeight,
+		// 開いた後に描き足しても変わらないよう、今の内容を写して渡す
+		strokes: [...local.strokes],
+		layers: local.layers.map(layer => ({ ...layer })),
+		attachable: props.attachable,
+	}, {
+		attach: (file) => emit('attach', file),
+		closed: () => dispose(),
+	});
+}
 
 // 投稿フォームから開いたとき: 描いた絵(全体)をドライブに上げて、そのフォームに添付する
 async function attachDoodle(): Promise<void> {
@@ -4488,6 +4541,10 @@ const headerActions = computed(() => {
 	// JUICE: 落書きは、名前とキャンバスの大きさの設定だけ(共有・通報などは無い)
 	if (isDoodle.value) {
 		actions.push({
+			icon: 'ti ti-player-play',
+			text: i18n.ts._juice.doodleTimelapse,
+			handler: openTimelapse,
+		}, {
 			icon: 'ti ti-crop',
 			text: i18n.ts._juice.doodleCrop,
 			handler: startCrop,
@@ -5103,6 +5160,31 @@ definePage(() => ({
 	width: 100%;
 	height: 100%;
 	pointer-events: none;
+}
+
+.cropInput {
+	width: 5em;
+	padding: 2px 4px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 4px;
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-fg);
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+
+	&:focus-visible {
+		outline: solid 2px var(--MI_THEME-focus);
+		outline-offset: -1px;
+	}
+}
+
+.cropField {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+	opacity: 0.9;
 }
 
 .cropShade {

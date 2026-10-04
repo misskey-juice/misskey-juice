@@ -16487,6 +16487,66 @@ export interface Locale extends ILocale {
          */
         "doodleCropWhole": string;
         /**
+         * 枠の左の位置
+         */
+        "doodleCropLeft": string;
+        /**
+         * 枠の上の位置
+         */
+        "doodleCropTop": string;
+        /**
+         * タイムラプス
+         */
+        "doodleTimelapse": string;
+        /**
+         * 長さ
+         */
+        "doodleTimelapseDuration": string;
+        /**
+         * {n}秒
+         */
+        "doodleTimelapseSeconds": ParameterizedString<"n">;
+        /**
+         * 最初から再生
+         */
+        "doodleTimelapseReplay": string;
+        /**
+         * 動画にする
+         */
+        "doodleTimelapseRecord": string;
+        /**
+         * 動画を作っています(再生が終わるまでこのままお待ちください)
+         */
+        "doodleTimelapseRecording": string;
+        /**
+         * このブラウザでは動画にできません(再生だけできます)
+         */
+        "doodleTimelapseUnsupported": string;
+        /**
+         * まだ何も描かれていません
+         */
+        "doodleTimelapseEmpty": string;
+        /**
+         * 動画を作れませんでした
+         */
+        "doodleTimelapseFailed": string;
+        /**
+         * 動画をドライブに保存しました
+         */
+        "doodleTimelapseSaved": string;
+        /**
+         * ドライブに保存
+         */
+        "doodleTimelapseSaveToDrive": string;
+        /**
+         * ノートに投稿
+         */
+        "doodleTimelapsePost": string;
+        /**
+         * 動画を作っている間は、このタブを表示したままにしてください(ほかのタブへ移っている間は止まり、戻ると続きから進みます)
+         */
+        "doodleTimelapseKeepOpen": string;
+        /**
          * 続きを描く
          */
         "doodleRecent": string;
