@@ -9618,6 +9618,18 @@ export interface Locale extends ILocale {
          */
         "canvasSquare3840": string;
         /**
+         * ドット絵 (32×32)
+         */
+        "canvasPixel32": string;
+        /**
+         * ドット絵 (64×64)
+         */
+        "canvasPixel64": string;
+        /**
+         * ドット絵 (128×128)
+         */
+        "canvasPixel128": string;
+        /**
          * あなたのロールでは絵チャの部屋を作れません(ほかの人の部屋には参加できます)
          */
         "cannotCreate": string;

@@ -157,6 +157,10 @@ const CANVAS_PRESETS = [
 	{ value: 'square', size: 1200, label: () => i18n.ts._drawRoom.canvasSquare },
 	{ value: 'square2048', size: 2048, label: () => i18n.ts._drawRoom.canvasSquare2048 },
 	{ value: 'square3840', size: 3840, label: () => i18n.ts._drawRoom.canvasSquare3840 },
+	// ドット絵向け
+	{ value: 'pixel32', size: 32, label: () => i18n.ts._drawRoom.canvasPixel32 },
+	{ value: 'pixel64', size: 64, label: () => i18n.ts._drawRoom.canvasPixel64 },
+	{ value: 'pixel128', size: 128, label: () => i18n.ts._drawRoom.canvasPixel128 },
 ] as const;
 
 async function createRoom(): Promise<void> {

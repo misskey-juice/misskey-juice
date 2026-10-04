@@ -22784,7 +22784,7 @@ export interface operations {
                     visibility: 'followers' | 'local';
                     maxMembers: number;
                     /** @enum {string} */
-                    canvasPreset?: 'landscape' | 'portrait' | 'square' | 'square2048' | 'square3840';
+                    canvasPreset?: 'landscape' | 'portrait' | 'square' | 'square2048' | 'square3840' | 'pixel32' | 'pixel64' | 'pixel128';
                     canvasWidth?: number;
                     canvasHeight?: number;
                     /** @default false */

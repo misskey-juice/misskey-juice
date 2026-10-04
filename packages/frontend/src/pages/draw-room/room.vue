@@ -2344,7 +2344,8 @@ function fitToScreen(): void {
 	viewAdjusted = false;
 	if (viewportEl.value == null || room.value == null) return;
 	const rect = viewportEl.value.getBoundingClientRect();
-	const scale = Math.min(rect.width / room.value.canvasWidth, rect.height / room.value.canvasHeight) * 0.96;
+	// ドット絵向けの小さいキャンバスでも、拡大の上限は超えない
+	const scale = Math.min(MAX_ZOOM, Math.min(rect.width / room.value.canvasWidth, rect.height / room.value.canvasHeight) * 0.96);
 	view.rotation = 0;
 	view.scale = scale;
 	view.x = (rect.width - room.value.canvasWidth * scale) / 2;
