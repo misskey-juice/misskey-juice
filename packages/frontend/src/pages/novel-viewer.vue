@@ -61,8 +61,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template v-for="(chapter, i) in chapters" :key="`${i}:${latinSideways}:${chapter.text}`">
 										<div v-if="i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 										<div v-else-if="i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
+										<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
+										<span v-else-if="i > 0 && chapter.breaksBefore > 0" :class="[$style.novelText, '_selectable']" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
 										<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-										<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+										<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</div>
 							</div>
@@ -81,7 +83,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<template v-for="(chapter, i) in chapters" :key="`${i}:${latinSideways}:${chapter.text}`">
 											<div v-if="i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 											<div v-else-if="i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
-											<span :class="$style.novelText" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+											<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
+											<span v-else-if="i > 0 && chapter.breaksBefore > 0" :class="$style.novelText" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
+											<span :class="$style.novelText" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 										</template>
 									</template>
 								</div>
@@ -108,8 +112,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<div v-else-if="writingMode !== 'horizontal' && i > 0 && chapter.sectionStart" :class="$style.pageBreak" data-novel-page-break aria-hidden="true"></div>
 									<div v-else-if="writingMode !== 'horizontal' && i > 0 && !chapter.titleStart" :class="$style.chapterBreak" aria-hidden="true">⁂</div>
+									<!-- JUICE: 章タイトルから始まる章の前の改行(原文の空行を含む)。章の本文は前後の空白を落としているので、ここで描く -->
+									<span v-else-if="writingMode !== 'horizontal' && i > 0 && chapter.breaksBefore > 0" :class="[$style.novelText, '_selectable']" :data-novel-chapter-gap="i" aria-hidden="true">{{ '\n'.repeat(chapter.breaksBefore) }}</span>
 									<span :ref="(el) => setChapterMarkerEl(i, el as HTMLElement | null)" :class="$style.chapterMarker"></span>
-									<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis" :class="{ [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
+									<span :class="[$style.novelText, '_selectable']" :data-novel-chapter="i"><template v-for="(seg, j) in chapter.segments" :key="j"><ruby v-if="seg.type === 'ruby'" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.base }}<rt>{{ seg.reading }}</rt></ruby><span v-else-if="seg.bold || seg.italic || seg.strike || seg.emphasis || seg.heading" :class="{ [$style.chapterTitle]: seg.heading, [$style.chapterTitleStart]: seg.headingStart, [$style.bold]: seg.bold, [$style.italic]: seg.italic, [$style.strike]: seg.strike, [$style.emphasis]: seg.emphasis != null, [$style.emphasis_s]: seg.emphasis === 's', [$style.emphasis_S]: seg.emphasis === 'S', [$style.emphasis_c]: seg.emphasis === 'c', [$style.emphasis_C]: seg.emphasis === 'C' }">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
 									</template>
 								</template>
 								<div v-if="writingMode === 'horizontal' && sectionCount > 1" :class="$style.chapterNav">
@@ -155,6 +161,7 @@ import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { store } from '@/store.js';
 import type { MenuItem } from '@/types/menu.js';
+import { CHAPTER_TITLE_PATTERN, splitByChapterTitles } from '@/utility/novel-chapters.js';
 import { caretAtPoint, chapterElementOf, lineAtPosition, lineExcerpt, lineRange, rangeStartRect, resolveBookmark, setNovelBookmarkHighlight } from '@/utility/novel-bookmark.js';
 import type { NovelBookmark } from '@/utility/novel-bookmark.js';
 import { isNovelTextFile } from '@/utility/novel-text-file.js';
@@ -467,7 +474,9 @@ function applyParagraphIndent(text: string): string {
 // カスタム絵文字・$[…]の関数等は記法のまま出す)。例外として小説で使う表現だけは反映する:
 // ・ルビ: MFMの $[ruby 基底 よみ]と、pixiv小説の [[rb:基底 > よみ]](青空文庫記法の《》もこの形に変換済み)
 // ・文字の装飾: 標準のマークダウン記法の **太字**・*斜体*・~~打ち消し線~~(装飾の中にルビを含めてもよい)
-type NovelDecoration = { bold?: boolean; italic?: boolean; strike?: boolean; emphasis?: EmphasisKind };
+// JUICE: headingは章タイトル([chapter:…])の文字(見出しとして太く・少し大きく出す)。headingStartはその最初の部分
+// (行頭の章タイトルを2字下げる)
+type NovelDecoration = { bold?: boolean; italic?: boolean; strike?: boolean; emphasis?: EmphasisKind; heading?: boolean; headingStart?: boolean };
 type NovelSegment = ({ type: 'text'; text: string } | { type: 'ruby'; base: string; reading: string }) & NovelDecoration;
 
 const RUBY_PATTERN = /\$\[ruby ([^\s\]]+) ([^\]]+)\]|\[\[rb:\s*([^>\]]+?)\s*>\s*([^\]]+?)\s*\]\]/g;
@@ -524,6 +533,9 @@ type NovelChapter = {
 	sectionStart: boolean;
 	// JUICE: 区切り線ではなく、[chapter:タイトル]の行から始まった章か(前に⁂を出さない)
 	titleStart: boolean;
+	// JUICE: 章タイトルから始まった章の前に、原文にあった改行の数(行末の改行+空行)。縦書きで、章の本文の外に描く
+	// (横書きは章の間に移動のボタンが入るので描かない)。章の本文に入れないのは、しおりの行番号をずらさないため
+	breaksBefore: number;
 };
 
 // JUICE: pixiv小説と同じく、独立行の [newpage] を改ページとして扱う。横書きでは1ページずつ表示して
@@ -531,38 +543,89 @@ type NovelChapter = {
 // ページの中はさらに区切り線(独立行の---等)で章に分ける。どちらも無ければ全文が1ページ1章になる。
 // 青空文庫記法の変換(凡例ブロックの除去含む)は分割より前に、全文に対して1回だけ行う
 const NEWPAGE_PATTERN = /^[ \t\u3000]*\[newpage\][ \t\u3000]*$/m;
-// JUICE: タイトルの中にルビ記法 [[rb:…]] を含めてもよい(途中の ] で打ち切らない)。
-// 改行はまたがない(閉じ忘れたときに、後ろの本文まで題名にしないように。エディターの目次と同じ)
-const CHAPTER_TITLE_PATTERN = /\[chapter:\s*((?:\[\[rb:[^\]]*\]\]|[^\]\n])*?)\s*\]/g;
+const PIXIV_RUBY_BASE_PATTERN = /\[\[rb:\s*([^>\]]+?)\s*>[^\]]*\]\]/g;
 
-// JUICE: [chapter:タイトル] のある行から新しい章にする(その前に本文があるときだけ。区切り線・改ページのすぐ後の
-// 章タイトルは、その章の題名にする)。区切り線を入れずに章タイトルだけを並べた作品でも、全ての章が目次に出るように
-// (エディターの目次 buildNovelOutline と同じ数え方)
-function splitByChapterTitles(part: string): string[] {
-	const starts: number[] = [];
-	let last = 0;
-	for (const m of part.matchAll(CHAPTER_TITLE_PATTERN)) {
-		const lineStart = part.lastIndexOf('\n', m.index) + 1;
-		if (lineStart <= last) continue;
-		if (part.slice(last, lineStart).trim() === '') continue;
-		starts.push(lineStart);
-		last = lineStart;
+// JUICE: 章の本文を、表示する部分の並びにする。[chapter:タイトル] は記法を外して見出しの部分にする(本文と見分けがつくように)。
+// 装飾・ルビが章タイトルをまたいでいても効くよう、章タイトルの範囲を目印(私用領域の文字)で包んでから全文を1回で解析し、
+// 解析した後で目印を外して見出しの印を付ける。段落の字下げは、章タイトルで始まる行にはかけない(見出しとして下げるため)
+const HEADING_OPEN = '\uE002';
+const HEADING_CLOSE = '\uE003';
+const HEADING_MARK_PATTERN = /[\uE002\uE003]/g;
+// 章タイトルで始まる行(前に装飾の始まりの記号があってもよい)
+const HEADING_LINE_PATTERN = /^(?:\*\*|~~|\*|\uE000[sScC])*\uE002/;
+
+function toChapterSegments(piece: string): { text: string; segments: NovelSegment[] } {
+	// 元の本文にある目印の文字は取り除く(見出しの範囲と取り違えないように)。題名が空の章タイトルは、記法ごと消す
+	const marked = piece.replace(HEADING_MARK_PATTERN, '').replace(CHAPTER_TITLE_PATTERN, (_, title: string) => (title.length > 0 ? `${HEADING_OPEN}${title}${HEADING_CLOSE}` : ''));
+	const indented = paragraphIndent.value
+		? marked.split('\n').map(line => (HEADING_LINE_PATTERN.test(line) ? line : applyParagraphIndent(line))).join('\n')
+		: marked;
+	const segments: NovelSegment[] = [];
+	let inHeading = false;
+	// 今の行の、ここまでに出した文字(行頭の章タイトルかどうかを見る)
+	let lineSoFar = '';
+	// 見出しの最初の部分をまだ出していない(行頭の章タイトルなら、最初の部分に2字下げの印を付ける)
+	let headingStartPending = false;
+	const push = (seg: NovelSegment) => {
+		const shown = seg.type === 'ruby' ? seg.base : seg.text;
+		if (seg.type === 'text' && shown.length === 0) return;
+		segments.push(inHeading ? { ...seg, heading: true, ...(headingStartPending ? { headingStart: true } : {}) } : seg);
+		if (inHeading) headingStartPending = false;
+		const lineEnd = shown.lastIndexOf('\n');
+		lineSoFar = lineEnd === -1 ? lineSoFar + shown : shown.slice(lineEnd + 1);
+	};
+	const mark = (ch: string) => {
+		inHeading = ch === HEADING_OPEN;
+		headingStartPending = inHeading && lineSoFar.trim() === '';
+	};
+	for (const seg of toNovelSegments(indented)) {
+		if (seg.type === 'ruby') {
+			// ルビの中に目印が入り込んだとき(章タイトルの中の $[ruby …] など)は、ルビごと見出しにする
+			const marks: string[] = (seg.base + seg.reading).match(HEADING_MARK_PATTERN) ?? [];
+			if (marks.includes(HEADING_OPEN)) mark(HEADING_OPEN);
+			push({ ...seg, base: seg.base.replace(HEADING_MARK_PATTERN, ''), reading: seg.reading.replace(HEADING_MARK_PATTERN, '') });
+			if (marks.at(-1) === HEADING_CLOSE) mark(HEADING_CLOSE);
+			continue;
+		}
+		let last = 0;
+		for (const m of seg.text.matchAll(HEADING_MARK_PATTERN)) {
+			push({ ...seg, text: seg.text.slice(last, m.index) });
+			mark(m[0]);
+			last = m.index + 1;
+		}
+		push({ ...seg, text: seg.text.slice(last) });
 	}
-	const pieces: string[] = [];
-	let from = 0;
-	for (const start of starts) {
-		pieces.push(part.slice(from, start));
-		from = start;
-	}
-	pieces.push(part.slice(from));
-	return pieces.map(t => t.trim()).filter(t => t.length > 0);
+	// 目印が装飾・ルビの記法の解釈を変えてしまうことがある(題名が * で始まる・終わるなど)。目印を入れずに解析した結果と
+	// 見た目(文字・装飾・ルビ)が違ったら、見出しにするのをやめて、目印を入れずに解析した結果を使う
+	const text = indented.replace(HEADING_MARK_PATTERN, '');
+	if (renderedKey(segments) === renderedKey(toNovelSegments(text))) return { text, segments };
+	// 見出しにしないときは、章タイトルの行にも今まで通り段落の字下げをかける
+	const stripped = marked.replace(HEADING_MARK_PATTERN, '');
+	const plainText = paragraphIndent.value ? applyParagraphIndent(stripped) : stripped;
+	return { text: plainText, segments: toNovelSegments(plainText) };
 }
 
-const PIXIV_RUBY_BASE_PATTERN = /\[\[rb:\s*([^>\]]+?)\s*>[^\]]*\]\]/g;
+// 表示する部分の並びの見た目(文字・装飾・ルビ)を、比べられる文字列にする。見出しの印と、部分の切れ目の違いは無視する
+function renderedKey(segments: NovelSegment[]): string {
+	const parts: string[] = [];
+	let lastStyle: string | null = null;
+	for (const seg of segments) {
+		const style = `${seg.bold === true}${seg.italic === true}${seg.strike === true}${seg.emphasis ?? ''}`;
+		if (seg.type === 'ruby') {
+			parts.push(`\uE004${style}\uE005${seg.base}\uE005${seg.reading}`);
+			lastStyle = null;
+		} else if (seg.text.length > 0) {
+			if (style === lastStyle) parts[parts.length - 1] += seg.text;
+			else parts.push(`\uE006${style}\uE005${seg.text}`);
+			lastStyle = style;
+		}
+	}
+	return parts.join('');
+}
 
 const chapters = computed<NovelChapter[]>(() => {
 	const text = isPreview.value ? previewText.value : (novelFileContent.value ?? appearNote.value?.text);
-	if (!text) return [{ text: '', segments: [], title: null, section: 0, sectionStart: true, titleStart: false }];
+	if (!text) return [{ text: '', segments: [], title: null, section: 0, sectionStart: true, titleStart: false, breaksBefore: 0 }];
 	let normalized = convertPixivNotation(text.replace(/\r\n/g, '\n'));
 	if (aozoraNotation.value) normalized = convertAozoraNotation(normalized);
 	const sectionTexts = normalized.split(NEWPAGE_PATTERN).map(t => t.trim()).filter(t => t.length > 0);
@@ -570,12 +633,11 @@ const chapters = computed<NovelChapter[]>(() => {
 	for (const [section, sectionText] of (sectionTexts.length > 0 ? sectionTexts : [normalized]).entries()) {
 		const parts = sectionText.split(/\n{0,2}^-{3,}$\n{0,2}/m).map(t => t.trim()).filter(t => t.length > 0);
 		for (const [j, part] of (parts.length > 0 ? parts : [sectionText]).entries()) {
-			for (const [k, piece] of splitByChapterTitles(part).entries()) {
+			for (const [k, { text: piece, breaksBefore }] of splitByChapterTitles(part).entries()) {
 				// JUICE: 目次に出すタイトルは、ルビ記法を基底の文字だけにする
 				const title = [...piece.matchAll(CHAPTER_TITLE_PATTERN)][0]?.[1]?.replace(PIXIV_RUBY_BASE_PATTERN, '$1') ?? null;
-				const withoutTitleSyntax = piece.replace(CHAPTER_TITLE_PATTERN, '$1');
-				const chapterText = paragraphIndent.value ? applyParagraphIndent(withoutTitleSyntax) : withoutTitleSyntax;
-				result.push({ text: chapterText, segments: toNovelSegments(chapterText), title: title || null, section, sectionStart: j === 0 && k === 0, titleStart: k > 0 });
+				const { text: chapterText, segments } = toChapterSegments(piece);
+				result.push({ text: chapterText, segments, title: title || null, section, sectionStart: j === 0 && k === 0, titleStart: k > 0, breaksBefore: k > 0 ? breaksBefore : 0 });
 			}
 		}
 	}
@@ -909,7 +971,15 @@ function currentLine(): { chapter: number; line: number } | null {
 	const caret = caretAtPoint(x, y);
 	if (caret == null) return null;
 	const chapterEl = chapterElementOf(inner, caret.node);
-	if (chapterEl == null) return null;
+	if (chapterEl == null) {
+		// JUICE: 章タイトルの前の改行に当たったら、その章の1行目(題名の行)にする。ただし改行の頭(位置0)は前の章の
+		// 最後の行の終わりなので、前の章の最後の行にする(Firefoxは、行の終わりより先を指すとここを返す)
+		const gapEl = (caret.node instanceof HTMLElement ? caret.node : caret.node.parentElement)?.closest<HTMLElement>('[data-novel-chapter-gap]');
+		if (gapEl == null || !inner.contains(gapEl)) return null;
+		const chapter = Number(gapEl.dataset.novelChapterGap);
+		if (caret.offset === 0 && chapter > 0) return { chapter: chapter - 1, line: (chapterLines.value[chapter - 1]?.length ?? 1) - 1 };
+		return { chapter, line: 0 };
+	}
 	return { chapter: Number(chapterEl.dataset.novelChapter), line: lineAtPosition(chapterEl, caret.node, caret.offset) };
 }
 
@@ -1908,6 +1978,18 @@ if (!props.embedded) {
 
 .bold {
 	font-weight: bold;
+}
+
+// JUICE: 章タイトル([chapter:…])。本文と見分けがつくよう、太く・少し大きくする。縦書きは全ての行を同じ幅にそろえて
+// ページを区切るので、行の幅(line-height)は変えず、文字だけ大きくする(大きくしすぎると隣の行に重なる)
+.chapterTitle {
+	font-weight: bold;
+	font-size: 1.15em;
+}
+
+// 行頭の章タイトルは2字下げる
+.chapterTitleStart {
+	margin-inline-start: 2em;
 }
 
 .italic {

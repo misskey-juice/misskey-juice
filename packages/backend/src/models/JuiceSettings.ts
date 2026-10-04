@@ -81,6 +81,15 @@ export interface JuiceSettingsValue {
 	 */
 	blockEmailPlusAliasRegistration?: boolean;
 	/**
+	 * 使い捨てメールアドレスのドメインの一覧(disposable-email-domains)で、新規登録・メールアドレス変更を断るか。
+	 * メールの検証方式(verifymail.io・Truemail・deep-email-validator)とは別に動く
+	 */
+	disposableEmailBlocklistEnabled?: boolean;
+	/**
+	 * 一覧に載っていても受け付けるドメイン(誤って載っているドメインを外すため)。サブドメインも受け付ける
+	 */
+	disposableEmailAllowDomains?: string[];
+	/**
 	 * AI生成物フラグ(isAIGenerated)が、ノート本体か添付ファイルのいずれか1つにでも立っている
 	 * ノートを連合する際、ActivityPubのsummary(CW相当)にフォールバック文言を合成して送出するか。
 	 * CWが未設定なら文言のみ、既にCWがある場合は「フォールバック文言 | 元のCW」の形で先頭に
@@ -394,6 +403,20 @@ export function resolveEmailAliasSettings(settings: JuiceSettingsValue): {
 	return {
 		blockEmailDotAliasRegistration: settings.blockEmailDotAliasRegistration ?? false,
 		blockEmailPlusAliasRegistration: settings.blockEmailPlusAliasRegistration ?? false,
+	};
+}
+
+/**
+ * jsonb には存在しないキーがありうるため、デフォルト値を解決してから返す。
+ * admin/juice/settings・DisposableEmailDomainServiceの2箇所で共通利用する。
+ */
+export function resolveDisposableEmailSettings(settings: JuiceSettingsValue): {
+	disposableEmailBlocklistEnabled: boolean;
+	disposableEmailAllowDomains: string[];
+} {
+	return {
+		disposableEmailBlocklistEnabled: settings.disposableEmailBlocklistEnabled ?? false,
+		disposableEmailAllowDomains: settings.disposableEmailAllowDomains ?? [],
 	};
 }
 

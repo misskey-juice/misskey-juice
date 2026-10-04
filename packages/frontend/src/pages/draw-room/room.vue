@@ -282,7 +282,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<path :d="pixelGridPath" :class="$style.pixelGrid" :stroke-opacity="pixelGridOpacity"/>
 					</svg>
 					<!-- JUICE: 選んでいる線の範囲と、投げ縄・範囲選択の途中の線 -->
-					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || shapePreview != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
+					<svg v-if="room != null && (selectionShapes.length > 0 || selectGesture != null || fillGesture != null || shapePreview != null || cropRect != null || (selecting && selection != null))" :class="[$style.canvasOverlay, $style.selectionLayer]" :viewBox="`0 0 ${room.canvasWidth} ${room.canvasHeight}`" aria-hidden="true">
 						<!-- 選んだときに囲んだ形(範囲・投げ縄)のまま表示し、移動ツールでずらしている間は一緒に動かす -->
 						<!-- 拡大縮小の途中は、形の座標を拡大して描く(まとめて拡大すると、枠の線・つまみも大きくなるため) -->
 						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0})`">
@@ -338,6 +338,33 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<polygon v-if="selectGesture != null" :points="toSvgPoints(selectGestureShape)" :class="$style.selectionOutline"/>
 						<!-- 保存する範囲(キャンバスと一緒に回転・拡大縮小する) -->
 						<rect v-if="selecting && selection != null" :x="selection.x" :y="selection.y" :width="selection.width" :height="selection.height" :class="$style.selectionOutline"/>
+						<!-- JUICE: 落書きのキャンバスの切り抜き(画像の切り抜きと同じ操作)。枠の外を暗くし、枠の中のドラッグで枠を動かし、
+							辺・角のつまみで大きさを変える。キャンバスの外へ広げた分は、紙の色(白)で見せる。
+							つまみ・枠の操作は表示領域(onPointerDownなど)で受ける(2本指の拡大縮小などと取り合わないように) -->
+						<template v-if="cropRect != null">
+							<clipPath :id="cropClipId">
+								<path :d="`M-100000 -100000H100000V100000H-100000Z M0 0H${room.canvasWidth}V${room.canvasHeight}H0Z`" clip-rule="evenodd"/>
+							</clipPath>
+							<rect :x="cropRect.left" :y="cropRect.top" :width="cropRect.right - cropRect.left" :height="cropRect.bottom - cropRect.top" fill="#fff" :clip-path="`url(#${cropClipId})`"/>
+							<path :d="`M-100000 -100000H100000V100000H-100000Z M${cropRect.left} ${cropRect.top}H${cropRect.right}V${cropRect.bottom}H${cropRect.left}Z`" fill-rule="evenodd" :class="$style.cropShade"/>
+							<rect
+								:x="cropRect.left"
+								:y="cropRect.top"
+								:width="cropRect.right - cropRect.left"
+								:height="cropRect.bottom - cropRect.top"
+								:class="$style.cropFrame"
+							/>
+							<rect
+								v-for="handle in cropHandles"
+								:key="handle.edge"
+								:x="handle.x - handle.size / 2"
+								:y="handle.y - handle.size / 2"
+								:width="handle.size"
+								:height="handle.size"
+								:class="$style.cropHandle"
+								:style="{ cursor: handle.cursor }"
+							/>
+						</template>
 					</svg>
 				</div>
 				<!-- JUICE: デバッグ情報(表示のメニューでオンにしたとき) -->
@@ -408,7 +435,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					aria-hidden="true"
 				></i>
 				<!-- JUICE: 選んでいる線の操作 -->
-				<div v-if="strokeSelection.size > 0 && !selecting" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
+				<div v-if="strokeSelection.size > 0 && !selecting && cropRect == null" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
 					<span :class="$style.selectionHint">{{ i18n.tsx._drawRoom.selectedStrokes({ n: strokeSelection.size }) }}</span>
 					<button class="_button" :class="$style.selectionAction" @click="tool = 'move'"><i class="ti ti-arrows-move"></i> {{ i18n.ts._drawRoom.moveTool }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionLeft" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionLeft" @click="rotateSelection(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
@@ -438,6 +465,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<button class="_button" :class="$style.selectionAction" @click="downloadImage(selection)"><i class="ti ti-download"></i> {{ i18n.ts._drawRoom.downloadImage }}</button>
 					</template>
 					<button v-tooltip="i18n.ts.cancel" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts.cancel" @click="cancelSelecting"><i class="ti ti-x"></i></button>
+				</div>
+				<!-- JUICE: 落書きのキャンバスの切り抜き -->
+				<div v-if="cropRect != null" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
+					<!-- 大きさと位置(今のキャンバスの左上からのずれ)は、数でも決められる -->
+					<i class="ti ti-crop" :class="$style.selectionHint"></i>
+					<input type="number" :class="$style.cropInput" :value="cropRect.right - cropRect.left" :min="DRAW_ROOM_CANVAS_MIN_SIZE" :max="DRAW_ROOM_CANVAS_MAX_SIZE" step="1" :disabled="cropApplying" :aria-label="i18n.ts._drawRoom.canvasWidth" @change="setCropValue('width', $event)" @keydown.enter="setCropValue('width', $event)"/>
+					<span :class="$style.selectionHint">×</span>
+					<input type="number" :class="$style.cropInput" :value="cropRect.bottom - cropRect.top" :min="DRAW_ROOM_CANVAS_MIN_SIZE" :max="DRAW_ROOM_CANVAS_MAX_SIZE" step="1" :disabled="cropApplying" :aria-label="i18n.ts._drawRoom.canvasHeight" @change="setCropValue('height', $event)" @keydown.enter="setCropValue('height', $event)"/>
+					<label :class="$style.cropField"><span>X</span><input type="number" :class="$style.cropInput" :value="cropRect.left" step="1" :disabled="cropApplying" :aria-label="i18n.ts._juice.doodleCropLeft" @change="setCropValue('left', $event)" @keydown.enter="setCropValue('left', $event)"/></label>
+					<label :class="$style.cropField"><span>Y</span><input type="number" :class="$style.cropInput" :value="cropRect.top" step="1" :disabled="cropApplying" :aria-label="i18n.ts._juice.doodleCropTop" @change="setCropValue('top', $event)" @keydown.enter="setCropValue('top', $event)"/></label>
+					<span :class="[$style.selectionHint, $style.barLabel]">{{ i18n.ts._juice.doodleCropHint }}</span>
+					<button class="_button" :class="$style.selectionAction" :disabled="cropApplying" @click="resetCrop"><i class="ti ti-maximize"></i> {{ i18n.ts._juice.doodleCropWhole }}</button>
+					<button class="_button" :class="[$style.selectionAction, $style.selectionActionPrimary]" :disabled="cropApplying" @click="applyCrop"><i class="ti ti-check"></i> {{ i18n.ts.apply }}</button>
+					<button v-tooltip="i18n.ts.cancel" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts.cancel" :disabled="cropApplying" @click="cancelCrop"><i class="ti ti-x"></i></button>
 				</div>
 				<!-- JUICE: 全体マップ。今表示している範囲を枠で示し、押した・なぞった位置へ表示を移す -->
 				<div :class="$style.minimap" @pointerdown.stop @pointermove.stop @pointerup.stop @wheel.stop.prevent>
@@ -1436,7 +1477,8 @@ function localConnection(): LocalDrawRoomConnection | null {
 
 function onDoodleChange(state: LocalDrawRoomState): void {
 	const id = loadedDoodleId;
-	if (id == null) return;
+	// 切り抜きを保存している間の変更は保存しない(ずらす前の位置で上書きしないように。保存の後で読み込み直す)
+	if (id == null || cropApplying.value) return;
 	doodleState = state;
 	doodleDirty = { id, state };
 	if (doodleSaveTimer != null) window.clearTimeout(doodleSaveTimer);
@@ -1525,6 +1567,219 @@ async function openDoodleSettings(): Promise<void> {
 		await updateDoodleMeta(id, { title });
 		room.value = { ...room.value, title };
 	}
+}
+
+//#region キャンバスの切り抜き(落書き)
+// 画像の切り抜きと同じ操作で、キャンバスの大きさを変える。枠はキャンバス座標(整数)で、キャンバスの外へ広げてもよい。
+// 適用すると、枠の左上が新しいキャンバスの左上になるよう全ての線をずらす(枠の外に出た線は消えずに残る)
+type CropRect = { left: number; top: number; right: number; bottom: number };
+type CropEdge = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+const cropRect = ref<CropRect | null>(null);
+const cropClipId = useId();
+// 適用して保存している間(その間は枠を出したままにして、描く・枠を動かす・もう一度適用するのを止める)
+const cropApplying = ref(false);
+let cropDrag: { pointerId: number; edge: CropEdge; startX: number; startY: number; from: CropRect } | null = null;
+
+const cropHandles = computed(() => {
+	const c = cropRect.value;
+	if (c == null) return [];
+	const cx = (c.left + c.right) / 2;
+	const cy = (c.top + c.bottom) / 2;
+	// つまみは画面上で18px。枠が画面上で小さいときは、つまみを小さくし、辺のつまみは出さない(枠の中をつかんで動かせるように)
+	const shortSide = Math.min(c.right - c.left, c.bottom - c.top) * view.scale;
+	const size = Math.min(18, shortSide / 3) / view.scale;
+	const edges: { edge: CropEdge; x: number; y: number; cursor: string }[] = shortSide < 54 ? [] : [
+		{ edge: 'n', x: cx, y: c.top, cursor: 'ns-resize' },
+		{ edge: 'e', x: c.right, y: cy, cursor: 'ew-resize' },
+		{ edge: 's', x: cx, y: c.bottom, cursor: 'ns-resize' },
+		{ edge: 'w', x: c.left, y: cy, cursor: 'ew-resize' },
+	];
+	// 角のつまみを後に描く(重なったら角を優先する)
+	const corners: { edge: CropEdge; x: number; y: number; cursor: string }[] = [
+		{ edge: 'nw', x: c.left, y: c.top, cursor: 'nwse-resize' },
+		{ edge: 'ne', x: c.right, y: c.top, cursor: 'nesw-resize' },
+		{ edge: 'se', x: c.right, y: c.bottom, cursor: 'nwse-resize' },
+		{ edge: 'sw', x: c.left, y: c.bottom, cursor: 'nesw-resize' },
+	];
+	return [...edges, ...corners].map(handle => ({ ...handle, size }));
+});
+
+function startCrop(): void {
+	const r = room.value;
+	if (r == null || !isDoodle.value || canvasLoading.value != null || cropApplying.value || cropDrag != null) return;
+	cancelStroke();
+	cancelSelecting();
+	clearStrokeSelection();
+	brushPanelOpen.value = false;
+	mobilePanel.value = null;
+	cropRect.value = { left: 0, top: 0, right: r.canvasWidth, bottom: r.canvasHeight };
+	// 押したボタン(ヘッダーの「キャンバスを切り抜く」)にフォーカスが残っていると、Enterがそのボタンを押し直すだけになるので外す
+	if (window.document.activeElement instanceof HTMLElement) window.document.activeElement.blur();
+}
+
+function cancelCrop(): void {
+	if (cropApplying.value) return;
+	endCrop();
+}
+
+function endCrop(): void {
+	cropRect.value = null;
+	cropDrag = null;
+	cropApplying.value = false;
+}
+
+function resetCrop(): void {
+	const r = room.value;
+	if (r == null || cropRect.value == null || cropApplying.value) return;
+	cropRect.value = { left: 0, top: 0, right: r.canvasWidth, bottom: r.canvasHeight };
+}
+
+// 数で決める。幅・高さは左上を動かさずに変え、X・Yは大きさを変えずに枠を動かす。入れた数は範囲に収めて、欄にも反映する
+function setCropValue(field: 'width' | 'height' | 'left' | 'top', ev: Event): void {
+	const c = cropRect.value;
+	const input = ev.target as HTMLInputElement;
+	if (c == null || cropApplying.value || cropDrag != null) return;
+	const raw = Math.round(input.valueAsNumber);
+	const next = { ...c };
+	if (Number.isFinite(raw)) {
+		if (field === 'width') next.right = c.left + Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, raw));
+		else if (field === 'height') next.bottom = c.top + Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, raw));
+		else {
+			// 枠が今の絵から離れすぎないようにする(キャンバスの大きさの上限まで)
+			const pos = Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(-DRAW_ROOM_CANVAS_MAX_SIZE, raw));
+			if (field === 'left') {
+				next.right = pos + (c.right - c.left);
+				next.left = pos;
+			} else {
+				next.bottom = pos + (c.bottom - c.top);
+				next.top = pos;
+			}
+		}
+		cropRect.value = next;
+	}
+	// 範囲に収めた・変えなかったときも、欄の数を今の値にそろえる
+	input.value = String(field === 'width' ? next.right - next.left : field === 'height' ? next.bottom - next.top : field === 'left' ? next.left : next.top);
+}
+
+// つまみ・枠をつかんだ所(キャンバス座標。キャンバスの外でも収めない)
+function cropPoint(ev: PointerEvent): [number, number] {
+	const rect = viewportEl.value!.getBoundingClientRect();
+	return viewToCanvas(ev.clientX - rect.left, ev.clientY - rect.top);
+}
+
+// 押した所にあるもの(つまみ・枠の中)。どれでもなければnull。指はつまみを少し広めに取る
+function cropEdgeAt(ev: PointerEvent): { edge: CropEdge; x: number; y: number } | null {
+	const c = cropRect.value;
+	if (c == null) return null;
+	const [x, y] = cropPoint(ev);
+	// 重なっていたら、後に描いたもの(角)を優先する
+	for (const handle of [...cropHandles.value].reverse()) {
+		const reach = handle.size / 2 + (ev.pointerType === 'mouse' ? 0 : 8 / view.scale);
+		if (Math.abs(x - handle.x) <= reach && Math.abs(y - handle.y) <= reach) return { edge: handle.edge, x, y };
+	}
+	return x >= c.left && x <= c.right && y >= c.top && y <= c.bottom ? { edge: 'move', x, y } : null;
+}
+
+function onCropHandleMove(ev: PointerEvent): void {
+	if (cropDrag == null || cropDrag.pointerId !== ev.pointerId || cropRect.value == null) return;
+	const [x, y] = cropPoint(ev);
+	const dx = Math.round(x - cropDrag.startX);
+	const dy = Math.round(y - cropDrag.startY);
+	const from = cropDrag.from;
+	if (cropDrag.edge === 'move') {
+		cropRect.value = { left: from.left + dx, top: from.top + dy, right: from.right + dx, bottom: from.bottom + dy };
+		return;
+	}
+	// 動かす辺を、反対の辺から見て最小〜最大の大きさに収める
+	const span = (moved: number, fixed: number, sign: 1 | -1) => fixed + sign * Math.min(DRAW_ROOM_CANVAS_MAX_SIZE, Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, sign * (moved - fixed)));
+	const next = { ...from };
+	if (cropDrag.edge.includes('w')) next.left = span(from.left + dx, from.right, -1);
+	if (cropDrag.edge.includes('e')) next.right = span(from.right + dx, from.left, 1);
+	if (cropDrag.edge.includes('n')) next.top = span(from.top + dy, from.bottom, -1);
+	if (cropDrag.edge.includes('s')) next.bottom = span(from.bottom + dy, from.top, 1);
+	cropRect.value = next;
+}
+
+function onCropHandleUp(ev: PointerEvent): void {
+	if (cropDrag == null || cropDrag.pointerId !== ev.pointerId) return;
+	// 取りやめなら、つかむ前の枠に戻す
+	if (ev.type !== 'pointerup' && cropRect.value != null) cropRect.value = cropDrag.from;
+	cropDrag = null;
+}
+
+async function applyCrop(): Promise<void> {
+	const c = cropRect.value;
+	const r = room.value;
+	const local = localConnection();
+	const id = loadedDoodleId;
+	if (c == null || r == null || local == null || id == null || cropDrag != null || cropApplying.value) return;
+	const width = clampCanvasSize(c.right - c.left, r.canvasWidth);
+	const height = clampCanvasSize(c.bottom - c.top, r.canvasHeight);
+	if (c.left === 0 && c.top === 0 && width === r.canvasWidth && height === r.canvasHeight) {
+		endCrop();
+		return;
+	}
+	// 保存し終えるまで枠を出したままにして、描けないようにする(保存の途中で描いた線が、ずらす前の位置で保存されないように)
+	cropApplying.value = true;
+	cancelStroke();
+	const generation = initGeneration;
+	// 枠の左上が新しいキャンバスの左上になるよう、全ての線をずらす
+	const strokes = c.left === 0 && c.top === 0
+		? local.strokes
+		: local.strokes.map(stroke => ({ ...stroke, dx: (stroke.dx ?? 0) - c.left, dy: (stroke.dy ?? 0) - c.top }));
+	// まとめて保存するのを待っている分は、ここで保存する内容に含まれるので取りやめる
+	if (doodleSaveTimer != null) window.clearTimeout(doodleSaveTimer);
+	doodleSaveTimer = null;
+	doodleDirty = null;
+	if (doodleThumbnailTimer != null) window.clearTimeout(doodleThumbnailTimer);
+	doodleThumbnailTimer = null;
+	try {
+		// 線とキャンバスの大きさを、続けて保存する
+		await saveDoodleData(id, { strokes, layers: local.layers }, { width, height });
+	} catch (err) {
+		console.error(err);
+		os.toast(i18n.ts._juice.doodleSaveFailed);
+		// 枠は残して、もう一度適用できるようにする
+		cropApplying.value = false;
+		// 線だけ保存されて大きさが変わっていないことがあるので、今の(ずらす前の)線を保存し直す
+		if (generation === initGeneration && loadedDoodleId === id) onDoodleChange({ strokes: local.strokes, layers: local.layers });
+		return;
+	}
+	// 保存の途中で画面を離れた・別の落書きへ移ったなら、読み込み直さない
+	if (generation !== initGeneration || loadedDoodleId !== id) {
+		endCrop();
+		return;
+	}
+	// 保存の途中にボタンなどから変えた分は、ずらす前の位置なので保存しない
+	if (doodleSaveTimer != null) window.clearTimeout(doodleSaveTimer);
+	doodleSaveTimer = null;
+	doodleDirty = null;
+	if (doodleThumbnailTimer != null) window.clearTimeout(doodleThumbnailTimer);
+	doodleThumbnailTimer = null;
+	cropApplying.value = false;
+	// 新しい大きさで読み込み直す(枠はここで消える。取り消しの履歴も消える)。一覧の小さな絵も作り直す
+	init().then(() => updateDoodleThumbnail(id));
+}
+//#endregion
+
+// タイムラプス(描いた線を順に再生する)を開く。今の線・レイヤーを渡す
+function openTimelapse(): void {
+	const r = room.value;
+	const local = localConnection();
+	if (r == null || local == null || cropRect.value != null || canvasLoading.value != null) return;
+	cancelStroke();
+	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkDoodleTimelapseDialog.vue')), {
+		title: r.title,
+		canvasWidth: r.canvasWidth,
+		canvasHeight: r.canvasHeight,
+		// 開いた後に描き足しても変わらないよう、今の内容を写して渡す
+		strokes: [...local.strokes],
+		layers: local.layers.map(layer => ({ ...layer })),
+		attachable: props.attachable,
+	}, {
+		attach: (file) => emit('attach', file),
+		closed: () => dispose(),
+	});
 }
 
 // 投稿フォームから開いたとき: 描いた絵(全体)をドライブに上げて、そのフォームに添付する
@@ -1939,7 +2194,10 @@ function connect(): void {
 		cursors.delete(payload.userId);
 		if (payload.userId === $i.id) {
 			cancelStroke();
-			if (payload.kicked) os.toast(i18n.ts._drawRoom.kicked);
+			// JUICE: 部屋主が理由を書いていれば、読めるようダイアログで出す(無ければ、今まで通り短く知らせる)。
+			// 理由は書いたままの文字で出す(ダイアログの本文はMFMとして解釈されるので、<plain>で包む)
+			if (payload.kicked && payload.reason != null && payload.reason !== '') os.alert({ type: 'warning', title: i18n.ts._drawRoom.kicked, text: i18n.tsx._drawRoom.kickedReason({ reason: `<plain>${payload.reason.replaceAll('</plain>', '')}</plain>` }) });
+			else if (payload.kicked) os.toast(i18n.ts._drawRoom.kicked);
 		}
 		refreshLayerList();
 	});
@@ -2015,6 +2273,7 @@ function onStreamConnected(): void {
 }
 
 function disposeRoom(): void {
+	endCrop();
 	cursors.clear();
 	strokeSelection.value = new Set();
 	selectionShapes.value = [];
@@ -2777,6 +3036,11 @@ function onPointerDown(ev: PointerEvent): void {
 			cancelLongPress();
 			endLongPressPicking();
 			cancelStroke();
+			// JUICE: 切り抜きの枠を動かしている途中なら、つかむ前の枠に戻す
+			if (cropDrag != null && cropRect.value != null) {
+				cropRect.value = cropDrag.from;
+				cropDrag = null;
+			}
 			selectFrom = null;
 			selectGesture.value = null;
 			fillGesture.value = null;
@@ -2799,9 +3063,22 @@ function onPointerDown(ev: PointerEvent): void {
 		return;
 	}
 	// スペースを押している間と手のひらツールでは、左ドラッグで表示を移動する
-	if ((spaceHeld.value || tool.value === 'hand') && ev.button === 0) {
+	// (キャンバスの切り抜きの間は、手のひらツールでも枠・つまみをつかめるようにする)
+	if ((spaceHeld.value || (tool.value === 'hand' && cropRect.value == null)) && ev.button === 0) {
 		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
 		panFrom = { x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId };
+		return;
+	}
+	// JUICE: キャンバスの切り抜きの間は描かない(枠・つまみの外のドラッグは表示の移動にする)
+	// 左ボタン(1本指)で枠の中をドラッグしたら枠を動かし、それ以外は表示の移動にする
+	if (cropRect.value != null) {
+		(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+		const hit = ev.button === 0 && cropDrag == null && !cropApplying.value ? cropEdgeAt(ev) : null;
+		if (hit != null) {
+			cropDrag = { pointerId: ev.pointerId, edge: hit.edge, startX: hit.x, startY: hit.y, from: { ...cropRect.value } };
+		} else {
+			panFrom = { x: ev.clientX, y: ev.clientY, pointerId: ev.pointerId };
+		}
 		return;
 	}
 	if (selecting.value && ev.button === 0) {
@@ -2985,6 +3262,11 @@ function onPointerMove(ev: PointerEvent): void {
 			return;
 		}
 	}
+	// JUICE: 切り抜きの枠・つまみを動かしている
+	if (cropDrag != null && cropDrag.pointerId === ev.pointerId) {
+		onCropHandleMove(ev);
+		return;
+	}
 	// JUICE: 長押しの途中で指が動いたら、長押しではない(そのまま線を描く)
 	// (小さく塗り込んでいるときも長押しにしないよう、動いた距離の合計でも見る)
 	if (longPress != null && longPress.pointerId === ev.pointerId) {
@@ -3072,7 +3354,8 @@ function onPointerUp(ev: PointerEvent): void {
 		if (touches.size === 0 && multiTap != null) {
 			const tap = multiTap;
 			multiTap = null;
-			if (!tap.moved && Date.now() - tap.startAt <= MULTI_TAP_MS) {
+			// JUICE: キャンバスの切り抜きの間は、タップで取り消し・やり直しをしない
+			if (!tap.moved && Date.now() - tap.startAt <= MULTI_TAP_MS && cropRect.value == null) {
 				if (tap.maxTouches === 2) undo();
 				else if (tap.maxTouches === 3) redo();
 			}
@@ -3081,6 +3364,10 @@ function onPointerUp(ev: PointerEvent): void {
 			pinch = null;
 			snapRotation();
 		}
+	}
+	if (cropDrag != null && cropDrag.pointerId === ev.pointerId) {
+		onCropHandleUp(ev);
+		return;
 	}
 	if (longPress != null && longPress.pointerId === ev.pointerId) cancelLongPress();
 	if (pickingPointerId != null && pickingPointerId === ev.pointerId) {
@@ -3160,6 +3447,20 @@ async function clearMyLayer(): Promise<void> {
 function onKeydown(ev: KeyboardEvent): void {
 	const target = ev.target;
 	if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') != null)) return;
+	if (cropRect.value != null) {
+		// JUICE: キャンバスの切り抜きの間は、Escで取りやめ・Enterで適用。ボタン等にフォーカスがあるときのEnterは、それを押すのに使う
+		if (ev.key === 'Escape') {
+			ev.preventDefault();
+			cancelCrop();
+			return;
+		}
+		if (ev.key === 'Enter') {
+			if (target instanceof HTMLElement && target.closest('button, a, [role="button"], [role="menuitem"]') != null) return;
+			ev.preventDefault();
+			applyCrop();
+			return;
+		}
+	}
 	if (ev.key === 'Escape' && selecting.value) {
 		cancelSelecting();
 		return;
@@ -3196,6 +3497,8 @@ function onKeydown(ev: KeyboardEvent): void {
 		fitToScreen();
 		return;
 	}
+	// JUICE: キャンバスの切り抜きの間は、表示の操作(上のスペース・拡大縮小)だけ受ける(取り消し・道具の切り替えなどはしない)
+	if (cropRect.value != null) return;
 	// JUICE: Ctrl+Shift+Z・Ctrl+Yでやり直す
 	if ((ev.ctrlKey || ev.metaKey) && ((ev.key.toLowerCase() === 'z' && ev.shiftKey) || ev.key.toLowerCase() === 'y')) {
 		ev.preventDefault();
@@ -3835,12 +4138,17 @@ async function leave(): Promise<void> {
 
 async function kick(userId: string): Promise<void> {
 	const user = userMap.get(userId);
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: i18n.tsx._drawRoom.kickConfirm({ name: user?.name ?? user?.username ?? userId }),
+	// JUICE: 外す理由を書ける(任意。外された本人にだけ伝わる)。取りやめたら外さない
+	const { canceled, result } = await os.inputText({
+		type: 'text',
+		title: i18n.tsx._drawRoom.kickConfirm({ name: user?.name ?? user?.username ?? userId }),
+		text: i18n.ts._drawRoom.kickReasonCaption,
+		placeholder: i18n.ts._drawRoom.kickReason,
+		maxLength: 200,
 	});
 	if (canceled) return;
-	await os.apiWithDialog('draw-rooms/kick', { roomId: props.roomId, userId });
+	const reason = (result ?? '').trim();
+	await os.apiWithDialog('draw-rooms/kick', { roomId: props.roomId, userId, ...(reason !== '' ? { reason } : {}) });
 }
 
 async function openRoomSettings(): Promise<void> {
@@ -4161,6 +4469,9 @@ const selection = ref<ImageArea | null>(null);
 let selectFrom: { x: number; y: number; pointerId: number } | null = null;
 
 function startSelecting(): void {
+	// JUICE: キャンバスの切り抜きの途中なら取りやめる(保存している間は始めない)
+	if (cropApplying.value) return;
+	cancelCrop();
 	selecting.value = true;
 	selection.value = null;
 	brushPanelOpen.value = false;
@@ -4238,6 +4549,14 @@ const headerActions = computed(() => {
 	// JUICE: 落書きは、名前とキャンバスの大きさの設定だけ(共有・通報などは無い)
 	if (isDoodle.value) {
 		actions.push({
+			icon: 'ti ti-player-play',
+			text: i18n.ts._juice.doodleTimelapse,
+			handler: openTimelapse,
+		}, {
+			icon: 'ti ti-crop',
+			text: i18n.ts._juice.doodleCrop,
+			handler: startCrop,
+		}, {
 			icon: 'ti ti-settings',
 			text: i18n.ts._juice.doodleSettings,
 			handler: openDoodleSettings,
@@ -4558,6 +4877,11 @@ definePage(() => ({
 	}
 }
 
+.selectionActionPrimary {
+	color: var(--MI_THEME-accent);
+	font-weight: bold;
+}
+
 .sheetButtons {
 	display: none;
 	gap: 4px;
@@ -4846,6 +5170,53 @@ definePage(() => ({
 	pointer-events: none;
 }
 
+.cropInput {
+	width: 5em;
+	padding: 2px 4px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 4px;
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-fg);
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+
+	&:focus-visible {
+		outline: solid 2px var(--MI_THEME-focus);
+		outline-offset: -1px;
+	}
+}
+
+.cropField {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+	opacity: 0.9;
+}
+
+.cropShade {
+	fill: rgb(0 0 0 / 0.5);
+	pointer-events: none;
+}
+
+.cropFrame {
+	fill: transparent;
+	stroke: var(--MI_THEME-accent);
+	stroke-width: calc(var(--px) * 2px);
+	pointer-events: all;
+	cursor: move;
+	touch-action: none;
+}
+
+.cropHandle {
+	fill: var(--MI_THEME-panel);
+	stroke: var(--MI_THEME-accent);
+	stroke-width: calc(var(--px) * 2px);
+	pointer-events: all;
+	touch-action: none;
+}
+
 .selectionLayer {
 	// JUICE: 選んだ範囲の枠・つまみは、キャンバスの外に出ても表示してつかめるようにする(外へ拡大・移動したものを戻せるように)
 	overflow: visible;
@@ -4907,6 +5278,13 @@ definePage(() => ({
 	gap: 4px;
 	// 全体マップの上では描かない(ドラッグは表示の移動に使う)
 	touch-action: none;
+	// JUICE: 枠そのもの(マップの横の空いた所・ボタンの間)では操作を受け止めず、下のキャンバスに描けるようにする
+	pointer-events: none;
+
+	> .minimapBody,
+	> .minimapBar > * {
+		pointer-events: auto;
+	}
 }
 
 .minimapBody {

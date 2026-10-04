@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
+import { DisposableEmailDomainService, normalizeDisposableEmailAllowDomains } from '@/core/DisposableEmailDomainService.js';
 import type { JuiceSettingsValue } from '@/models/JuiceSettings.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 
@@ -81,6 +82,8 @@ export const paramDef = {
 		},
 		blockEmailDotAliasRegistration: { type: 'boolean' },
 		blockEmailPlusAliasRegistration: { type: 'boolean' },
+		disposableEmailBlocklistEnabled: { type: 'boolean' },
+		disposableEmailAllowDomains: { type: 'array', maxItems: 1000, items: { type: 'string', maxLength: 253 } },
 		aiGeneratedFallbackCwEnabled: { type: 'boolean' },
 		novelFallbackCwEnabled: { type: 'boolean' },
 		discordOauthEnabled: { type: 'boolean' },
@@ -111,6 +114,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private juiceSettingsService: JuiceSettingsService,
 		private moderationLogService: ModerationLogService,
+		private disposableEmailDomainService: DisposableEmailDomainService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const before = await this.juiceSettingsService.fetch(true);
@@ -150,6 +154,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.reportCategories !== undefined) set.reportCategories = ps.reportCategories;
 			if (ps.blockEmailDotAliasRegistration !== undefined) set.blockEmailDotAliasRegistration = ps.blockEmailDotAliasRegistration;
 			if (ps.blockEmailPlusAliasRegistration !== undefined) set.blockEmailPlusAliasRegistration = ps.blockEmailPlusAliasRegistration;
+			if (ps.disposableEmailBlocklistEnabled !== undefined) set.disposableEmailBlocklistEnabled = ps.disposableEmailBlocklistEnabled;
+			// 許可するドメインは、小文字・重複なし・形の正しいものだけにして保存する
+			if (ps.disposableEmailAllowDomains !== undefined) set.disposableEmailAllowDomains = normalizeDisposableEmailAllowDomains(ps.disposableEmailAllowDomains);
 			if (ps.aiGeneratedFallbackCwEnabled !== undefined) set.aiGeneratedFallbackCwEnabled = ps.aiGeneratedFallbackCwEnabled;
 			if (ps.novelFallbackCwEnabled !== undefined) set.novelFallbackCwEnabled = ps.novelFallbackCwEnabled;
 			if (ps.discordOauthEnabled !== undefined) set.discordOauthEnabled = ps.discordOauthEnabled;
@@ -172,6 +179,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.drawRoomMaxRoomMegabytes !== undefined) set.drawRoomMaxRoomMegabytes = ps.drawRoomMaxRoomMegabytes;
 
 			const after = await this.juiceSettingsService.update(set);
+
+			// JUICE: 使い捨てメールアドレスの一覧をオンにしたら、すぐに一覧を取りに行く。管理画面に一覧の状態をすぐ出せるよう、
+			// 少しだけ待つ(取れなくても・間に合わなくても、設定の保存は成功にする)
+			if (ps.disposableEmailBlocklistEnabled === true && before.disposableEmailBlocklistEnabled !== true) {
+				await Promise.race([
+					this.disposableEmailDomainService.refresh().catch(() => {}),
+					new Promise(resolve => setTimeout(resolve, 8000)),
+				]);
+			}
 
 			this.moderationLogService.log(me, 'updateJuiceSettings', {
 				before,

@@ -113,7 +113,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkUrlPreview v-for="url in urls" :key="url" :url="url" :compact="true" :detail="false" :class="$style.urlPreview"/>
 					</div>
 					<div v-if="appearNote.renoteId" :class="$style.quote"><MkNoteSimple :note="appearNote?.renote ?? null" :class="$style.quoteNote"/></div>
-					<button v-if="isLong && collapsed" :class="$style.collapsed" class="_button" @click="collapsed = false">
+					<!-- JUICE: 本文が小説のノート(小説フラグ付きで、テキストファイルを添付していない)は、畳んだ続きをその場で広げずに、
+						小説ビューワーで開く -->
+					<MkA v-if="isLong && collapsed && opensNovelViewer" :class="[$style.collapsed, $style.collapsedNovel]" :to="`/notes/${appearNote.id}/novel-viewer`">
+						<span :class="$style.collapsedLabel"><i class="ti ti-book"></i> {{ i18n.ts._juice.readAsNovel }}</span>
+					</MkA>
+					<button v-else-if="isLong && collapsed" :class="$style.collapsed" class="_button" @click="collapsed = false">
 						<span :class="$style.collapsedLabel">{{ i18n.ts.showMore }}</span>
 					</button>
 					<button v-else-if="isLong && !collapsed" :class="$style.showLess" class="_button" @click="collapsed = true">
@@ -257,6 +262,7 @@ import MkCwButton from '@/components/MkCwButton.vue';
 import MkPoll from '@/components/MkPoll.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
+import { useRouter } from '@/router.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -292,6 +298,8 @@ const reactButton = useTemplateRef('reactButton');
 const quickReactButton = useTemplateRef('quickReactButton');
 const clipButton = useTemplateRef('clipButton');
 const galleryEl = useTemplateRef('galleryEl');
+
+const router = useRouter();
 
 // コンポーサブルの呼び出し
 const {
@@ -341,6 +349,12 @@ const {
 	currentClip,
 	currentAntenna,
 });
+
+// JUICE: 畳んだ本文の続きを、その場で広げずに小説ビューワーで開くか。本文だけの小説のノート(小説フラグ付きで、
+// 添付・アンケート・引用が無い)だけ。ビューワーは本文(テキストファイルがあればそのファイル)しか出さないので、
+// 画像などが畳まれているノートは、今まで通りその場で広げられるようにする
+const opensNovelViewer = computed(() => !props.mock && $appearNote.isNovel
+	&& (appearNote.files?.length ?? 0) === 0 && appearNote.poll == null && appearNote.renoteId == null);
 
 // provide
 provide(DI.mfmEmojiReactCallback, reactViaMfmEmoji);
@@ -412,6 +426,9 @@ const keymap = {
 			renoteCollapsed.value = false;
 		} else if (appearNote.cw != null) {
 			showContent.value = !showContent.value;
+		} else if (isLong.value && collapsed.value && opensNovelViewer.value) {
+			// JUICE: 本文が小説のノートは、小説ビューワーで開く
+			router.push('/notes/:noteId/novel-viewer', { params: { noteId: appearNote.id } });
 		} else if (isLong.value) {
 			collapsed.value = !collapsed.value;
 		}
@@ -705,6 +722,17 @@ const keymap = {
 
 	&:hover > .collapsedLabel {
 		background: var(--MI_THEME-panelHighlight);
+	}
+}
+
+// JUICE: 小説ビューワーへのリンク(ボタンと同じ見た目・位置にする)
+.collapsedNovel {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	&:hover {
+		text-decoration: none;
 	}
 }
 

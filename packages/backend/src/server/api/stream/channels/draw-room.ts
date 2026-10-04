@@ -122,6 +122,11 @@ export class DrawRoomChannel extends Channel {
 			// 大きさが変わったら、線の座標の確認もその大きさで行う
 			this.room = { ...this.room, title, maxMembers, canvasWidth, canvasHeight };
 		}
+		// JUICE: 描く人から外した理由は、外された本人にだけ流す
+		if (data.type === 'memberLeft' && data.body.reason != null && data.body.userId !== selfId) {
+			this.send('memberLeft', { userId: data.body.userId, kicked: data.body.kicked });
+			return;
+		}
 		// JUICE: ほかの人の下描き(本人だけに見える)のレイヤーの線と、レイヤーそのものは流さない
 		if ('userId' in data.body && data.body.userId !== selfId) {
 			if (data.type === 'strokePart' || data.type === 'stroke') {

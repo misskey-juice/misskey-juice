@@ -17,6 +17,7 @@ import { bindThis } from '@/decorators.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { escapeHtml } from '@/misc/escape-html.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
+import { DisposableEmailDomainService } from '@/core/DisposableEmailDomainService.js';
 import { resolveEmailAliasSettings } from '@/models/JuiceSettings.js';
 
 @Injectable()
@@ -37,6 +38,7 @@ export class EmailService {
 		private utilityService: UtilityService,
 		private httpRequestService: HttpRequestService,
 		private juiceSettingsService: JuiceSettingsService,
+		private disposableEmailDomainService: DisposableEmailDomainService,
 	) {
 		this.logger = this.loggerService.getLogger('email');
 	}
@@ -185,27 +187,64 @@ export class EmailService {
 			};
 		}
 
+		// JUICE: 使い捨てメールアドレスのドメインの一覧(disposable-email-domains)に載っていれば断る。
+		// 下の検証方式(verifymail.io・Truemail・deep-email-validator)のどれを使っていても、検証を使っていなくても動く。
+		// 一覧を読めないときは判定せずに先へ進む(登録を止めない)
+		if (await this.disposableEmailDomainService.isDisposable(emailAddress).catch((err) => {
+			this.logger.warn(`Failed to check the disposable email domain list: ${err}`);
+			return false;
+		})) {
+			return {
+				available: false,
+				reason: 'disposable',
+			};
+		}
+
 		let validated: {
 			valid: boolean,
 			reason?: string | null,
 		} = { valid: true, reason: null };
 
 		if (this.meta.enableActiveEmailValidation) {
-			if (this.meta.enableVerifymailApi && this.meta.verifymailAuthKey != null) {
-				validated = await this.verifyMail(emailAddress, this.meta.verifymailAuthKey);
-			} else if (this.meta.enableTruemailApi && this.meta.truemailInstance && this.meta.truemailAuthKey != null) {
-				validated = await this.trueMail(this.meta.truemailInstance, emailAddress, this.meta.truemailAuthKey);
-			} else {
+			// 使い捨てメールアドレスの一覧で判定できているか(設定がオンでも、一覧をまだ取れていなければfalse)
+			const blocklistReady = await this.disposableEmailDomainService.isReady().catch(() => false);
+			const validateByDeepEmailValidator = async () => {
 				const { validate: validateEmail } = await import('deep-email-validator');
-				validated = await validateEmail({
+				return await validateEmail({
 					email: emailAddress,
 					validateRegex: true,
 					validateMx: true,
 					validateTypo: false, // TLDを見ているみたいだけどclubとか弾かれるので
-					validateDisposable: true, // 捨てアドかどうかチェック
+					// 捨てアドかどうかチェック。JUICE: 使い捨てメールアドレスの一覧(上で判定済み)を使っているときは、
+					// 同梱の古い一覧では判定しない(管理画面の「使い捨てと判定しないドメイン」が効くように)
+					validateDisposable: !blocklistReady,
 					validateSMTP: false, // 日本だと25ポートが殆どのプロバイダーで塞がれていてタイムアウトになるので
 				});
+			};
+			if (this.meta.enableVerifymailApi && this.meta.verifymailAuthKey != null) {
+				// JUICE: verifymail.ioに問い合わせられなかったとき(利用回数の上限で429が返る・落ちている等)は、
+				// 全ての登録・メールアドレス変更をエラーで止めずに、サーバー自身での検証(deep-email-validator)に切り替える
+				validated = await this.verifyMail(emailAddress, this.meta.verifymailAuthKey).catch(async (err) => {
+					// エラーの文には、問い合わせ先のURL(APIキーとメールアドレスを含む)が入ることがあるので、種類だけを記録する
+					const detail = (err as { statusCode?: number; code?: string; name?: string } | null)?.statusCode ?? (err as { code?: string } | null)?.code ?? (err as { name?: string } | null)?.name ?? 'unknown';
+					this.logger.warn(`verifymail.io request failed (${detail}), falling back to deep-email-validator`);
+					return await validateByDeepEmailValidator();
+				});
+			} else if (this.meta.enableTruemailApi && this.meta.truemailInstance && this.meta.truemailAuthKey != null) {
+				validated = await this.trueMail(this.meta.truemailInstance, emailAddress, this.meta.truemailAuthKey);
+				// JUICE: Truemailに問い合わせられなかったとき(reasonが'network')も、同じくサーバー自身での検証に切り替える
+				if (!validated.valid && validated.reason === 'network') {
+					this.logger.warn('Truemail request failed, falling back to deep-email-validator');
+					validated = await validateByDeepEmailValidator();
+				}
+			} else {
+				validated = await validateByDeepEmailValidator();
 			}
+		}
+
+		// JUICE: 管理画面の「使い捨てと判定しないドメイン」は、検証方式(verifymail.io等)が使い捨てと判定したときにも効かせる
+		if (!validated.valid && validated.reason === 'disposable' && await this.disposableEmailDomainService.isAllowed(emailAddress).catch(() => false)) {
+			validated = { valid: true, reason: null };
 		}
 
 		if (!validated.valid) {
@@ -367,11 +406,10 @@ export class EmailService {
 		}>;
 
 		/* api error: when there is only one `message` attribute in the returned result */
+		// JUICE: APIのエラー(キーが無効・利用回数の上限など)は、全てのアドレスを無効にせず、例外にして呼び出し側で
+		// サーバー自身での検証に切り替える(エラーの文は、キーなどを含まないよう記録しない)
 		if (Object.keys(json).length === 1 && Reflect.has(json, 'message')) {
-			return {
-				valid: false,
-				reason: null,
-			};
+			throw Object.assign(new Error('verifymail.io returned an API error'), { code: 'VERIFYMAIL_API_ERROR' });
 		}
 		if (json.email_address === undefined) {
 			return {

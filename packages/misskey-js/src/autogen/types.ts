@@ -11622,6 +11622,11 @@ export interface operations {
                         }[];
                         blockEmailDotAliasRegistration: boolean;
                         blockEmailPlusAliasRegistration: boolean;
+                        disposableEmailBlocklistEnabled: boolean;
+                        disposableEmailAllowDomains: string[];
+                        disposableEmailBlocklistCount: number;
+                        /** Format: date-time */
+                        disposableEmailBlocklistFetchedAt: string | null;
                         aiGeneratedFallbackCwEnabled: boolean;
                         novelFallbackCwEnabled: boolean;
                         discordOauthEnabled: boolean;
@@ -11827,6 +11832,8 @@ export interface operations {
                     }[];
                     blockEmailDotAliasRegistration?: boolean;
                     blockEmailPlusAliasRegistration?: boolean;
+                    disposableEmailBlocklistEnabled?: boolean;
+                    disposableEmailAllowDomains?: string[];
                     aiGeneratedFallbackCwEnabled?: boolean;
                     novelFallbackCwEnabled?: boolean;
                     discordOauthEnabled?: boolean;
@@ -23130,6 +23137,7 @@ export interface operations {
                     roomId: string;
                     /** Format: misskey:id */
                     userId: string;
+                    reason?: string | null;
                 };
             };
         };

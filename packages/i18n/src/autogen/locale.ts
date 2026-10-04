@@ -10570,6 +10570,18 @@ export interface Locale extends ILocale {
          */
         "kicked": string;
         /**
+         * 外す理由(任意)
+         */
+        "kickReason": string;
+        /**
+         * 理由は、外された人にだけ伝わります。空のままでも外せます。外された人は見学者として残ります。
+         */
+        "kickReasonCaption": string;
+        /**
+         * 理由: {reason}
+         */
+        "kickedReason": ParameterizedString<"reason">;
+        /**
          * 画像をドライブに保存
          */
         "saveImage": string;
@@ -16011,6 +16023,30 @@ export interface Locale extends ILocale {
          */
         "blockEmailPlusAliasRegistrationCaption": string;
         /**
+         * 使い捨てメールアドレスを使えないようにする
+         */
+        "disposableEmailBlocklistEnabled": string;
+        /**
+         * 新規登録・メールアドレス変更で、使い捨てメールアドレスのドメインの一覧に載っているアドレス(サブドメインを含む)を受け付けません。「メールアドレスの検証」の方式に関係なく動きます。一覧は1日に1回取り直し、取れなかったときは前の一覧を使い続けます。一覧:
+         */
+        "disposableEmailBlocklistEnabledCaption": string;
+        /**
+         * 今の一覧: {n}件、取得:
+         */
+        "disposableEmailBlocklistStatus": ParameterizedString<"n">;
+        /**
+         * 一覧はまだ取得していません(オンにして保存すると取得します。取得できるまでは判定しません)
+         */
+        "disposableEmailBlocklistNotFetched": string;
+        /**
+         * 使い捨てと判定しないドメイン
+         */
+        "disposableEmailAllowDomains": string;
+        /**
+         * 1行に1つ、ドメインを入れます(例: example.com)。一覧に載っていても、ここに入れたドメインとそのサブドメインは受け付けます。誤って一覧に載っているドメインを外すのに使います。
+         */
+        "disposableEmailAllowDomainsCaption": string;
+        /**
          * AI生成物をミュート
          */
         "muteAIGeneratedNotes": string;
@@ -16474,6 +16510,78 @@ export interface Locale extends ILocale {
          * 落書きの設定
          */
         "doodleSettings": string;
+        /**
+         * キャンバスを切り抜く
+         */
+        "doodleCrop": string;
+        /**
+         * 枠・つまみをドラッグ(外へ広げることもできます)
+         */
+        "doodleCropHint": string;
+        /**
+         * 全体
+         */
+        "doodleCropWhole": string;
+        /**
+         * 枠の左の位置
+         */
+        "doodleCropLeft": string;
+        /**
+         * 枠の上の位置
+         */
+        "doodleCropTop": string;
+        /**
+         * タイムラプス
+         */
+        "doodleTimelapse": string;
+        /**
+         * 長さ
+         */
+        "doodleTimelapseDuration": string;
+        /**
+         * {n}秒
+         */
+        "doodleTimelapseSeconds": ParameterizedString<"n">;
+        /**
+         * 最初から再生
+         */
+        "doodleTimelapseReplay": string;
+        /**
+         * 動画にする
+         */
+        "doodleTimelapseRecord": string;
+        /**
+         * 動画を作っています(再生が終わるまでこのままお待ちください)
+         */
+        "doodleTimelapseRecording": string;
+        /**
+         * このブラウザでは動画にできません(再生だけできます)
+         */
+        "doodleTimelapseUnsupported": string;
+        /**
+         * まだ何も描かれていません
+         */
+        "doodleTimelapseEmpty": string;
+        /**
+         * 動画を作れませんでした
+         */
+        "doodleTimelapseFailed": string;
+        /**
+         * 動画をドライブに保存しました
+         */
+        "doodleTimelapseSaved": string;
+        /**
+         * ドライブに保存
+         */
+        "doodleTimelapseSaveToDrive": string;
+        /**
+         * ノートに投稿
+         */
+        "doodleTimelapsePost": string;
+        /**
+         * 動画を作っている間は、このタブを表示したままにしてください(ほかのタブへ移っている間は止まり、戻ると続きから進みます)
+         */
+        "doodleTimelapseKeepOpen": string;
         /**
          * 続きを描く
          */

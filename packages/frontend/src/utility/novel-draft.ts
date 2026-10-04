@@ -421,7 +421,7 @@ export type NovelOutlineItem = {
 	chars: number;
 };
 
-const OUTLINE_LINE_PATTERN = /^(?:[ \t\u3000]*\[newpage\][ \t\u3000]*|-{3,})$|\[chapter:\s*((?:\[\[rb:[^\]]*\]\]|[^\]\n])*?)\s*\]/gm;
+const OUTLINE_LINE_PATTERN = /^(?:[ \t\u3000]*\[newpage\][ \t\u3000]*|-{3,})$|\[chapter:\s*((?:\[\[rb:[^\]\n]*\]\]|[^\]\n])*?)\s*\]/gm;
 
 // 青空文庫形式の冒頭の凡例ブロック(ビューワーでは取り除かれるので、中の罫線を章の区切りとして数えない)
 function legendRange(text: string): [number, number] | null {

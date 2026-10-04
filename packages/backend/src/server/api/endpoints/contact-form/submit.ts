@@ -12,6 +12,7 @@ import { ContactFormService } from '@/core/ContactFormService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { CaptchaService } from '@/core/CaptchaService.js';
 import { EmailService } from '@/core/EmailService.js';
+import { DisposableEmailDomainService } from '@/core/DisposableEmailDomainService.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { resolveContactFormSettings } from '@/models/JuiceSettings.js';
 
@@ -92,6 +93,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private utilityService: UtilityService,
 		private captchaService: CaptchaService,
 		private emailService: EmailService,
+		private disposableEmailDomainService: DisposableEmailDomainService,
 	) {
 		super(meta, paramDef, async (ps, me, _accessToken, _file, _cleanup, ip, headers) => {
 			const { contactFormEnabled, contactFormRequireAuth, contactFormContentMaxLength } = resolveContactFormSettings(await this.juiceSettingsService.fetch());
@@ -128,6 +130,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (validated != null && !validated.available && validated.reason !== 'used' && validated.reason !== 'plusTag' && validated.reason !== 'gmailDot') {
 						throw new ApiError(meta.errors.invalidReplyMethod);
 					}
+				} else if (await this.disposableEmailDomainService.isDisposable(ps.email.trim()).catch(() => false)) {
+					// JUICE: 詳細なメール検証を使っていなくても、使い捨てメールアドレスの一覧(JUICE設定)には従う
+					// (入力画面は email-address/available で止めるので、ここでも同じにする)
+					throw new ApiError(meta.errors.invalidReplyMethod);
 				}
 			} else {
 				if (!ps.misskeyUsername || ps.misskeyUsername.trim() === '') {
