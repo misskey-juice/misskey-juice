@@ -1168,6 +1168,7 @@ export type Channels = {
             memberLeft: (payload: {
                 userId: User['id'];
                 kicked: boolean;
+                reason?: string;
             }) => void;
             presence: (payload: {
                 userIds: User['id'][];

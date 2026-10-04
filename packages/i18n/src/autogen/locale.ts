@@ -10570,6 +10570,18 @@ export interface Locale extends ILocale {
          */
         "kicked": string;
         /**
+         * 外す理由(任意)
+         */
+        "kickReason": string;
+        /**
+         * 理由は、外された人にだけ伝わります。空のままでも外せます。外された人は見学者として残ります。
+         */
+        "kickReasonCaption": string;
+        /**
+         * 理由: {reason}
+         */
+        "kickedReason": ParameterizedString<"reason">;
+        /**
          * 画像をドライブに保存
          */
         "saveImage": string;

@@ -467,6 +467,79 @@ describe('絵チャ', () => {
 		await call('draw-rooms/delete', { roomId: room.id }, alice);
 	});
 
+	test('部屋主がメンバーを外すときに書いた理由は、外された本人にだけ届く。理由が空なら誰にも届かず、200文字を超える理由はエラー', async () => {
+		// 理由なし・空文字・nullのそれぞれで外す人が要るので、このテスト専用のユーザーを足す
+		const erin = await signup();
+		const frank = await signup();
+		const room = await createRoom(alice, { maxMembers: 8 });
+		for (const u of [bob, carol, erin, frank]) {
+			assert.strictEqual((await call('draw-rooms/join', { roomId: room.id }, u)).status, 204);
+		}
+
+		// 部屋を開いている人ごとに、届いたmemberLeftを集める(daveは見学者)
+		type MemberLeft = { userId: string; kicked: boolean; reason?: string };
+		const watchers = [alice, bob, carol, dave, erin, frank];
+		const received = new Map<string, MemberLeft[]>(watchers.map(u => [u.id, []]));
+		const sockets = await Promise.all(watchers.map(u => connectStream(u, 'drawRoom', (msg) => {
+			if (msg.type === 'memberLeft') received.get(u.id)!.push(msg.body as MemberLeft);
+		}, { roomId: room.id })));
+		// 外した知らせが全員に届くのを待ち、人ごとに届いた内容を返す
+		const waitMemberLeft = async (userId: string): Promise<Map<string, MemberLeft>> => {
+			return await vi.waitFor(() => {
+				const result = new Map<string, MemberLeft>();
+				for (const u of watchers) {
+					const event = received.get(u.id)!.find(e => e.userId === userId);
+					assert.ok(event != null);
+					result.set(u.id, event);
+				}
+				return result;
+			}, { timeout: 5000, interval: 100 });
+		};
+
+		try {
+			// 200文字を超える理由は受け付けず、外されない(200文字ちょうどは通る)
+			const tooLong = await call('draw-rooms/kick', { roomId: room.id, userId: bob.id, reason: 'あ'.repeat(201) }, alice);
+			assert.strictEqual(tooLong.status, 400);
+			assert.strictEqual(tooLong.body.error.code, 'INVALID_PARAM');
+			assert.strictEqual(((await call('draw-rooms/show', { roomId: room.id }, bob)).body as DrawRoom).isMember, true);
+
+			// 理由(前後の空白は除く)は、外された本人にだけ届く。部屋主・ほかのメンバー・見学者には理由なしで届く
+			assert.strictEqual((await call('draw-rooms/kick', { roomId: room.id, userId: bob.id, reason: '  荒らし行為のため  ' }, alice)).status, 204);
+			const bobLeft = await waitMemberLeft(bob.id);
+			assert.deepStrictEqual(bobLeft.get(bob.id), { userId: bob.id, kicked: true, reason: '荒らし行為のため' });
+			for (const u of [alice, carol, dave, erin, frank]) {
+				assert.deepStrictEqual(bobLeft.get(u.id), { userId: bob.id, kicked: true });
+			}
+
+			// 理由を書かない・空文字・nullのときは、外された本人にも理由は届かない
+			const noReasons: [SignupSuccessResponse, Record<string, unknown>][] = [[carol, {}], [erin, { reason: '' }], [frank, { reason: null }]];
+			for (const [target, params] of noReasons) {
+				assert.strictEqual((await call('draw-rooms/kick', { roomId: room.id, userId: target.id, ...params }, alice)).status, 204);
+				const left = await waitMemberLeft(target.id);
+				for (const u of watchers) {
+					assert.deepStrictEqual(left.get(u.id), { userId: target.id, kicked: true });
+				}
+			}
+
+			// 理由つきの知らせは1回ずつだけ届いている(理由を除いた分と二重に届かない)
+			for (const u of watchers) {
+				assert.strictEqual(received.get(u.id)!.length, 4);
+			}
+
+			// 200文字ちょうどの理由は通る
+			assert.strictEqual((await call('draw-rooms/join', { roomId: room.id }, dave)).status, 204);
+			const longest = 'あ'.repeat(200);
+			assert.strictEqual((await call('draw-rooms/kick', { roomId: room.id, userId: dave.id, reason: longest }, alice)).status, 204);
+			const daveLeft = await waitMemberLeft(dave.id);
+			assert.deepStrictEqual(daveLeft.get(dave.id), { userId: dave.id, kicked: true, reason: longest });
+			assert.deepStrictEqual(daveLeft.get(alice.id), { userId: dave.id, kicked: true });
+		} finally {
+			for (const ws of sockets) ws.close();
+		}
+
+		await call('draw-rooms/end', { roomId: room.id }, alice);
+	});
+
 	test('凍結された人の部屋は、ほかの人の一覧に出ず開けない(モデレーターは開ける)', async () => {
 		// 凍結するとほかのテストに影響するので、このテスト専用のユーザーを使う
 		const frozen = await signup();

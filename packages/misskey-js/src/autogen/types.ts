@@ -23137,6 +23137,7 @@ export interface operations {
                     roomId: string;
                     /** Format: misskey:id */
                     userId: string;
+                    reason?: string | null;
                 };
             };
         };

@@ -368,6 +368,8 @@ export interface DrawRoomEventTypes {
 	memberLeft: {
 		userId: MiUser['id'];
 		kicked: boolean;
+		// 部屋主が書いた、外した理由(外された本人にだけ流す)
+		reason?: string;
 	};
 	// 部屋が削除された(モデレーターによる削除を含む)
 	deleted: {

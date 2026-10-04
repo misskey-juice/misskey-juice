@@ -2194,7 +2194,10 @@ function connect(): void {
 		cursors.delete(payload.userId);
 		if (payload.userId === $i.id) {
 			cancelStroke();
-			if (payload.kicked) os.toast(i18n.ts._drawRoom.kicked);
+			// JUICE: 部屋主が理由を書いていれば、読めるようダイアログで出す(無ければ、今まで通り短く知らせる)。
+			// 理由は書いたままの文字で出す(ダイアログの本文はMFMとして解釈されるので、<plain>で包む)
+			if (payload.kicked && payload.reason != null && payload.reason !== '') os.alert({ type: 'warning', title: i18n.ts._drawRoom.kicked, text: i18n.tsx._drawRoom.kickedReason({ reason: `<plain>${payload.reason.replaceAll('</plain>', '')}</plain>` }) });
+			else if (payload.kicked) os.toast(i18n.ts._drawRoom.kicked);
 		}
 		refreshLayerList();
 	});
@@ -4135,12 +4138,17 @@ async function leave(): Promise<void> {
 
 async function kick(userId: string): Promise<void> {
 	const user = userMap.get(userId);
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: i18n.tsx._drawRoom.kickConfirm({ name: user?.name ?? user?.username ?? userId }),
+	// JUICE: 外す理由を書ける(任意。外された本人にだけ伝わる)。取りやめたら外さない
+	const { canceled, result } = await os.inputText({
+		type: 'text',
+		title: i18n.tsx._drawRoom.kickConfirm({ name: user?.name ?? user?.username ?? userId }),
+		text: i18n.ts._drawRoom.kickReasonCaption,
+		placeholder: i18n.ts._drawRoom.kickReason,
+		maxLength: 200,
 	});
 	if (canceled) return;
-	await os.apiWithDialog('draw-rooms/kick', { roomId: props.roomId, userId });
+	const reason = (result ?? '').trim();
+	await os.apiWithDialog('draw-rooms/kick', { roomId: props.roomId, userId, ...(reason !== '' ? { reason } : {}) });
 }
 
 async function openRoomSettings(): Promise<void> {

@@ -38,6 +38,8 @@ export const paramDef = {
 	properties: {
 		roomId: { type: 'string', format: 'misskey:id' },
 		userId: { type: 'string', format: 'misskey:id' },
+		// 外す理由(任意)。外された本人にだけ伝える
+		reason: { type: 'string', nullable: true, maxLength: 200 },
 	},
 	required: ['roomId', 'userId'],
 } as const;
@@ -50,7 +52,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			try {
 				const room = await this.drawRoomService.getRoom(ps.roomId, me);
-				await this.drawRoomService.kick(room, me, ps.userId);
+				await this.drawRoomService.kick(room, me, ps.userId, ps.reason?.trim() || null);
 			} catch (err) {
 				rethrowDrawRoomError(err);
 			}

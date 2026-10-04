@@ -1148,7 +1148,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 	 * 部屋主がメンバーを外す。外された人は見学者になり、その部屋には参加し直せない
 	 */
 	@bindThis
-	public async kick(room: MiDrawRoom, me: MiUser, userId: MiUser['id']): Promise<void> {
+	public async kick(room: MiDrawRoom, me: MiUser, userId: MiUser['id'], reason: string | null = null): Promise<void> {
 		if (room.ownerId !== me.id) throw new DrawRoomError('notOwner');
 		if (userId === room.ownerId) throw new DrawRoomError('cannotKickOwner');
 		// 終了した部屋のメンバーは記録として残す(保存した部屋の表示が後から変わらないように)
@@ -1159,7 +1159,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 			.sadd(this.kickedKey(room.id), userId)
 			.expire(this.kickedKey(room.id), REDIS_KEY_TTL_SEC)
 			.exec();
-		this.publishStream(room.id, 'memberLeft', { userId, kicked: true });
+		// JUICE: 理由は、外された本人のストリームにだけ流す(ほかの人には、チャンネルで除いて流す)
+		this.publishStream(room.id, 'memberLeft', { userId, kicked: true, ...(reason != null ? { reason } : {}) });
 	}
 
 	/**
