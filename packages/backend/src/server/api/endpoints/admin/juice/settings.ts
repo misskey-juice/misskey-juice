@@ -6,7 +6,8 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
+import { DisposableEmailDomainService } from '@/core/DisposableEmailDomainService.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveDisposableEmailSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -169,6 +170,25 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			disposableEmailBlocklistEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			disposableEmailAllowDomains: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: { type: 'string', optional: false, nullable: false },
+			},
+			// 使い捨てメールアドレスのドメインの一覧の状態(件数と、取ってきた日時。まだ取っていなければ0・null)
+			disposableEmailBlocklistCount: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			disposableEmailBlocklistFetchedAt: {
+				type: 'string',
+				optional: false, nullable: true,
+				format: 'date-time',
+			},
 			aiGeneratedFallbackCwEnabled: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -263,9 +283,14 @@ export const paramDef = {
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
 		private juiceSettingsService: JuiceSettingsService,
+		private disposableEmailDomainService: DisposableEmailDomainService,
 	) {
 		super(meta, paramDef, async () => {
 			const settings = await this.juiceSettingsService.fetch();
+			// 一覧の状態は、使っているときだけ出す(オフの間は、前に取った一覧が残っていても0件・未取得とする)
+			const blocklistStatus = resolveDisposableEmailSettings(settings).disposableEmailBlocklistEnabled
+				? await this.disposableEmailDomainService.status()
+				: { count: 0, fetchedAt: null };
 			return {
 				...resolveSignupApprovalSettings(settings),
 				...resolveExploreOtherServersSettings(settings),
@@ -282,6 +307,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveNewAccountFollowRequestSettings(settings),
 				...resolveReportCategorySettings(settings),
 				...resolveEmailAliasSettings(settings),
+				...resolveDisposableEmailSettings(settings),
+				disposableEmailBlocklistCount: blocklistStatus.count,
+				disposableEmailBlocklistFetchedAt: blocklistStatus.fetchedAt,
 				...resolveAiGeneratedFallbackCwSettings(settings),
 				...resolveNovelFallbackCwSettings(settings),
 				...resolveOauthLoginSettings(settings),

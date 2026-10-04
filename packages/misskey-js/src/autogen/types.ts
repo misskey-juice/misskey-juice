@@ -11622,6 +11622,11 @@ export interface operations {
                         }[];
                         blockEmailDotAliasRegistration: boolean;
                         blockEmailPlusAliasRegistration: boolean;
+                        disposableEmailBlocklistEnabled: boolean;
+                        disposableEmailAllowDomains: string[];
+                        disposableEmailBlocklistCount: number;
+                        /** Format: date-time */
+                        disposableEmailBlocklistFetchedAt: string | null;
                         aiGeneratedFallbackCwEnabled: boolean;
                         novelFallbackCwEnabled: boolean;
                         discordOauthEnabled: boolean;
@@ -11827,6 +11832,8 @@ export interface operations {
                     }[];
                     blockEmailDotAliasRegistration?: boolean;
                     blockEmailPlusAliasRegistration?: boolean;
+                    disposableEmailBlocklistEnabled?: boolean;
+                    disposableEmailAllowDomains?: string[];
                     aiGeneratedFallbackCwEnabled?: boolean;
                     novelFallbackCwEnabled?: boolean;
                     discordOauthEnabled?: boolean;

@@ -16011,6 +16011,30 @@ export interface Locale extends ILocale {
          */
         "blockEmailPlusAliasRegistrationCaption": string;
         /**
+         * 使い捨てメールアドレスを使えないようにする
+         */
+        "disposableEmailBlocklistEnabled": string;
+        /**
+         * 新規登録・メールアドレス変更で、使い捨てメールアドレスのドメインの一覧に載っているアドレス(サブドメインを含む)を受け付けません。「メールアドレスの検証」の方式に関係なく動きます。一覧は1日に1回取り直し、取れなかったときは前の一覧を使い続けます。一覧:
+         */
+        "disposableEmailBlocklistEnabledCaption": string;
+        /**
+         * 今の一覧: {n}件、取得:
+         */
+        "disposableEmailBlocklistStatus": ParameterizedString<"n">;
+        /**
+         * 一覧はまだ取得していません(オンにして保存すると取得します。取得できるまでは判定しません)
+         */
+        "disposableEmailBlocklistNotFetched": string;
+        /**
+         * 使い捨てと判定しないドメイン
+         */
+        "disposableEmailAllowDomains": string;
+        /**
+         * 1行に1つ、ドメインを入れます(例: example.com)。一覧に載っていても、ここに入れたドメインとそのサブドメインは受け付けます。誤って一覧に載っているドメインを外すのに使います。
+         */
+        "disposableEmailAllowDomainsCaption": string;
+        /**
          * AI生成物をミュート
          */
         "muteAIGeneratedNotes": string;

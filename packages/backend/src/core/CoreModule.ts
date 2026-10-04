@@ -40,6 +40,7 @@ import { ImageProcessingService } from './ImageProcessingService.js';
 import { SystemAccountService } from './SystemAccountService.js';
 import { InternalStorageService } from './InternalStorageService.js';
 import { JuiceSettingsService } from './JuiceSettingsService.js';
+import { DisposableEmailDomainService } from './DisposableEmailDomainService.js';
 import { RemoteAvatarDecorationService } from './RemoteAvatarDecorationService.js';
 import { JuiceUserRankingService } from './JuiceUserRankingService.js';
 import { EmailI18nService } from './EmailI18nService.js';
@@ -196,6 +197,7 @@ const $IdService: Provider = { provide: 'IdService', useExisting: IdService };
 const $ImageProcessingService: Provider = { provide: 'ImageProcessingService', useExisting: ImageProcessingService };
 const $InternalStorageService: Provider = { provide: 'InternalStorageService', useExisting: InternalStorageService };
 const $JuiceSettingsService: Provider = { provide: 'JuiceSettingsService', useExisting: JuiceSettingsService };
+const $DisposableEmailDomainService: Provider = { provide: 'DisposableEmailDomainService', useExisting: DisposableEmailDomainService };
 const $RemoteAvatarDecorationService: Provider = { provide: 'RemoteAvatarDecorationService', useExisting: RemoteAvatarDecorationService };
 const $JuiceUserRankingService: Provider = { provide: 'JuiceUserRankingService', useExisting: JuiceUserRankingService };
 const $EmailI18nService: Provider = { provide: 'EmailI18nService', useExisting: EmailI18nService };
@@ -361,6 +363,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ImageProcessingService,
 		InternalStorageService,
 		JuiceSettingsService,
+		DisposableEmailDomainService,
 		RemoteAvatarDecorationService,
 		JuiceUserRankingService,
 		EmailI18nService,
@@ -523,6 +526,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ImageProcessingService,
 		$InternalStorageService,
 		$JuiceSettingsService,
+		$DisposableEmailDomainService,
 		$RemoteAvatarDecorationService,
 		$JuiceUserRankingService,
 		$EmailI18nService,
@@ -686,6 +690,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ImageProcessingService,
 		InternalStorageService,
 		JuiceSettingsService,
+		DisposableEmailDomainService,
 		RemoteAvatarDecorationService,
 		JuiceUserRankingService,
 		EmailI18nService,
@@ -847,6 +852,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ImageProcessingService,
 		$InternalStorageService,
 		$JuiceSettingsService,
+		$DisposableEmailDomainService,
 		$RemoteAvatarDecorationService,
 		$JuiceUserRankingService,
 		$EmailI18nService,

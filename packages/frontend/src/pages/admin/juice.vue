@@ -108,6 +108,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #caption>{{ i18n.ts._juice.blockEmailPlusAliasRegistrationCaption }}</template>
 								</MkSwitch>
 							</SearchMarker>
+
+							<!-- JUICE: 使い捨てメールアドレスのドメインの一覧(disposable-email-domains)で断る -->
+							<SearchMarker>
+								<MkSwitch v-model="disposableEmailBlocklistEnabled">
+									<template #label><SearchLabel>{{ i18n.ts._juice.disposableEmailBlocklistEnabled }}</SearchLabel></template>
+									<template #caption>
+										{{ i18n.ts._juice.disposableEmailBlocklistEnabledCaption }}
+										<a href="https://github.com/disposable-email-domains/disposable-email-domains" target="_blank" rel="noopener" class="_link">disposable-email-domains</a>
+										<br>
+										<template v-if="disposableEmailBlocklistStatus.fetchedAt != null">{{ i18n.tsx._juice.disposableEmailBlocklistStatus({ n: disposableEmailBlocklistStatus.count }) }} <MkTime :time="disposableEmailBlocklistStatus.fetchedAt" mode="detail"/></template>
+										<template v-else>{{ i18n.ts._juice.disposableEmailBlocklistNotFetched }}</template>
+									</template>
+								</MkSwitch>
+							</SearchMarker>
+
+							<SearchMarker>
+								<MkTextarea v-model="disposableEmailAllowDomainsInput">
+									<template #label><SearchLabel>{{ i18n.ts._juice.disposableEmailAllowDomains }}</SearchLabel></template>
+									<template #caption>{{ i18n.ts._juice.disposableEmailAllowDomainsCaption }}</template>
+								</MkTextarea>
+							</SearchMarker>
 						</div>
 					</MkFolder>
 				</SearchMarker>
@@ -526,6 +547,12 @@ const customSplashTextTooManyLines = computed(() => customSplashTextLines.value.
 const customSplashTextTooLongLineCount = computed(() => customSplashTextLines.value.filter(x => x.length > CUSTOM_SPLASH_TEXT_MAX_LENGTH).length);
 const blockEmailDotAliasRegistration = ref(settings.blockEmailDotAliasRegistration);
 const blockEmailPlusAliasRegistration = ref(settings.blockEmailPlusAliasRegistration);
+const disposableEmailBlocklistEnabled = ref(settings.disposableEmailBlocklistEnabled);
+// 許可するドメインは、1行に1つで入れる(空白・カンマで区切って並べてもよい)。上限(件数・長さ)はadmin/juice/update-settingsのparamDefと合わせる
+const disposableEmailAllowDomainsInput = ref(settings.disposableEmailAllowDomains.join('\n'));
+const disposableEmailAllowDomainsLines = computed(() => disposableEmailAllowDomainsInput.value.split(/[\s,]+/).filter(x => x.length > 0 && x.length <= 253).slice(0, 1000));
+// 一覧の状態(件数と取得した日時)。保存した後に読み直す
+const disposableEmailBlocklistStatus = ref({ count: settings.disposableEmailBlocklistCount, fetchedAt: settings.disposableEmailBlocklistFetchedAt });
 const aiGeneratedFallbackCwEnabled = ref(settings.aiGeneratedFallbackCwEnabled);
 const novelFallbackCwEnabled = ref(settings.novelFallbackCwEnabled);
 
@@ -636,6 +663,8 @@ function save() {
 		newAccountFollowRequestThresholdMs: newAccountFollowRequestThresholdMs.value,
 		blockEmailDotAliasRegistration: blockEmailDotAliasRegistration.value,
 		blockEmailPlusAliasRegistration: blockEmailPlusAliasRegistration.value,
+		disposableEmailBlocklistEnabled: disposableEmailBlocklistEnabled.value,
+		disposableEmailAllowDomains: disposableEmailAllowDomainsLines.value,
 		aiGeneratedFallbackCwEnabled: aiGeneratedFallbackCwEnabled.value,
 		novelFallbackCwEnabled: novelFallbackCwEnabled.value,
 		discordOauthEnabled: oauthSettings.discord.enabled.value,
@@ -653,7 +682,13 @@ function save() {
 		microsoftOauthEnabled: oauthSettings.microsoft.enabled.value,
 		microsoftOauthClientId: oauthSettings.microsoft.clientId.value || null,
 		microsoftOauthClientSecret: oauthSettings.microsoft.clientSecret.value || null,
-	});
+	}).then(async () => {
+		// JUICE: 保存した後の値を読み直す(許可するドメインは、サーバーが形の正しいものだけにそろえて保存する。
+		// 入れたものが保存されなかったときに気付けるよう、欄にも反映する)
+		const saved = await misskeyApi('admin/juice/settings');
+		disposableEmailAllowDomainsInput.value = saved.disposableEmailAllowDomains.join('\n');
+		disposableEmailBlocklistStatus.value = { count: saved.disposableEmailBlocklistCount, fetchedAt: saved.disposableEmailBlocklistFetchedAt };
+	}).catch(() => {});
 }
 
 const headerActions = computed(() => []);
