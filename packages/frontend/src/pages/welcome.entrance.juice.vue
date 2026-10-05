@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<!-- 管理画面(ブランディング)の「背景画像のURL」。classicと同じく、設定されていればページ全体に敷く -->
 	<div v-if="meta.backgroundImageUrl" :class="$style.bg" :style="{ backgroundImage: `url(${ meta.backgroundImageUrl })` }"></div>
 	<div :class="$style.container">
-		<div :class="$style.side">
+		<div>
 			<MkVisitorDashboard mainOnly :translucent="!!meta.backgroundImageUrl"/>
 		</div>
 
