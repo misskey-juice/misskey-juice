@@ -14,9 +14,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:options="[
 							{ value: 'classic' },
 							{ value: 'simple' },
+							// JUICE: JUICE独自のエントランス(classicをジュース風にしたもの)
+							{ value: 'juice', slotId: 'juice' },
 						]"
 					>
 						<template #label><SearchLabel>{{ i18n.ts._serverSettings.entrancePageStyle }}</SearchLabel></template>
+						<template #option-juice>juice<span class="_juice">JUICE</span></template>
 					</MkRadios>
 				</SearchMarker>
 

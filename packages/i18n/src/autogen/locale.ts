@@ -16676,7 +16676,7 @@ export interface Locale extends ILocale {
              */
             "title": string;
             /**
-             * このサーバーとの連合がうまくいかないとき、どこで止まっているかを確かめます。このサーバーの設定と、相手のサーバーへの実際の問い合わせを順に調べます(相手のサーバーには何も配送しません)。
+             * このサーバーとの連合がうまくいかないとき、どこで止まっているかを確かめます。このサーバーの設定と、相手のサーバーへの実際の問い合わせを順に調べます(相手のサーバーには何も配送しません。inboxには署名の無い空の問い合わせを送って、応答だけを見ます)。
              */
             "description": string;
             /**
@@ -16912,6 +16912,42 @@ export interface Locale extends ILocale {
                  * 取得できました(ただし、署名を確かめずに返すサーバーも多いので、相手がこのサーバーをブロックしていても、ここは問題なしになることがあります)
                  */
                 "actorFetched": string;
+                /**
+                 * 相手のサーバーのinboxが、配送を受け付けていません(inboxが無い・URLが変わった可能性があります)
+                 */
+                "inboxNotFound": string;
+            };
+            "_keys": {
+                /**
+                 * 署名の鍵
+                 */
+                "title": string;
+                /**
+                 * 相手から届いた署名は、このサーバーが保存している相手の鍵で確かめます(相手が鍵を変えたのに、保存している鍵が古いままだと、確かめられません)
+                 */
+                "note": string;
+                /**
+                 * 不明
+                 */
+                "unknown": string;
+                "_sources": {
+                    /**
+                     * このサーバーの署名
+                     */
+                    "local": string;
+                    /**
+                     * 相手が公開している鍵(publicKey)
+                     */
+                    "publicKey": string;
+                    /**
+                     * 相手が公開している鍵(assertionMethod)
+                     */
+                    "assertionMethod": string;
+                    /**
+                     * このサーバーが保存している相手の鍵
+                     */
+                    "stored": string;
+                };
             };
         };
         /**
@@ -18735,5 +18771,35 @@ export interface Locale extends ILocale {
              */
             "cancelled": string;
         };
+    };
+    "_juiceEntrance": {
+        /**
+         * 登録しているユーザー
+         */
+        "registeredUsers": string;
+        /**
+         * オンライン
+         */
+        "onlineUsers": string;
+        /**
+         * つながっているサーバー
+         */
+        "connectedServers": string;
+        /**
+         * ノート
+         */
+        "notes": string;
+        /**
+         * タイムライン
+         */
+        "timeline": string;
+        /**
+         * 人気
+         */
+        "popular": string;
+        /**
+         * つながっているサーバーの一部
+         */
+        "someConnectedServers": string;
     };
 }

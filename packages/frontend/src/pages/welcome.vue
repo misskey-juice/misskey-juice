@@ -7,6 +7,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div v-if="instance">
 	<XSetup v-if="instance.requireSetup"/>
 	<XEntranceClassic v-else-if="(instance.clientOptions.entrancePageStyle ?? 'classic') === 'classic'"/>
+	<!-- JUICE: JUICE独自のエントランス(classicをジュース風にしたもの) -->
+	<XEntranceJuice v-else-if="instance.clientOptions.entrancePageStyle === 'juice'"/>
 	<XEntranceSimple v-else/>
 </div>
 </template>
@@ -18,6 +20,7 @@ import { instanceName } from '@@/js/config.js';
 import XSetup from './welcome.setup.vue';
 import XEntranceClassic from './welcome.entrance.classic.vue';
 import XEntranceSimple from './welcome.entrance.simple.vue';
+import XEntranceJuice from './welcome.entrance.juice.vue';
 import { definePage } from '@/page.js';
 import { fetchInstance } from '@/instance.js';
 

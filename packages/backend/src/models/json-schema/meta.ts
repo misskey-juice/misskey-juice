@@ -403,7 +403,8 @@ export const packedMetaClientOptionsSchema = {
 	properties: {
 		entrancePageStyle: {
 			type: 'string',
-			enum: ['classic', 'simple'],
+			// JUICE: juiceは、JUICE独自のエントランス
+			enum: ['classic', 'simple', 'juice'],
 			optional: false, nullable: false,
 		},
 		showTimelineForVisitor: {

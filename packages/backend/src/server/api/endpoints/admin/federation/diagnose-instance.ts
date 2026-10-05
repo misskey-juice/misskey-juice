@@ -52,6 +52,21 @@ export const meta = {
 						code: { type: 'string', optional: false, nullable: true },
 						detail: { type: 'string', optional: false, nullable: true },
 						elapsedMs: { type: 'number', optional: false, nullable: true },
+						// 署名の鍵の種類(署名付きでのユーザー情報の取得の項目だけ。それ以外はnull)
+						keys: {
+							type: 'array',
+							optional: false, nullable: true,
+							items: {
+								type: 'object',
+								optional: false, nullable: false,
+								properties: {
+									source: { type: 'string', optional: false, nullable: false, enum: ['local', 'publicKey', 'assertionMethod', 'stored'] },
+									type: { type: 'string', optional: false, nullable: false },
+									bits: { type: 'number', optional: false, nullable: true },
+									algorithm: { type: 'string', optional: false, nullable: true },
+								},
+							},
+						},
 					},
 				},
 			},

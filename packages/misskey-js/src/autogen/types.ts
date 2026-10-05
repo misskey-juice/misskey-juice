@@ -6670,7 +6670,7 @@ export type components = {
         MetaDetailed: components['schemas']['MetaLite'] & components['schemas']['MetaDetailedOnly'];
         MetaClientOptions: {
             /** @enum {string} */
-            entrancePageStyle: 'classic' | 'simple';
+            entrancePageStyle: 'classic' | 'simple' | 'juice';
             showTimelineForVisitor: boolean;
             showActivitiesForVisitor: boolean;
         };
@@ -10954,6 +10954,13 @@ export interface operations {
                             code: string | null;
                             detail: string | null;
                             elapsedMs: number | null;
+                            keys: {
+                                /** @enum {string} */
+                                source: 'local' | 'publicKey' | 'assertionMethod' | 'stored';
+                                type: string;
+                                bits: number | null;
+                                algorithm: string | null;
+                            }[] | null;
                         }[];
                     };
                 };
@@ -15985,7 +15992,7 @@ export interface operations {
                     defaultDarkTheme?: string | null;
                     clientOptions?: {
                         /** @enum {string} */
-                        entrancePageStyle?: 'classic' | 'simple';
+                        entrancePageStyle?: 'classic' | 'simple' | 'juice';
                         showTimelineForVisitor?: boolean;
                         showActivitiesForVisitor?: boolean;
                     };

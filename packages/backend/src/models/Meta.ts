@@ -753,7 +753,8 @@ export class MiMeta {
 		default: { },
 	})
 	public clientOptions: {
-		entrancePageStyle: 'classic' | 'simple';
+		// JUICE: juiceは、JUICE独自のエントランス(classicをジュース風にしたもの)
+		entrancePageStyle: 'classic' | 'simple' | 'juice';
 		showTimelineForVisitor: boolean;
 		showActivitiesForVisitor: boolean;
 	};

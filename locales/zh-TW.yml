@@ -4309,7 +4309,7 @@ _juice:
   doodleTimelapseWatermarkFailed: "無法產生浮水印"
   _federationDiagnosis:
     title: "診斷"
-    description: "當與此伺服器的聯邦不正常時，檢查問題出在哪裡。依序檢查本伺服器的設定以及對對方伺服器的實際請求（不會向對方伺服器傳送任何內容）。"
+    description: "當與此伺服器的聯邦不正常時，檢查問題出在哪裡。依序檢查本伺服器的設定以及對對方伺服器的實際請求（不會向對方伺服器傳送任何內容；只會向 inbox 傳送不帶簽章的空請求，查看其回應）。"
     run: "開始診斷"
     rerun: "重新診斷"
     running: "正在診斷（可能需要數十秒）"
@@ -4370,6 +4370,16 @@ _juice:
       internalError: "在本伺服器內部檢查失敗"
       userGone: "用於檢查的使用者已不在對方伺服器上（不一定是伺服器本身的問題）"
       actorFetched: "已取得（但許多伺服器不驗證簽章就會回應，因此即使對方封鎖了本伺服器，這裡也可能顯示正常）"
+      inboxNotFound: "對方伺服器的 inbox 不接受傳送（可能沒有 inbox，或其 URL 已變更）"
+    _keys:
+      title: "簽章金鑰"
+      note: "對方傳來的簽章使用本伺服器儲存的對方金鑰驗證（如果對方更換了金鑰而儲存的金鑰仍是舊的，則無法驗證）"
+      unknown: "未知"
+      _sources:
+        local: "本伺服器的簽章"
+        publicKey: "對方公開的金鑰（publicKey）"
+        assertionMethod: "對方公開的金鑰（assertionMethod）"
+        stored: "本伺服器儲存的對方金鑰"
   doodleRecent: "繼續畫"
   doodleEmpty: "還沒有塗鴉"
   doodleDeleteConfirm: "要刪除「{name}」嗎？它將從此瀏覽器中刪除，且無法復原。"
@@ -4834,3 +4844,11 @@ _importRequest:
     approved: "已核准"
     rejected: "已駁回"
     cancelled: "已撤回"
+_juiceEntrance:
+  registeredUsers: "註冊使用者"
+  onlineUsers: "線上"
+  connectedServers: "已連線的伺服器"
+  notes: "貼文"
+  timeline: "時間軸"
+  popular: "熱門"
+  someConnectedServers: "部分已連線的伺服器"

@@ -24,6 +24,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div :class="$style.title">{{ t._checks[check.id] }}</div>
 						<div :class="$style.message">{{ messageOf(check) }}</div>
 						<div v-if="detailOf(check) != null" :class="$style.detail">{{ detailOf(check) }}</div>
+						<!-- 署名の鍵の種類(署名付きでのユーザー情報の取得の項目だけ) -->
+						<div v-if="check.keys != null && check.keys.length > 0" :class="$style.keys">
+							<div :class="$style.keysTitle">{{ t._keys.title }}</div>
+							<div v-for="(key, i) in check.keys" :key="i" :class="$style.key">
+								<span :class="$style.keySource">{{ t._keys._sources[key.source] }}</span>
+								<span :class="$style.keyType">{{ keyLabel(key) }}</span>
+							</div>
+							<div :class="$style.keysNote">{{ t._keys.note }}</div>
+						</div>
 					</div>
 					<div v-if="check.elapsedMs != null" :class="$style.elapsed">{{ check.elapsedMs }}ms</div>
 				</div>
@@ -45,6 +54,7 @@ import { i18n } from '@/i18n.js';
 
 type Result = Misskey.entities.AdminFederationDiagnoseInstanceResponse;
 type Check = Result['checks'][number];
+type Key = NonNullable<Check['keys']>[number];
 
 const props = defineProps<{
 	host: string;
@@ -93,6 +103,23 @@ function detailOf(check: Check): string | null {
 		return Number.isNaN(date.getTime()) ? check.detail : date.toLocaleString();
 	}
 	return check.detail;
+}
+
+// 鍵の種類の表示(例: RSA 2048bit · rsa-sha256 / Ed25519 / ECDSA prime256v1)
+function keyLabel(key: Key): string {
+	const typeName = (() => {
+		if (key.type === 'rsa') return 'RSA';
+		if (key.type === 'rsa-pss') return 'RSA-PSS';
+		if (key.type === 'ed25519') return 'Ed25519';
+		if (key.type === 'ed448') return 'Ed448';
+		if (key.type.startsWith('ec:')) return `ECDSA ${key.type.slice(3)}`;
+		if (key.type === 'unknown') return t._keys.unknown;
+		return key.type;
+	})();
+	return [
+		key.bits != null ? `${typeName} ${key.bits}bit` : typeName,
+		key.algorithm,
+	].filter(x => x != null).join(' · ');
 }
 
 // 今の診断の番号(診断している間に別のサーバーのページへ移ったら、前の診断の結果は捨てる)
@@ -183,6 +210,41 @@ watch(() => props.host, () => {
 	opacity: 0.7;
 	overflow-wrap: anywhere;
 	font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+
+.keys {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: var(--MI-radius);
+	background: var(--MI_THEME-bg);
+	font-size: 0.85em;
+}
+
+.keysTitle {
+	font-weight: bold;
+}
+
+.key {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 8px;
+}
+
+.keySource {
+	opacity: 0.8;
+}
+
+.keyType {
+	font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+}
+
+.keysNote {
+	margin-top: 4px;
+	opacity: 0.7;
+	font-size: 0.95em;
 }
 
 .elapsed {
