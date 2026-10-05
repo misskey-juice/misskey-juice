@@ -79,6 +79,8 @@ import type {
 	AdminEmojiSetLicenseBulkRequest,
 	AdminEmojiUpdateRequest,
 	AdminFederationDeleteAllFilesRequest,
+	AdminFederationDiagnoseInstanceRequest,
+	AdminFederationDiagnoseInstanceResponse,
 	AdminFederationRefreshRemoteInstanceMetadataRequest,
 	AdminFederationRemoveAllFollowingRequest,
 	AdminFederationUpdateInstanceRequest,
@@ -819,6 +821,7 @@ export type Endpoints = {
 	'admin/emoji/set-license-bulk': { req: AdminEmojiSetLicenseBulkRequest; res: EmptyResponse };
 	'admin/emoji/update': { req: AdminEmojiUpdateRequest; res: EmptyResponse };
 	'admin/federation/delete-all-files': { req: AdminFederationDeleteAllFilesRequest; res: EmptyResponse };
+	'admin/federation/diagnose-instance': { req: AdminFederationDiagnoseInstanceRequest; res: AdminFederationDiagnoseInstanceResponse };
 	'admin/federation/refresh-remote-instance-metadata': { req: AdminFederationRefreshRemoteInstanceMetadataRequest; res: EmptyResponse };
 	'admin/federation/remove-all-following': { req: AdminFederationRemoveAllFollowingRequest; res: EmptyResponse };
 	'admin/federation/update-instance': { req: AdminFederationUpdateInstanceRequest; res: EmptyResponse };

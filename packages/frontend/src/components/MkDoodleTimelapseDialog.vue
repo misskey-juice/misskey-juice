@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkModalWindow
 	ref="dialog"
 	:width="720"
-	:height="640"
+	:height="720"
 	@close="close()"
 	@closed="emit('closed')"
 >
@@ -33,6 +33,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton v-if="!recording && videoType != null" primary rounded @click="record"><i class="ti ti-video"></i> {{ i18n.ts._juice.doodleTimelapseRecord }}</MkButton>
 				<MkButton v-if="recording" rounded danger @click="cancelRecording"><i class="ti ti-x"></i> {{ i18n.ts.cancel }}</MkButton>
 			</div>
+			<!-- 画像のアップロードと同じウォーターマークのプリセットを重ねる(ロゴ・二次元コード・模様など) -->
+			<div v-if="watermarkAvailable && !recording" :class="$style.controls">
+				<MkSelect v-model="watermarkPresetId" :items="watermarkPresetItems" small :class="$style.watermarkSelect">
+					<template #label>{{ i18n.ts.watermark }}<MkLoading v-if="watermarkLoading" :em="true" inline/></template>
+				</MkSelect>
+				<MkButton rounded @click="editWatermark"><i class="ti ti-pencil"></i> {{ watermarkPreset != null ? i18n.ts.edit : i18n.ts.add }}</MkButton>
+			</div>
 			<div v-if="recording" :class="$style.note" role="status">{{ i18n.ts._juice.doodleTimelapseRecording }}<br>{{ i18n.ts._juice.doodleTimelapseKeepOpen }}</div>
 			<div v-else-if="videoType == null" :class="$style.note">{{ i18n.ts._juice.doodleTimelapseUnsupported }}</div>
 			<div v-if="video != null && !recording" :class="$style.controls">
@@ -55,7 +62,11 @@ import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { uploadFile } from '@/utility/drive.js';
 import { DrawTimelapse, timelapseVideoType } from '@/utility/draw-timelapse.js';
+import type { DrawLayerEvent, DrawStrokeEdit } from '@/utility/draw-room-local.js';
+import type { WatermarkPreset } from '@/utility/watermark/WatermarkRenderer.js';
 import { $i } from '@/i.js';
+import { prefer } from '@/preferences.js';
+import { deepClone } from '@/utility/clone.js';
 
 const props = defineProps<{
 	title: string;
@@ -63,6 +74,10 @@ const props = defineProps<{
 	canvasHeight: number;
 	strokes: Misskey.entities.DrawStroke[];
 	layers: Misskey.entities.DrawLayer[];
+	// レイヤーの表示・非表示などを変えた記録(あれば、再生で追う)
+	layerEvents?: DrawLayerEvent[];
+	// 線を描く以外の操作(動かす・回す・取り消しなど)の記録(あれば、再生で追う)
+	strokeEdits?: DrawStrokeEdit[];
 	// 投稿フォームから開いた落書き(動画をそのフォームに添付する)
 	attachable?: boolean;
 }>();
@@ -77,6 +92,10 @@ const VIDEO_MAX_SIZE = 1280;
 const VIDEO_FPS = 30;
 // 描き終えた絵を見せておく時間(ミリ秒)
 const HOLD_MS = 1500;
+// ドット絵のような小さいキャンバスは、長い辺がこの大きさ以上になるよう、整数倍に(ぼかさずに)拡大して出す
+const VIDEO_MIN_SIZE = 480;
+// ウォーターマークを作るのを待つ時間の上限(ミリ秒)
+const WATERMARK_TIMEOUT_MS = 8000;
 
 const dialog = useTemplateRef('dialog');
 const canvasEl = useTemplateRef('canvasEl');
@@ -87,6 +106,67 @@ const recording = ref(false);
 const video = shallowRef<{ blob: Blob; ext: string } | null>(null);
 const videoUrl = ref<string | null>(null);
 const videoType = timelapseVideoType();
+
+// ウォーターマーク(画像のアップロードと同じプリセット)。選んだプリセットを、動画と同じ大きさの透明な絵にしておき、コマごとに重ねる
+const watermarkAvailable = $i?.policies.watermarkAvailable === true;
+const watermarkPresetId = ref<string | null>(prefer.s.juiceDoodleTimelapseWatermarkPresetId);
+const watermarkPreset = computed(() => (watermarkAvailable ? prefer.r.watermarkPresets.value.find(preset => preset.id === watermarkPresetId.value) ?? null : null));
+const watermarkPresetItems = computed(() => [
+	{ label: i18n.ts.none, value: null },
+	...prefer.r.watermarkPresets.value.map(preset => ({ label: preset.name || i18n.ts.noName, value: preset.id as string | null })),
+]);
+const watermarkLoading = ref(false);
+let watermarkOverlay: HTMLCanvasElement | null = null;
+// 作り直している途中で選び直されたら、古いほうの結果は使わない
+let watermarkGeneration = 0;
+
+async function updateWatermark(): Promise<void> {
+	const canvas = canvasEl.value;
+	const preset = watermarkPreset.value;
+	const generation = ++watermarkGeneration;
+	let overlay: HTMLCanvasElement | null = null;
+	if (canvas != null && preset != null && preset.layers.length > 0) {
+		watermarkLoading.value = true;
+		try {
+			const { renderWatermarkOverlay } = await import('@/utility/watermark/overlay.js');
+			// 二次元コードに入れるアイコンなど、素材を読み込めないと終わらないことがあるので、待つ時間に上限を付ける
+			overlay = await Promise.race([
+				renderWatermarkOverlay(deepClone(preset.layers), canvas.width, canvas.height),
+				new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('watermark timeout')), WATERMARK_TIMEOUT_MS)),
+			]);
+		} catch (err) {
+			console.error(err);
+			if (generation === watermarkGeneration) os.toast(i18n.ts._juice.doodleTimelapseWatermarkFailed);
+		}
+	}
+	if (generation !== watermarkGeneration) return;
+	watermarkLoading.value = false;
+	watermarkOverlay = overlay;
+	if (recording.value) return;
+	clearVideo();
+	redraw();
+}
+
+// プリセットを編集する(無ければ新しく作る)。画像のアップロードと同じ編集画面・同じ保存先
+async function editWatermark(): Promise<void> {
+	const current = watermarkPreset.value;
+	const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkWatermarkEditorDialog.vue').then(x => x.default), {
+		presetEditMode: true,
+		preset: current != null ? deepClone(current) : null,
+		layers: current != null ? deepClone(current.layers) : [],
+	}, {
+		presetOk: (preset: WatermarkPreset) => {
+			const presets = prefer.s.watermarkPresets;
+			prefer.commit('watermarkPresets', presets.some(p => p.id === preset.id) ? presets.map(p => (p.id === preset.id ? preset : p)) : [...presets, preset]);
+			watermarkPresetId.value = preset.id;
+		},
+		closed: () => dispose(),
+	});
+}
+
+// 小さいキャンバスを拡大する倍率と、拡大する前の絵を描く作業用のキャンバス(拡大しないときは使わない)
+let zoom = 1;
+let sourceCanvas: HTMLCanvasElement | null = null;
 
 const duration = ref(20);
 const durationItems = computed(() => [10, 20, 30, 60].map(seconds => ({ label: i18n.tsx._juice.doodleTimelapseSeconds({ n: seconds }), value: seconds })));
@@ -106,8 +186,29 @@ function draw(fraction: number): void {
 	const ctx = canvasEl.value?.getContext('2d');
 	if (t == null || ctx == null) return;
 	// 録画中は、絵が変わっていなくても毎回描く(描かないと、動画にコマが入らない)
-	t.render(ctx, t.totalUnits * fraction, recording.value);
+	const sourceCtx = sourceCanvas?.getContext('2d') ?? ctx;
+	const painted = t.render(sourceCtx, t.totalUnits * fraction, recording.value || redrawNext);
 	progress.value = fraction;
+	// 絵を描き直したときだけ、拡大とウォーターマークを重ねる(前のコマのままのときに重ねると、半透明のところが濃くなっていく)
+	if (!painted) return;
+	redrawNext = false;
+	if (sourceCanvas != null) {
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.imageSmoothingEnabled = false;
+		ctx.drawImage(sourceCanvas, 0, 0, ctx.canvas.width, ctx.canvas.height);
+		ctx.restore();
+	}
+	if (watermarkOverlay != null) ctx.drawImage(watermarkOverlay, 0, 0, ctx.canvas.width, ctx.canvas.height);
+}
+
+// 次のコマは、絵が変わっていなくても描き直す(ウォーターマークを変えたとき)
+let redrawNext = false;
+
+// 今のコマを描き直す(再生が終わっていたら、描き終えた絵を描き直す)
+function redraw(): void {
+	redrawNext = true;
+	if (!playing) draw(empty.value ? 1 : progress.value);
 }
 
 function stopPlayback(): void {
@@ -180,6 +281,14 @@ watch(duration, () => {
 	clearVideo();
 	play();
 });
+
+// 選んだプリセット・プリセットの中身が変わったら、重ねる絵を作り直す
+watch(watermarkPresetId, (id) => {
+	prefer.commit('juiceDoodleTimelapseWatermarkPresetId', id);
+});
+watch(watermarkPreset, () => {
+	updateWatermark();
+}, { deep: true });
 
 function record(): void {
 	const canvas = canvasEl.value;
@@ -287,11 +396,18 @@ onMounted(() => {
 	window.document.addEventListener('visibilitychange', onVisibilityChange);
 	const canvas = canvasEl.value;
 	if (canvas == null) return;
-	const t = new DrawTimelapse(props.canvasWidth, props.canvasHeight, props.strokes, props.layers, VIDEO_MAX_SIZE);
+	const t = new DrawTimelapse(props.canvasWidth, props.canvasHeight, props.strokes, props.layers, VIDEO_MAX_SIZE, props.layerEvents ?? [], props.strokeEdits ?? []);
 	timelapse.value = t;
-	canvas.width = t.width;
-	canvas.height = t.height;
+	zoom = Math.max(1, Math.ceil(VIDEO_MIN_SIZE / Math.max(t.width, t.height)));
+	canvas.width = t.width * zoom;
+	canvas.height = t.height * zoom;
+	if (zoom > 1) {
+		sourceCanvas = window.document.createElement('canvas');
+		sourceCanvas.width = t.width;
+		sourceCanvas.height = t.height;
+	}
 	empty.value = t.totalUnits === 0;
+	if (watermarkPreset.value != null) updateWatermark();
 	if (empty.value) draw(1);
 	else play();
 });
@@ -301,8 +417,11 @@ onUnmounted(() => {
 	cancelCurrentRecording?.();
 	stopPlayback();
 	if (videoUrl.value != null) URL.revokeObjectURL(videoUrl.value);
+	watermarkGeneration++;
+	watermarkOverlay = null;
 	timelapse.value?.dispose();
 	timelapse.value = null;
+	sourceCanvas = null;
 });
 </script>
 

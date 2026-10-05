@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="buttonEl"
 	v-ripple="canToggle"
 	class="_button"
-	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.remote]: isRemoteCustomEmoji, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -65,6 +65,9 @@ const emojiName = computed(() => getEmojiNameFromReaction(props.reaction));
 
 const isLocalCustomEmoji = computed(() => isLocalCustomEmojiReaction(props.reaction));
 
+// JUICE: ほかのサーバーのカスタム絵文字でのリアクション(押すと相乗りになる)。このサーバーの絵文字と見分けられるよう、枠を点線にする
+const isRemoteCustomEmoji = computed(() => props.reaction[0] === ':' && !isLocalCustomEmoji.value);
+
 // JUICE: リモートのカスタム絵文字を使ったリアクションへの相乗り(既存リアクションに便乗して
 // 同じリアクションを付けること)を管理者設定で有効化できるようにする(著作権者の許諾なく
 // リモートの絵文字画像を表示・使用することになりうるため、既定は無効)。
@@ -87,6 +90,28 @@ const canToggle = computed(() => {
 });
 // JUICE: リモートのカスタム絵文字によるリアクションも、ライセンス等の詳細情報を確認できるようにする
 const canGetInfo = computed(() => props.reaction.includes(':'));
+
+// リアクションを付けたことを、自分の画面に反映する
+async function emitReacted(userId: string): Promise<void> {
+	if (!isRemoteCustomEmoji.value) {
+		const emoji = customEmojisMap.get(emojiName.value);
+		if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) return;
+		noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction: props.reaction, emoji });
+		return;
+	}
+	// JUICE: ほかのサーバーの絵文字への相乗りは、このサーバーの絵文字の一覧に無いので、今までは画面に反映されなかった
+	// (読み込み直すまで、付けたことが分からなかった)。サーバーが別のリアクションに置き換えることもある
+	// (使えない絵文字なら既定のリアクションになる)ので、実際に付いたリアクションを取ってから反映する
+	const fresh = await misskeyApi('notes/show', { noteId: props.noteId }).catch(() => null);
+	const reaction = fresh?.myReaction ?? props.reaction;
+	if (reaction[0] !== ':') {
+		noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction });
+		return;
+	}
+	const name = getEmojiNameFromReaction(reaction);
+	const url = fresh?.reactionEmojis[name] ?? props.reactionEmojis[name] ?? customEmojisMap.get(name)?.url;
+	noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction, emoji: url != null ? { name, url } : null });
+}
 
 async function toggleReaction() {
 	if (!canToggle.value) return;
@@ -123,17 +148,7 @@ async function toggleReaction() {
 				misskeyApi('notes/reactions/create', {
 					noteId: props.noteId,
 					reaction: props.reaction,
-				}).then(() => {
-					const emoji = customEmojisMap.get(emojiName.value);
-					if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) {
-						return;
-					}
-					noteEvents.emit(`reacted:${props.noteId}`, {
-						userId: me.id,
-						reaction: props.reaction,
-						emoji: emoji,
-					});
-				});
+				}).then(() => emitReacted(me.id));
 			}
 		});
 	} else {
@@ -157,18 +172,7 @@ async function toggleReaction() {
 		misskeyApi('notes/reactions/create', {
 			noteId: props.noteId,
 			reaction: props.reaction,
-		}).then(() => {
-			const emoji = customEmojisMap.get(emojiName.value);
-			if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) {
-				return;
-			}
-
-			noteEvents.emit(`reacted:${props.noteId}`, {
-				userId: me.id,
-				reaction: props.reaction,
-				emoji: emoji,
-			});
-		});
+		}).then(() => emitReacted(me.id));
 		// TODO: 上位コンポーネントでやる
 		//if (props.note.text && props.note.text.length > 100 && (Date.now() - new Date(props.note.createdAt).getTime() < 1000 * 3)) {
 		//	claimAchievement('reactWithoutRead');
@@ -343,6 +347,17 @@ if (!mock) {
 
 		> .icon {
 			filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+		}
+	}
+
+	// JUICE: ほかのサーバーのカスタム絵文字でのリアクションは、枠を点線にする
+	&.remote {
+		outline: dashed 1px color-mix(in srgb, var(--MI_THEME-fg) 45%, transparent);
+		outline-offset: -1px;
+
+		&.reacted, &.reacted:hover {
+			box-shadow: none;
+			outline-color: var(--MI_THEME-accent);
 		}
 	}
 }

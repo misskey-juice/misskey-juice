@@ -15,17 +15,44 @@ type DrawLayer = Misskey.entities.DrawLayer;
 type DrawLayerGroup = NonNullable<DrawLayer['groups']>[number];
 
 // 取り消し・やり直しの手順(サーバーのHISTORY_LUAと同じ)
-type HistoryStep =
+export type DrawHistoryStep =
 	| { t: 'del'; ids: string[] }
 	| { t: 'mv'; ids: string[] | '*'; dx: number; dy: number }
 	| { t: 'ins'; items: { a: string | null; s: DrawStroke }[] }
 	// サーバーのaddLayer・rmLayerの代わりに、レイヤーの一覧をまるごと置き換える(消したレイヤーの代わりに作ったレイヤーも、取り消しで消せるように)
 	| { t: 'layers'; layers: DrawLayer[] };
+type HistoryStep = DrawHistoryStep;
 type HistoryEntry = { u: HistoryStep[]; r: HistoryStep[] };
+
+/**
+ * レイヤーの見え方(表示・濃さ・合成モード)を変えた記録。タイムラプスで、描いている途中のレイヤーの表示・非表示を追うために持つ。
+ * after・index は、変えた時点で最後に描いてあった線のidと、線の本数(その線の後で変えた、という目印)。
+ * 先頭の1件(after: null, index: 0)は、記録を始める前の見え方
+ */
+export type DrawLayerEvent = {
+	// 線の操作の記録(DrawStrokeEdit)と合わせた、起きた順の番号(前の版で残した記録には無い)
+	seq?: number;
+	after: string | null;
+	index: number;
+	layers: { id: string; visible: boolean; opacity: number; blend?: DrawLayer['blend'] }[];
+};
+
+/**
+ * 線を描く以外の操作(動かす・回す・拡大縮小・反転・消す・取り消し・やり直しなど)の記録。タイムラプスで、操作の前の絵から順に見せるために持つ。
+ * before・after は、操作の直前・直後の線の本数。u は、操作の後の並び(の先頭 after 本)を、操作の前の並びに戻す手順
+ */
+export type DrawStrokeEdit = {
+	seq: number;
+	before: number;
+	after: number;
+	u: DrawHistoryStep[];
+};
 
 export type LocalDrawRoomState = {
 	strokes: DrawStroke[];
 	layers: DrawLayer[];
+	layerEvents?: DrawLayerEvent[];
+	strokeEdits?: DrawStrokeEdit[];
 };
 
 const DEFAULT_LAYERS: DrawLayer[] = [{ id: '0', name: '', visible: true, opacity: 1 }];
@@ -34,6 +61,111 @@ const MAX_LAYERS = 8;
 const HISTORY_MAX_ENTRIES = 100;
 const GROUP_MAX_DEPTH = 16;
 const MAX_GROUPS = 128;
+// レイヤーの見え方の記録の上限(超えたら古いものから捨てる。先頭の1件は残す)
+const MAX_LAYER_EVENTS = 1000;
+// 線の操作の記録の上限(件数と、記録の中に持っている前の線の本数。超えたら古いものから捨てる)
+const MAX_STROKE_EDITS = 2000;
+const MAX_STROKE_EDIT_STROKES = 30000;
+
+/**
+ * 取り消し・やり直しの手順を、線の並びに当てはめる(レイヤーの一覧を戻す手順は飛ばす)。
+ * 戻す線は、目印の線(同じレイヤーで次にあった線)の前に入れ、目印が無ければ最後に入れる
+ */
+export function applyHistorySteps(strokes: readonly DrawStroke[], steps: readonly DrawHistoryStep[]): DrawStroke[] {
+	let list = [...strokes];
+	for (const step of steps) {
+		if (step.t === 'del') {
+			const ids = new Set(step.ids);
+			list = list.filter(s => !ids.has(s.id));
+		} else if (step.t === 'mv') {
+			const ids = step.ids === '*' ? null : new Set(step.ids);
+			list = list.map(s => (ids == null || ids.has(s.id) ? { ...s, dx: (s.dx ?? 0) + step.dx, dy: (s.dy ?? 0) + step.dy } : s));
+		} else if (step.t === 'ins') {
+			const present = new Set(list.map(s => s.id));
+			const items = step.items.filter(item => {
+				if (present.has(item.s.id)) return false;
+				present.add(item.s.id);
+				return true;
+			});
+			if (items.length === 0) continue;
+			const beforeAnchor = new Map<string, DrawStroke[]>();
+			for (const item of items) {
+				if (item.a == null) continue;
+				const waiting = beforeAnchor.get(item.a) ?? [];
+				waiting.push(item.s);
+				beforeAnchor.set(item.a, waiting);
+			}
+			const result: DrawStroke[] = [];
+			const placed = new Set<string>();
+			for (const s of list) {
+				const waiting = beforeAnchor.get(s.id);
+				if (waiting != null) {
+					result.push(...waiting);
+					placed.add(s.id);
+				}
+				result.push(s);
+			}
+			for (const item of items) {
+				if (!(item.a != null && placed.has(item.a))) result.push(item.s);
+			}
+			list = result;
+		}
+	}
+	return list;
+}
+
+/**
+ * 操作の後の並び(after)を、操作の前の並び(before)に戻す手順を作る。変わっていなければnull。
+ * 取り消しの履歴の手順(同じレイヤーの線を目印にする)と違い、レイヤーをまたいだ全体の順番もそのまま戻るよう、
+ * 全ての線の中で次にある(この操作で変わらない)線を目印にする。変わらなかった線は、前後で同じオブジェクトのまま
+ */
+function editStepsOf(before: readonly DrawStroke[], after: readonly DrawStroke[]): DrawHistoryStep[] | null {
+	const beforeSet = new Set(before);
+	const afterSet = new Set(after);
+	const removed = before.filter(s => !afterSet.has(s));
+	const inserted = after.filter(s => !beforeSet.has(s));
+	if (removed.length === 0 && inserted.length === 0) return null;
+	// 同じ線を同じだけ動かしただけなら、動かした量だけを持つ(前の線をまるごと持たない)
+	if (removed.length === inserted.length && before.length === after.length) {
+		const dx = (removed[0].dx ?? 0) - (inserted[0].dx ?? 0);
+		const dy = (removed[0].dy ?? 0) - (inserted[0].dy ?? 0);
+		const movedOnly = removed.every((old, index) => {
+			const now = inserted[index];
+			if (old.id !== now.id || (old.dx ?? 0) - (now.dx ?? 0) !== dx || (old.dy ?? 0) - (now.dy ?? 0) !== dy) return false;
+			const { dx: _oldDx, dy: _oldDy, ...oldRest } = old;
+			const { dx: _nowDx, dy: _nowDy, ...nowRest } = now;
+			const keys = Object.keys(oldRest) as (keyof typeof oldRest)[];
+			return keys.length === Object.keys(nowRest).length && keys.every(key => oldRest[key] === nowRest[key]);
+		}) && before.every((s, index) => s.id === after[index].id);
+		if (movedOnly) return [{ t: 'mv', ids: removed.length === before.length ? '*' : removed.map(s => s.id), dx, dy }];
+	}
+	const items: { a: string | null; s: DrawStroke }[] = [];
+	let nextKept: string | null = null;
+	for (let i = before.length - 1; i >= 0; i--) {
+		if (afterSet.has(before[i])) nextKept = before[i].id;
+		else items.unshift({ a: nextKept, s: before[i] });
+	}
+	const steps: DrawHistoryStep[] = [];
+	if (inserted.length > 0) steps.push({ t: 'del', ids: inserted.map(s => s.id) });
+	if (items.length > 0) steps.push({ t: 'ins', items });
+	return steps;
+}
+
+/** 線の操作の記録の中に持っている前の線を、ずらす(キャンバスを切り抜いて、全ての線をずらしたとき) */
+export function shiftStrokeEdits(edits: readonly DrawStrokeEdit[], dx: number, dy: number): DrawStrokeEdit[] {
+	if (dx === 0 && dy === 0) return [...edits];
+	return edits.map(edit => ({
+		...edit,
+		u: edit.u.map(step => (step.t === 'ins' ? { ...step, items: step.items.map(item => ({ a: item.a, s: { ...item.s, dx: (item.s.dx ?? 0) + dx, dy: (item.s.dy ?? 0) + dy } })) } : step)),
+	}));
+}
+
+const layerViewOf = (layers: DrawLayer[]): DrawLayerEvent['layers'] => layers.map(layer => ({
+	id: layer.id,
+	visible: layer.visible !== false,
+	opacity: layer.opacity,
+	...(layer.blend != null ? { blend: layer.blend } : {}),
+}));
 
 const layerOf = (stroke: DrawStroke) => stroke.layer ?? '0';
 // 線の中身を比べるための文字列(同じ線でも、動かした・切ったら変わる)
@@ -87,6 +219,13 @@ export class LocalDrawRoomConnection {
 	private disposed = false;
 	public strokes: DrawStroke[];
 	public layers: DrawLayer[];
+	public layerEvents: DrawLayerEvent[];
+	public strokeEdits: DrawStrokeEdit[];
+	// 記録に付ける、起きた順の番号(次に使う番号)
+	private seq: number;
+	// 今処理している操作の種類と、最後に記録を確かめたときの線の並び(線の操作の記録を作るのに使う)
+	private currentOp: string | null = null;
+	private loggedStrokes: DrawStroke[];
 
 	constructor(
 		private readonly userId: string,
@@ -98,6 +237,10 @@ export class LocalDrawRoomConnection {
 	) {
 		this.strokes = state.strokes;
 		this.layers = state.layers.length > 0 ? state.layers : DEFAULT_LAYERS.map(l => ({ ...l }));
+		this.layerEvents = Array.isArray(state.layerEvents) ? state.layerEvents : [];
+		this.strokeEdits = Array.isArray(state.strokeEdits) ? state.strokeEdits : [];
+		this.seq = 1 + Math.max(0, ...this.layerEvents.map(event => event.seq ?? 0), ...this.strokeEdits.map(edit => edit.seq));
+		this.loggedStrokes = this.strokes;
 	}
 
 	/** 取り消せる回数と、やり直せる回数(デバッグ情報の表示用) */
@@ -132,7 +275,51 @@ export class LocalDrawRoomConnection {
 	}
 
 	private changed(): void {
-		this.onChange({ strokes: this.strokes, layers: this.layers });
+		this.logStrokeEdit();
+		this.onChange({ strokes: this.strokes, layers: this.layers, layerEvents: this.layerEvents, strokeEdits: this.strokeEdits });
+	}
+
+	// レイヤーの見え方(表示・濃さ・合成モード・並び)が変わっていたら記録する。1回の操作を1件として残す(タイムラプスで、
+	// 隠した・また出した、濃さを変えて戻した、などが分かるように。濃さのスライダーは、離したときに1回だけ送られてくる)
+	private recordLayerEvent(before: DrawLayer[]): void {
+		// 同じ操作で線も変わっていたら(レイヤーを消した、など)、そちらを先に記録する
+		this.logStrokeEdit();
+		const prev = layerViewOf(before);
+		const next = layerViewOf(this.layers);
+		if (JSON.stringify(prev) === JSON.stringify(next)) return;
+		const events = [...this.layerEvents];
+		if (events.length === 0) events.push({ after: null, index: 0, layers: prev });
+		events.push({ seq: this.seq++, after: this.strokes.at(-1)?.id ?? null, index: this.strokes.length, layers: next });
+		while (events.length > MAX_LAYER_EVENTS) events.splice(1, 1);
+		this.layerEvents = events;
+	}
+
+	// 線を描く以外の操作で線の並びが変わっていたら、その操作を記録する(操作の前の並びに戻す手順を持っておく)
+	private logStrokeEdit(): void {
+		const before = this.loggedStrokes;
+		const after = this.strokes;
+		if (after === before) return;
+		this.loggedStrokes = after;
+		const op = this.currentOp;
+		if (op == null || op === 'stroke') return;
+		// 全て消した・レイヤーを結合した後は、前の操作の記録を使えない(線の並びがつながらない)ので捨てる
+		if ((op === 'clearLayer' && after.length === 0 && this.history.length === 0) || op === 'mergeLayer') {
+			this.strokeEdits = [];
+			return;
+		}
+		const u = editStepsOf(before, after);
+		if (u == null) return;
+		// 手順で前の並びに(順番も含めて)戻らないなら、それより前の操作は追えないので、記録を捨てる
+		const restored = applyHistorySteps(after, u);
+		if (restored.length !== before.length || restored.some((stroke, index) => stroke.id !== before[index].id)) {
+			this.strokeEdits = [];
+			return;
+		}
+		const edits = [...this.strokeEdits, { seq: this.seq++, before: before.length, after: after.length, u }];
+		const heldOf = (edit: DrawStrokeEdit) => edit.u.reduce((sum, step) => sum + (step.t === 'ins' ? step.items.length : 0), 0);
+		let held = edits.reduce((sum, edit) => sum + heldOf(edit), 0);
+		while (edits.length > 1 && (edits.length > MAX_STROKE_EDITS || held > MAX_STROKE_EDIT_STROKES)) held -= heldOf(edits.shift()!);
+		this.strokeEdits = edits;
 	}
 
 	private reject(): void {
@@ -160,6 +347,17 @@ export class LocalDrawRoomConnection {
 
 	public send(type: string, body: any): void {
 		if (this.disposed) return;
+		this.currentOp = type;
+		try {
+			this.dispatch(type, body);
+		} finally {
+			// 保存を知らせなかった操作(断った操作など)でも、線の並びが変わっていたら記録しておく
+			this.logStrokeEdit();
+			this.currentOp = null;
+		}
+	}
+
+	private dispatch(type: string, body: any): void {
 		switch (type) {
 			case 'stroke': return this.addStroke(body as DrawStroke);
 			case 'undo': return this.undoRedo('u');
@@ -241,7 +439,10 @@ export class LocalDrawRoomConnection {
 			} else if (step.t === 'layers') {
 				// 名前・表示・濃さなど(履歴に積まない変更)は、今のものを残す
 				const current = new Map(this.layers.map(layer => [layer.id, layer]));
+				const layersBefore = this.layers;
 				this.layers = step.layers.map(layer => current.get(layer.id) ?? layer);
+				this.strokes = list;
+				this.recordLayerEvent(layersBefore);
 				layersChanged = true;
 			}
 		}
@@ -302,6 +503,7 @@ export class LocalDrawRoomConnection {
 				r: [...entry.r, { t: 'layers', layers: saved }],
 			});
 		}
+		this.recordLayerEvent(before);
 		this.changed();
 		this.emit('layersUpdated', { userId: this.userId, layers: saved });
 	}
@@ -370,6 +572,17 @@ export class LocalDrawRoomConnection {
 		}
 		this.strokes = [...rest.slice(0, at), ...moved, ...rest.slice(at)];
 		this.layers = layers.filter(layer => layer.id !== from).map(layer => (layer.id === into ? { ...layer, visible, groups } : layer));
+		// 前の記録は、結合した後のレイヤーに合わせて書き直す(どちらかが見えていた間は、結合先を見えていたことにする。
+		// そうしないと、結合先だけを隠していた間、結合元の線まで隠れていたことになる)
+		this.layerEvents = this.layerEvents.map(event => {
+			const fromView = event.layers.find(layer => layer.id === from);
+			const intoView = event.layers.find(layer => layer.id === into);
+			if (fromView == null) return event;
+			const rest = event.layers.filter(layer => layer.id !== from);
+			if (intoView == null || intoView.visible || !fromView.visible) return { ...event, layers: rest };
+			return { ...event, layers: rest.map(layer => (layer.id === into ? { ...fromView, id: into } : layer)) };
+		});
+		this.recordLayerEvent(layers.filter(layer => layer.id !== from).map(layer => (layer.id === into ? { ...layer, visible: intoLayer.visible || fromLayer.visible } : layer)));
 		// 結合は取り消せない(サーバーと同じ)
 		this.history = [];
 		this.redoHistory = [];

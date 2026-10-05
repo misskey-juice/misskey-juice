@@ -27,7 +27,7 @@ export function clampMaxMembers(value: number | null | undefined, fallback: numb
 }
 
 // JUICE: 部屋主が自由に決められるキャンバスの大きさの範囲(サーバーの DRAW_ROOM_CANVAS_MIN_SIZE / MAX_SIZE と同じ)
-export const DRAW_ROOM_CANVAS_MIN_SIZE = 100;
+export const DRAW_ROOM_CANVAS_MIN_SIZE = 16;
 export const DRAW_ROOM_CANVAS_MAX_SIZE = 3840;
 
 /**

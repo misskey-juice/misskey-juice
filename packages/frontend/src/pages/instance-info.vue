@@ -112,6 +112,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkPagination>
 		</div>
+		<!-- JUICE: 連合の診断(どこで連合が止まっているかを確かめる。モデレーター以上) -->
+		<XDiagnosis v-else-if="tab === 'diagnosis'" :host="host"/>
 		<div v-else-if="tab === 'raw'" class="_gaps_m">
 			<MkObjectView tall :value="instance">
 			</MkObjectView>
@@ -126,6 +128,7 @@ import * as Misskey from 'misskey-js';
 import type { ChartSrc } from '@/components/MkChart.vue';
 import MkChart from '@/components/MkChart.vue';
 import MkObjectView from '@/components/MkObjectView.vue';
+import XDiagnosis from './instance-info.diagnosis.vue';
 import FormLink from '@/components/form/link.vue';
 import MkLink from '@/components/MkLink.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -306,6 +309,11 @@ const headerTabs = computed(() => [{
 	key: 'users',
 	title: i18n.ts.users,
 	icon: 'ti ti-users',
+}, {
+	// JUICE: 連合の診断
+	key: 'diagnosis',
+	title: i18n.ts._juice._federationDiagnosis.title,
+	icon: 'ti ti-stethoscope',
 }] : []), {
 	key: 'raw',
 	title: 'Raw',

@@ -35,11 +35,15 @@ export const DRAW_ROOM_CANVAS_PRESETS = {
 	// JUICE: 大きい正方形。点の座標の形式(1/8px単位のint16)で扱えるのは約4095pxまで
 	square2048: [2048, 2048],
 	square3840: [3840, 3840],
+	// JUICE: ドット絵向けの小さい正方形
+	pixel32: [32, 32],
+	pixel64: [64, 64],
+	pixel128: [128, 128],
 } as const;
 export type DrawRoomCanvasPreset = keyof typeof DRAW_ROOM_CANVAS_PRESETS;
 
 // JUICE: 部屋主が自由に決められるキャンバスの大きさの範囲(点の座標の形式で扱える大きさに収める)
-export const DRAW_ROOM_CANVAS_MIN_SIZE = 100;
+export const DRAW_ROOM_CANVAS_MIN_SIZE = 16;
 export const DRAW_ROOM_CANVAS_MAX_SIZE = 3840;
 
 export const DRAW_ROOM_MIN_MEMBERS = 2;

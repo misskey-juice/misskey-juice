@@ -135,7 +135,9 @@ export class AntennaService implements OnApplicationShutdown {
 		}
 
 		if (antenna.src === 'home') {
-			// TODO
+			// JUICE: アンテナの持ち主がフォローしているユーザーのノートだけを拾う
+			const isFollowing = Object.hasOwn(await this.cacheService.userFollowingsCache.fetch(antenna.userId), note.userId);
+			if (!isFollowing) return false;
 		} else if (antenna.src === 'list') {
 			if (antenna.userListId == null) return false;
 			const exists = await this.userListMembershipsRepository.exists({

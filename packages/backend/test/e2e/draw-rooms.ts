@@ -13,7 +13,7 @@ import { api, connectStream, port, role, signup } from '../utils.js';
 
 type DrawRoom = { id: string; ownerId: string; members: { id: string }[]; isMember: boolean; isEnded: boolean; maxMembers: number; keepAfterEnd: boolean; endedAt: string | null; deletesAt: string | null };
 
-async function createRoom(user: SignupSuccessResponse, params: Partial<{ title: string; visibility: 'followers' | 'local'; maxMembers: number; canvasPreset: 'landscape' | 'portrait' | 'square' | 'square2048' | 'square3840'; keepAfterEnd: boolean }> = {}): Promise<DrawRoom> {
+async function createRoom(user: SignupSuccessResponse, params: Partial<{ title: string; visibility: 'followers' | 'local'; maxMembers: number; canvasPreset: 'landscape' | 'portrait' | 'square' | 'square2048' | 'square3840' | 'pixel32' | 'pixel64' | 'pixel128'; keepAfterEnd: boolean }> = {}): Promise<DrawRoom> {
 	const res = await api('draw-rooms/create', {
 		title: 'test room',
 		visibility: 'local',

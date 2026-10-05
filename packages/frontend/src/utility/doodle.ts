@@ -20,6 +20,10 @@ const CANVAS_PRESETS = [
 	{ value: 'portrait', width: 900, height: 1600, label: () => i18n.ts._drawRoom.canvasPortrait },
 	{ value: 'square', width: 1200, height: 1200, label: () => i18n.ts._drawRoom.canvasSquare },
 	{ value: 'square2048', width: 2048, height: 2048, label: () => i18n.ts._drawRoom.canvasSquare2048 },
+	// ドット絵向け
+	{ value: 'pixel32', width: 32, height: 32, label: () => i18n.ts._drawRoom.canvasPixel32 },
+	{ value: 'pixel64', width: 64, height: 64, label: () => i18n.ts._drawRoom.canvasPixel64 },
+	{ value: 'pixel128', width: 128, height: 128, label: () => i18n.ts._drawRoom.canvasPixel128 },
 ] as const;
 
 /** 名前とキャンバスの大きさを聞いて、新しい落書きを作る */

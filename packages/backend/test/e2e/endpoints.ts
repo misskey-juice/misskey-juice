@@ -2482,6 +2482,47 @@ describe('Endpoints', () => {
 		});
 	});
 
+	// JUICE: 連合の診断。相手のサーバーへ実際に問い合わせるので、モデレーター以上だけが使え、
+	// このサーバーが知っているサーバー(instancesテーブルにあるもの)だけを対象にする。
+	// 診断の中身(各項目の判定)はtest/unit/FederationDiagnosisService.tsで確かめる
+	describe('admin/federation/diagnose-instance', () => {
+		test('ログインしていなければ使えない', async () => {
+			const res = await api('admin/federation/diagnose-instance', { host: 'unknown.example' });
+			assert.strictEqual(res.status, 401);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'CREDENTIAL_REQUIRED');
+		});
+
+		test('一般ユーザーは使えない', async () => {
+			const res = await api('admin/federation/diagnose-instance', { host: 'unknown.example' }, bob);
+			assert.strictEqual(res.status, 403);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'ROLE_PERMISSION_DENIED');
+		});
+
+		test('管理者でも、このサーバーが知らないサーバーは診断できない', async () => {
+			const res = await api('admin/federation/diagnose-instance', { host: 'unknown.example' }, alice);
+			assert.strictEqual(res.status, 400);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'NO_SUCH_INSTANCE');
+		});
+
+		test('モデレーターは使える(知らないサーバーなら NO_SUCH_INSTANCE)', async () => {
+			const moderator = await signup({ username: `diag${randomString('abcdefghijklmnopqrstuvwxyz', 8)}` });
+			const moderatorRole = await role(alice, { isModerator: true, name: 'Federation Diagnosis Moderator Role' });
+			const assign = await api('admin/roles/assign', { userId: moderator.id, roleId: moderatorRole.id }, alice);
+			assert.strictEqual(assign.status, 204);
+
+			// 大文字で渡しても同じ扱い(ホスト名は小文字に揃えてから探す)
+			const res = await api('admin/federation/diagnose-instance', { host: 'Unknown.Example' }, moderator);
+			assert.strictEqual(res.status, 400);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'NO_SUCH_INSTANCE');
+		});
+
+		test('hostが空なら INVALID_PARAM', async () => {
+			const res = await api('admin/federation/diagnose-instance', { host: '' }, alice);
+			assert.strictEqual(res.status, 400);
+			assert.strictEqual(castAsError(res.body as any).error.code, 'INVALID_PARAM');
+		});
+	});
+
 	describe('承認式新規登録', () => {
 		beforeAll(async () => {
 			const res = await api('admin/juice/update-settings', {

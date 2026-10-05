@@ -36,6 +36,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.spectatingAsGuest }}</div>
 					<MkButton small primary @click="pleaseLogin()"><i class="ti ti-login-2"></i> {{ i18n.ts._drawRoom.loginToJoin }}</MkButton>
 				</template>
+				<!-- JUICE: 描く人として参加している部屋に入り直したときは、見学中から始める(うっかり描かないように)。席はそのまま -->
+				<template v-else-if="room.isMember && drawingPaused">
+					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.spectatingAsMember }}</div>
+					<MkButton small primary @click="resumeDrawing"><i class="ti ti-brush"></i> {{ i18n.ts._drawRoom.resumeDrawing }}</MkButton>
+					<!-- 描き始めなくても、席を空けられるようにする -->
+					<MkButton small @click="leave">{{ isOwner ? i18n.ts._drawRoom.spectateAsOwner : i18n.ts._drawRoom.leave }}</MkButton>
+				</template>
 				<template v-else-if="!room.isMember">
 					<div :class="$style.statusText"><i class="ti ti-eye"></i> {{ isFull ? i18n.ts._drawRoom.full : i18n.ts._drawRoom.spectating }}</div>
 					<MkButton v-if="!isFull" small primary @click="join"><i class="ti ti-brush"></i> {{ i18n.ts._drawRoom.join }}</MkButton>
@@ -288,7 +295,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<g :transform="`translate(${moveOffset.x} ${moveOffset.y}) rotate(${rotateDragAngle * 180 / Math.PI} ${selectionPivot?.x ?? 0} ${selectionPivot?.y ?? 0})`">
 							<polygon v-for="(shape, i) in displayedSelectionShapes" :key="i" :points="toSvgPoints(shape)" :class="$style.selectionOutline"/>
 							<!-- JUICE: ドラッグして選んだ部分を回転するつまみ -->
-							<template v-if="selectionBox != null && canDraw">
+							<template v-if="selectionBox != null && canDraw && strokeSelection.size > 0">
 								<line :x1="selectionBox.cx" :y1="selectionBox.minY" :x2="selectionBox.cx" :y2="selectionBox.minY - 28 / view.scale" :class="$style.selectionOutline"/>
 								<circle
 									:cx="selectionBox.cx"
@@ -435,7 +442,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					aria-hidden="true"
 				></i>
 				<!-- JUICE: 選んでいる線の操作 -->
-				<div v-if="strokeSelection.size > 0 && !selecting && cropRect == null" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
+				<div v-if="(strokeSelection.size > 0 || (isDoodle && selectionShapes.length > 0)) && !selecting && cropRect == null" :class="$style.selectionBar" @pointerdown.stop @pointermove.stop @pointerup.stop>
+					<template v-if="strokeSelection.size > 0">
 					<span :class="$style.selectionHint">{{ i18n.tsx._drawRoom.selectedStrokes({ n: strokeSelection.size }) }}</span>
 					<button class="_button" :class="$style.selectionAction" @click="tool = 'move'"><i class="ti ti-arrows-move"></i> {{ i18n.ts._drawRoom.moveTool }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.rotateSelectionLeft" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.rotateSelectionLeft" @click="rotateSelection(-ROTATE_STEP)"><i class="ti ti-rotate-2"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.rotateLeft }}</span></button>
@@ -447,7 +455,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<button v-tooltip="i18n.ts._drawRoom.flipSelectionHorizontal" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionHorizontal" @click="flipSelectionHorizontal"><i class="ti ti-flip-vertical"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipHorizontal }}</span></button>
 					<!-- JUICE: 選んだ部分を上下反転する(選んだ形の真ん中を軸に) -->
 					<button v-tooltip="i18n.ts._drawRoom.flipSelectionVertical" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.flipSelectionVertical" @click="flipSelectionVertical"><i class="ti ti-flip-horizontal"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortFlipVertical }}</span></button>
-					<button class="_button" :class="$style.selectionAction" @click="deleteSelectedStrokes"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</button>
+					</template>
+					<!-- JUICE: 落書きは、範囲・投げ縄で選んだ形を囲む四角で、キャンバスを切り抜ける(ヘッダーの「キャンバスを切り抜く」と同じ。枠を調整してから適用する) -->
+					<button v-if="isDoodle && selectionBox != null" v-tooltip="i18n.ts._juice.doodleCrop" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._juice.doodleCrop" @click="cropToStrokeSelection"><i class="ti ti-crop"></i><span :class="$style.barLabel">{{ i18n.ts._juice.doodleCropShort }}</span></button>
+					<button v-if="strokeSelection.size > 0" class="_button" :class="$style.selectionAction" @click="deleteSelectedStrokes"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</button>
 					<button v-tooltip="i18n.ts._drawRoom.clearSelection" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts._drawRoom.clearSelection" @click="clearStrokeSelection"><i class="ti ti-x"></i><span :class="$style.barLabel">{{ i18n.ts._drawRoom.shortDeselect }}</span></button>
 				</div>
 				<!-- JUICE: 保存する範囲の選択 -->
@@ -463,6 +474,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<button class="_button" :class="$style.selectionAction" @click="postImage(selection)"><i class="ti ti-pencil"></i> {{ i18n.ts._drawRoom.postImage }}</button>
 						</template>
 						<button class="_button" :class="$style.selectionAction" @click="downloadImage(selection)"><i class="ti ti-download"></i> {{ i18n.ts._drawRoom.downloadImage }}</button>
+						<!-- JUICE: 落書きは、選んだ範囲でキャンバスを切り抜くこともできる(ヘッダーの「キャンバスを切り抜く」と同じ。枠を調整してから適用する) -->
+						<button v-if="isDoodle && selection.height >= 1" class="_button" :class="$style.selectionAction" @click="startCrop(selection)"><i class="ti ti-crop"></i> {{ i18n.ts._juice.doodleCrop }}</button>
 					</template>
 					<button v-tooltip="i18n.ts.cancel" class="_button" :class="$style.selectionAction" :aria-label="i18n.ts.cancel" @click="cancelSelecting"><i class="ti ti-x"></i></button>
 				</div>
@@ -815,7 +828,8 @@ import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE
 import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool, Rect } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
-import { LocalDrawRoomConnection } from '@/utility/draw-room-local.js';
+import { LocalDrawRoomConnection, shiftStrokeEdits } from '@/utility/draw-room-local.js';
+import { activeDrawRoomIds } from '@/utility/draw-room-session.js';
 import type { LocalDrawRoomState } from '@/utility/draw-room-local.js';
 import { getDoodle, saveDoodleData, updateDoodleMeta } from '@/utility/doodle-storage.js';
 
@@ -1383,7 +1397,17 @@ function acceptContent(): void {
 
 // 観戦に回った部屋主は、満員でも描く人に戻れる
 const isFull = computed(() => room.value != null && room.value.members.length >= room.value.maxMembers && !isOwner.value);
-const canDraw = computed(() => room.value != null && !room.value.isEnded && room.value.isMember);
+// JUICE: 描く人として参加しているが、見学中にしている(入り直したとき。「描き始める」を押すまで描けない)。落書きには無い
+const drawingPaused = ref(false);
+const canDraw = computed(() => room.value != null && !room.value.isEnded && room.value.isMember && !drawingPaused.value);
+
+// この画面で今描いている部屋のid(描いている間に読み込み直しても、見学中に戻さないため)。画面を離れたら忘れる
+let drawingRoomId: string | null = null;
+
+function resumeDrawing(): void {
+	if (room.value != null) drawingRoomId = room.value.id;
+	drawingPaused.value = false;
+}
 
 function rememberUsers(users: Misskey.entities.UserLite[]): void {
 	for (const user of users) userMap.set(user.id, user);
@@ -1446,7 +1470,7 @@ const DOODLE_THUMBNAIL_SIZE = 256;
 async function loadDoodle(id: string): Promise<Misskey.entities.DrawRoom> {
 	const doodle = await getDoodle(id);
 	if (doodle == null) throw new Error('Doodle not found');
-	doodleState = { strokes: doodle.data.strokes, layers: doodle.data.layers };
+	doodleState = { strokes: doodle.data.strokes, layers: doodle.data.layers, layerEvents: doodle.data.layerEvents, strokeEdits: doodle.data.strokeEdits };
 	loadedDoodleId = id;
 	const me = signedInUser!;
 	return {
@@ -1497,7 +1521,7 @@ function flushDoodle(): void {
 	const dirty = doodleDirty;
 	doodleDirty = null;
 	if (dirty == null) return;
-	saveDoodleData(dirty.id, { strokes: dirty.state.strokes, layers: dirty.state.layers }).catch(err => {
+	saveDoodleData(dirty.id, { strokes: dirty.state.strokes, layers: dirty.state.layers, layerEvents: dirty.state.layerEvents, strokeEdits: dirty.state.strokeEdits }).catch(err => {
 		console.error(err);
 		os.toast(i18n.ts._juice.doodleSaveFailed);
 	});
@@ -1604,17 +1628,31 @@ const cropHandles = computed(() => {
 	return [...edges, ...corners].map(handle => ({ ...handle, size }));
 });
 
-function startCrop(): void {
+// areaを渡すと、その範囲の枠から始める(範囲を選んで保存するメニューから来たとき)。無ければキャンバス全体の枠から
+function startCrop(area?: ImageArea | null | Event): void {
 	const r = room.value;
 	if (r == null || !isDoodle.value || canvasLoading.value != null || cropApplying.value || cropDrag != null) return;
+	const initial = area != null && !(area instanceof Event) && area.width >= 1 && area.height >= 1 ? area : null;
 	cancelStroke();
 	cancelSelecting();
 	clearStrokeSelection();
 	brushPanelOpen.value = false;
 	mobilePanel.value = null;
-	cropRect.value = { left: 0, top: 0, right: r.canvasWidth, bottom: r.canvasHeight };
+	cropRect.value = initial != null
+		// 選んだ範囲が小さすぎれば、切り抜ける最小の大きさまで右下へ広げる
+		? { left: initial.x, top: initial.y, right: initial.x + Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, initial.width), bottom: initial.y + Math.max(DRAW_ROOM_CANVAS_MIN_SIZE, initial.height) }
+		: { left: 0, top: 0, right: r.canvasWidth, bottom: r.canvasHeight };
 	// 押したボタン(ヘッダーの「キャンバスを切り抜く」)にフォーカスが残っていると、Enterがそのボタンを押し直すだけになるので外す
 	if (window.document.activeElement instanceof HTMLElement) window.document.activeElement.blur();
+}
+
+// 範囲・投げ縄で選んだ形を囲む四角から、切り抜きを始める
+function cropToStrokeSelection(): void {
+	const box = selectionBox.value;
+	if (box == null) return;
+	const x = Math.floor(box.minX);
+	const y = Math.floor(box.minY);
+	startCrop({ x, y, width: Math.ceil(box.maxX) - x, height: Math.ceil(box.maxY) - y });
 }
 
 function cancelCrop(): void {
@@ -1735,14 +1773,15 @@ async function applyCrop(): Promise<void> {
 	doodleThumbnailTimer = null;
 	try {
 		// 線とキャンバスの大きさを、続けて保存する
-		await saveDoodleData(id, { strokes, layers: local.layers }, { width, height });
+		// 記録の中に持っている前の線も、同じだけずらす
+		await saveDoodleData(id, { strokes, layers: local.layers, layerEvents: local.layerEvents, strokeEdits: shiftStrokeEdits(local.strokeEdits, -c.left, -c.top) }, { width, height });
 	} catch (err) {
 		console.error(err);
 		os.toast(i18n.ts._juice.doodleSaveFailed);
 		// 枠は残して、もう一度適用できるようにする
 		cropApplying.value = false;
 		// 線だけ保存されて大きさが変わっていないことがあるので、今の(ずらす前の)線を保存し直す
-		if (generation === initGeneration && loadedDoodleId === id) onDoodleChange({ strokes: local.strokes, layers: local.layers });
+		if (generation === initGeneration && loadedDoodleId === id) onDoodleChange({ strokes: local.strokes, layers: local.layers, layerEvents: local.layerEvents, strokeEdits: local.strokeEdits });
 		return;
 	}
 	// 保存の途中で画面を離れた・別の落書きへ移ったなら、読み込み直さない
@@ -1775,6 +1814,8 @@ function openTimelapse(): void {
 		// 開いた後に描き足しても変わらないよう、今の内容を写して渡す
 		strokes: [...local.strokes],
 		layers: local.layers.map(layer => ({ ...layer })),
+		layerEvents: [...local.layerEvents],
+		strokeEdits: [...local.strokeEdits],
 		attachable: props.attachable,
 	}, {
 		attach: (file) => emit('attach', file),
@@ -1805,6 +1846,11 @@ async function init(): Promise<void> {
 		const r = isDoodle.value ? await loadDoodle(props.doodleId!) : await misskeyApi('draw-rooms/show', { roomId: props.roomId });
 		if (generation !== initGeneration) return;
 		room.value = r;
+		// JUICE: 描く人として参加している部屋に入り直したときは、見学中から始める(作った直後・参加した直後・
+		// この画面で描いている間の読み込み直しは、そのまま描ける)
+		// (部屋を作った直後の印は、ここで1回だけ受け取って消す。ほかの画面で同じ部屋を開いても、そちらは見学中から始まる)
+		if (activeDrawRoomIds.delete(r.id) && r.isMember) drawingRoomId = r.id;
+		drawingPaused.value = !isDoodle.value && r.isMember && !r.isEnded && drawingRoomId !== r.id;
 		rememberUsers([r.owner, ...r.members]);
 
 		const e = markRaw(new DrawCanvasEngine(r.canvasWidth, r.canvasHeight));
@@ -2301,7 +2347,8 @@ function fitToScreen(): void {
 	viewAdjusted = false;
 	if (viewportEl.value == null || room.value == null) return;
 	const rect = viewportEl.value.getBoundingClientRect();
-	const scale = Math.min(rect.width / room.value.canvasWidth, rect.height / room.value.canvasHeight) * 0.96;
+	// ドット絵向けの小さいキャンバスでも、拡大の上限は超えない
+	const scale = Math.min(MAX_ZOOM, Math.min(rect.width / room.value.canvasWidth, rect.height / room.value.canvasHeight) * 0.96);
 	view.rotation = 0;
 	view.scale = scale;
 	view.x = (rect.width - room.value.canvasWidth * scale) / 2;
@@ -3465,7 +3512,7 @@ function onKeydown(ev: KeyboardEvent): void {
 		cancelSelecting();
 		return;
 	}
-	if (ev.key === 'Escape' && strokeSelection.value.size > 0) {
+	if (ev.key === 'Escape' && (strokeSelection.value.size > 0 || selectionShapes.value.length > 0)) {
 		clearStrokeSelection();
 		return;
 	}
@@ -3572,7 +3619,8 @@ function finishSelectGesture(gesture: { kind: 'select' | 'lasso'; points: number
 	} else {
 		strokeSelection.value = new Set(ids);
 		// 線が1本も入っていなければ、何も選んでいない状態にする
-		selectionShapes.value = ids.length > 0 ? [shape] : [];
+		// (JUICE: 落書きは、選んだ範囲でキャンバスを切り抜けるので、線が入っていなくても範囲は残す)
+		selectionShapes.value = ids.length > 0 || isDoodle.value ? [shape] : [];
 	}
 }
 
@@ -3698,7 +3746,7 @@ const selectionBox = computed(() => {
 			maxY = Math.max(maxY, shape[i + 1]);
 		}
 	}
-	return { minY, maxX, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+	return { minX, minY, maxX, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
 });
 const selectionPivot = computed(() => (selectionBox.value == null ? null : { x: selectionBox.value.cx, y: selectionBox.value.cy }));
 // つまみをドラッグしている間の回転の角度・拡大縮小の倍率(表示だけ。離したときに線を変形する)
@@ -4128,6 +4176,9 @@ async function join(): Promise<void> {
 	// 参加を反映する前に描き始めると、その線が受け付けられないため)
 	const r = await misskeyApi('draw-rooms/show', { roomId: props.roomId });
 	if (room.value != null && room.value.id === r.id) room.value = r;
+	// 参加した直後は、そのまま描ける
+	drawingRoomId = r.id;
+	drawingPaused.value = false;
 }
 
 async function leave(): Promise<void> {
@@ -4453,7 +4504,12 @@ function openImageMenu(ev: MouseEvent): void {
 		text: i18n.ts._drawRoom.selectArea,
 		icon: 'ti ti-crop',
 		action: startSelecting,
-	}, { type: 'divider' }, {
+	}, ...(isDoodle.value ? [{
+		// JUICE: 落書きは、ここからもキャンバスを切り抜ける(ヘッダーのボタンと同じ)
+		text: i18n.ts._juice.doodleCrop,
+		icon: 'ti ti-crop',
+		action: () => startCrop(),
+	}] : []), { type: 'divider' as const }, {
 		type: 'radio',
 		text: i18n.ts._drawRoom.imageFormat,
 		icon: 'ti ti-file-type-png',
@@ -4651,6 +4707,8 @@ function stopListening(): void {
 }
 
 function leavePage(): void {
+	// JUICE: 部屋の画面を離れたら、次に入り直したときは見学中から始める
+	drawingRoomId = null;
 	stopListening();
 	cancelStroke();
 	// 離れている間に指を離した知らせが届かないと、次に来たとき1本指のドラッグを2本指の操作と取り違えるので消しておく
