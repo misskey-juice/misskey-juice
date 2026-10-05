@@ -4832,3 +4832,11 @@ _importRequest:
     approved: "Approved"
     rejected: "Rejected"
     cancelled: "Withdrawn"
+_juiceEntrance:
+  registeredUsers: "Registered users"
+  onlineUsers: "Online now"
+  connectedServers: "Connected servers"
+  notes: "Notes"
+  timeline: "Timeline"
+  popular: "Popular"
+  someConnectedServers: "Some of the connected servers"

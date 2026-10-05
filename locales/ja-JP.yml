@@ -4963,3 +4963,11 @@ _importRequest:
     approved: "承認済み"
     rejected: "却下"
     cancelled: "取り下げ"
+_juiceEntrance:
+  registeredUsers: "登録しているユーザー"
+  onlineUsers: "オンライン"
+  connectedServers: "つながっているサーバー"
+  notes: "ノート"
+  timeline: "タイムライン"
+  popular: "人気"
+  someConnectedServers: "つながっているサーバーの一部"

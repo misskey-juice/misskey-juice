@@ -4834,3 +4834,11 @@ _importRequest:
     approved: "已核准"
     rejected: "已駁回"
     cancelled: "已撤回"
+_juiceEntrance:
+  registeredUsers: "註冊使用者"
+  onlineUsers: "線上"
+  connectedServers: "已連線的伺服器"
+  notes: "貼文"
+  timeline: "時間軸"
+  popular: "熱門"
+  someConnectedServers: "部分已連線的伺服器"

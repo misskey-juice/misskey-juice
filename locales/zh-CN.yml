@@ -4832,3 +4832,11 @@ _importRequest:
     approved: "已批准"
     rejected: "已驳回"
     cancelled: "已撤回"
+_juiceEntrance:
+  registeredUsers: "注册用户"
+  onlineUsers: "在线"
+  connectedServers: "已连接的服务器"
+  notes: "帖子"
+  timeline: "时间线"
+  popular: "热门"
+  someConnectedServers: "部分已连接的服务器"

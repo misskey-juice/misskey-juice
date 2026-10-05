@@ -71,7 +71,8 @@ export const paramDef = {
 		clientOptions: {
 			type: 'object', nullable: false,
 			properties: {
-				entrancePageStyle: { type: 'string', nullable: false, enum: ['classic', 'simple'] },
+				// JUICE: juiceは、JUICE独自のエントランス
+				entrancePageStyle: { type: 'string', nullable: false, enum: ['classic', 'simple', 'juice'] },
 				showTimelineForVisitor: { type: 'boolean', nullable: false },
 				showActivitiesForVisitor: { type: 'boolean', nullable: false },
 			},

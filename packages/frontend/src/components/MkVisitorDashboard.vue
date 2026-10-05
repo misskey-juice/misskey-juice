@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div v-if="instance" :class="$style.root">
-	<div :class="[$style.main, $style.panel]">
+	<div :class="[$style.main, $style.panel, { [$style.translucent]: translucent }]">
 		<img :src="instance.iconUrl || '/client-assets/juice-icon-transparent.png'" alt="" :class="$style.mainIcon"/>
 		<button class="_button _acrylic" :class="$style.mainMenu" @click="showMenu"><i class="ti ti-dots"></i></button>
 		<div :class="$style.mainFg">
@@ -27,9 +27,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div class="_gaps_s" :class="$style.mainActions">
 				<template v-if="instance.disableRegistration && juicePublicSettings.approvalRequiredForSignup && juicePublicSettings.invitationRegistrationEnabled">
 					<MkButton :class="$style.mainAction" full rounded gradate data-testid="signup-invitation" style="margin-right: 12px;" @click="signup('invitation')">{{ i18n.ts._juice.registerWithInvitation }}</MkButton>
-					<MkButton :class="$style.mainAction" full rounded gradate data-testid="signup-application" style="margin-right: 12px;" @click="signup('application')">{{ i18n.ts._juice.applyToJoin }}<span class="_juice">JUICE</span></MkButton>
+					<MkButton :class="$style.mainAction" full rounded gradate data-testid="signup-application" style="margin-right: 12px;" @click="signup('application')">{{ i18n.ts._juice.applyToJoin }}<span class="_juice" :class="$style.juiceOnGradate">JUICE</span></MkButton>
 				</template>
-				<MkButton v-else :class="$style.mainAction" full rounded gradate data-testid="signup" style="margin-right: 12px;" @click="signup()">{{ juicePublicSettings.approvalRequiredForSignup ? i18n.ts._juice.applyToJoin : i18n.ts.joinThisServer }}<span v-if="juicePublicSettings.approvalRequiredForSignup" class="_juice">JUICE</span></MkButton>
+				<MkButton v-else :class="$style.mainAction" full rounded gradate data-testid="signup" style="margin-right: 12px;" @click="signup()">{{ juicePublicSettings.approvalRequiredForSignup ? i18n.ts._juice.applyToJoin : i18n.ts.joinThisServer }}<span v-if="juicePublicSettings.approvalRequiredForSignup" class="_juice" :class="$style.juiceOnGradate">JUICE</span></MkButton>
 				<MkButton v-if="juicePublicSettings.exploreOtherServersEnabled" :class="$style.mainAction" full rounded type="a" target="_blank" rel="noopener" href="https://servers.misskey.ink/">{{ i18n.ts.exploreOtherServers }}</MkButton>
 				<MkButton :class="$style.mainAction" full rounded data-testid="signin" @click="signin()">{{ i18n.ts.login }}</MkButton>
 			</div>
@@ -38,7 +38,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</div>
-	<div v-if="stats && instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.stats">
+	<div v-if="!mainOnly && stats && instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.stats">
 		<div :class="[$style.statsItem, $style.panel]">
 			<div :class="$style.statsItemLabel">{{ i18n.ts.users }}</div>
 			<div :class="$style.statsItemCount"><MkNumber :value="stats.originalUsersCount"/></div>
@@ -48,13 +48,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.statsItemCount"><MkNumber :value="stats.originalNotesCount"/></div>
 		</div>
 	</div>
-	<div v-if="instance.policies.ltlAvailable && instance.clientOptions.showTimelineForVisitor !== false" :class="[$style.tl, $style.panel]">
+	<div v-if="!mainOnly && instance.policies.ltlAvailable && instance.clientOptions.showTimelineForVisitor !== false" :class="[$style.tl, $style.panel]">
 		<div :class="$style.tlHeader">{{ i18n.ts.letsLookAtTimeline }}</div>
 		<div :class="$style.tlBody">
 			<MkStreamingNotesTimeline src="local"/>
 		</div>
 	</div>
-	<div v-if="instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.panel">
+	<div v-if="!mainOnly && instance.clientOptions.showActivitiesForVisitor !== false" :class="$style.panel">
 		<XActiveUsersChart/>
 	</div>
 </div>
@@ -78,9 +78,16 @@ import MkNumber from '@/components/MkNumber.vue';
 import XActiveUsersChart from '@/components/MkVisitorDashboard.ActiveUsersChart.vue';
 import { openInstanceMenu } from '@/ui/_common_/common.js';
 
+const props = defineProps<{
+	// JUICE: JUICEのエントランス(welcome.entrance.juice.vue)用。サーバーの紹介と登録・ログインだけを出す(統計やTLはエントランス側で並べる)
+	mainOnly?: boolean;
+	// JUICE: 背景画像の上に置くとき、パネルを半透明にして背景画像が透けて見えるようにする
+	translucent?: boolean;
+}>();
+
 const stats = ref<Misskey.entities.StatsResponse | null>(null);
 
-if (instance.clientOptions.showActivitiesForVisitor !== false) {
+if (!props.mainOnly && instance.clientOptions.showActivitiesForVisitor !== false) {
 	misskeyApi('stats', {}).then((res) => {
 		stats.value = res;
 	});
@@ -187,6 +194,12 @@ function showMenu(ev: PointerEvent) {
 	text-align: center;
 }
 
+.translucent {
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.8);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
+}
+
 .mainIcon {
 	width: 85px;
 	margin-top: -47px;
@@ -239,6 +252,13 @@ function showMenu(ev: PointerEvent) {
 	line-height: 28px;
 }
 
+/* JUICE: 色の付いたボタン(gradate)の上のJUICEバッジは、ボタンの文字の色で塗りつぶして、ボタンの色の字にする(橙の上に橙の枠だと見えないため) */
+.juiceOnGradate.juiceOnGradate {
+	color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-fgOnAccent);
+	border-color: var(--MI_THEME-fgOnAccent);
+}
+
 .mainSignupCheck {
 	padding: 0 32px 32px 32px;
 }
@@ -255,7 +275,7 @@ function showMenu(ev: PointerEvent) {
 }
 
 .statsItemLabel {
-	color: color(from var(--MI_THEME-fg) srgb r g b / 0.75);
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.8);
 	font-size: 0.9em;
 }
 

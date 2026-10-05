@@ -18736,4 +18736,34 @@ export interface Locale extends ILocale {
             "cancelled": string;
         };
     };
+    "_juiceEntrance": {
+        /**
+         * 登録しているユーザー
+         */
+        "registeredUsers": string;
+        /**
+         * オンライン
+         */
+        "onlineUsers": string;
+        /**
+         * つながっているサーバー
+         */
+        "connectedServers": string;
+        /**
+         * ノート
+         */
+        "notes": string;
+        /**
+         * タイムライン
+         */
+        "timeline": string;
+        /**
+         * 人気
+         */
+        "popular": string;
+        /**
+         * つながっているサーバーの一部
+         */
+        "someConnectedServers": string;
+    };
 }
