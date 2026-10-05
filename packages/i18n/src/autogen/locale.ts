@@ -9678,6 +9678,14 @@ export interface Locale extends ILocale {
          */
         "roomCwCaption": string;
         /**
+         * 部屋の説明
+         */
+        "roomDescription": string;
+        /**
+         * どんな絵を描く部屋か(テーマ・ルールなど)。部屋の一覧にも出ます。改行できます(10行まで)
+         */
+        "roomDescriptionCaption": string;
+        /**
          * センシティブ(NSFW)な絵の部屋
          */
         "roomSensitive": string;

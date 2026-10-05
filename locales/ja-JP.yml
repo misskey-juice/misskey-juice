@@ -2533,6 +2533,8 @@ _drawRoom:
   keepAfterEndCaption: "オフにすると、終了してから1時間後に絵とチャットが削除されます(それまでは画像の保存・投稿ができます)"
   roomCw: "注意書き(CW)"
   roomCwCaption: "グロテスクな表現など、見る前に知らせたいことがあれば書きます。部屋を開いたとき、絵の代わりにこの注意書きが出て、開くと決めた人だけが見られます(128文字まで)"
+  roomDescription: "部屋の説明"
+  roomDescriptionCaption: "どんな絵を描く部屋か(テーマ・ルールなど)。部屋の一覧にも出ます。改行できます(10行まで)"
   roomSensitive: "センシティブ(NSFW)な絵の部屋"
   roomSensitiveCaption: "センシティブなメディアを隠す設定の人には、開くと決めるまで絵を隠します。この部屋の絵をノートに投稿するときは、センシティブなファイルとして上げます"
   roomSensitiveBadge: "NSFW"

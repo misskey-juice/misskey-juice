@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { DrawRoomService, normalizeCw, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_CANVAS_PRESETS, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
+import { DrawRoomService, normalizeCw, normalizeDescription, DRAW_ROOM_DESCRIPTION_MAX_LENGTH, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_CANVAS_PRESETS, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
 import { drawRoomVisibilities } from '@/models/DrawRoom.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
 import { ApiError } from '@/server/api/error.js';
@@ -53,6 +53,8 @@ export const paramDef = {
 		keepAfterEnd: { type: 'boolean', default: false },
 		// JUICE: 部屋を開く前に出す注意書き(CW)と、センシティブ(NSFW)の印
 		cw: { type: 'string', nullable: true, maxLength: 128 },
+		// JUICE: 部屋の説明(どんな絵を描く部屋か。一覧にも出す。nullか空で外す)
+		description: { type: 'string', nullable: true, maxLength: DRAW_ROOM_DESCRIPTION_MAX_LENGTH },
 		isSensitive: { type: 'boolean', default: false },
 	},
 	required: ['title', 'visibility', 'maxMembers'],
@@ -75,6 +77,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					canvasSize: ps.canvasWidth != null && ps.canvasHeight != null ? { width: ps.canvasWidth, height: ps.canvasHeight } : undefined,
 					keepAfterEnd: ps.keepAfterEnd,
 					cw: normalizeCw(ps.cw),
+					description: normalizeDescription(ps.description),
 					isSensitive: ps.isSensitive,
 				});
 				return await this.drawRoomService.pack(room, me);

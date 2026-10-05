@@ -3894,6 +3894,8 @@ _drawRoom:
   keepAfterEndCaption: "If off, the drawing and chat are deleted 1 hour after the room ends (you can save or post the image until then)"
   roomCw: "Content warning (CW)"
   roomCwCaption: "Write anything people should know before seeing the drawing, such as graphic content. When the room is opened, this warning is shown instead of the drawing until the viewer chooses to open it (up to 128 characters)"
+  roomDescription: "Room description"
+  roomDescriptionCaption: "What the room is for (theme, rules, etc.). It is also shown in the room list. You can use line breaks (up to 10 lines)."
   roomSensitive: "Sensitive (NSFW) room"
   roomSensitiveCaption: "For people who hide sensitive media, the drawing is hidden until they choose to open it. Images posted from this room are uploaded as sensitive files"
   roomSensitiveBadge: "NSFW"

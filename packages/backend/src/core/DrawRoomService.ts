@@ -92,6 +92,27 @@ export function normalizeCw(cw: string | null | undefined): string | null {
 	const text = cw.replace(/\p{Cc}/gu, ' ').trim();
 	return text === '' ? null : text;
 }
+
+/** JUICE: 部屋の説明の長さの上限 */
+export const DRAW_ROOM_DESCRIPTION_MAX_LENGTH = 512;
+/** JUICE: 部屋の説明の行数の上限(これより後ろの行は、最後の行に空白でつなげる) */
+export const DRAW_ROOM_DESCRIPTION_MAX_LINES = 10;
+
+/**
+ * JUICE: 部屋の説明を整える(改行は残し、ほかの制御文字を除き、3行以上続く空行を2行にし、前後の空白を取る)。
+ * 行は10行まで(それより後ろの行は、10行目に空白でつなげる)。空ならnull(説明無し)
+ */
+export function normalizeDescription(description: string | null | undefined): string | null {
+	if (description == null) return null;
+	const text = description.replace(/\r\n?/g, '\n').replace(/[^\S\n]*\n/g, '\n').replace(/(?!\n)\p{Cc}/gu, ' ').replace(/\n{3,}/g, '\n\n').trim();
+	if (text === '') return null;
+	const lines = text.split('\n');
+	const limited = lines.length <= DRAW_ROOM_DESCRIPTION_MAX_LINES
+		? lines
+		: [...lines.slice(0, DRAW_ROOM_DESCRIPTION_MAX_LINES - 1), lines.slice(DRAW_ROOM_DESCRIPTION_MAX_LINES - 1).filter(line => line.trim() !== '').join(' ')];
+	return limited.join('\n').slice(0, DRAW_ROOM_DESCRIPTION_MAX_LENGTH);
+}
+
 // 1人が1つの部屋に置ける線の本数と、線のデータ量(JSONのバイト数)の上限。描き続けてRedisや
 // 終了時のDB保存(1人=1行)が際限なく膨らまないようにする。
 // JUICE: 上限はロールのポリシー(drawRoomMaxStrokes・drawRoomMaxStrokeMegabytes)で決め、ここはその最大値(ロールでもこれより大きくはできない)
@@ -1010,6 +1031,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			canvasHeight: room.canvasHeight,
 			keepAfterEnd: room.keepAfterEnd,
 			cw: room.cw,
+			description: room.description,
 			isSensitive: room.isSensitive,
 			isEnded: room.isEnded,
 			endedAt: room.endedAt?.toISOString() ?? null,
@@ -1033,6 +1055,8 @@ export class DrawRoomService implements OnApplicationShutdown {
 		// JUICE: 注意書き(CW)と、センシティブ(NSFW)の印
 		cw?: string | null;
 		isSensitive?: boolean;
+		// JUICE: 部屋の説明
+		description?: string | null;
 	}): Promise<MiDrawRoom> {
 		await this.ensureEnabled();
 		// JUICE: 部屋を作れるのは、ロールで許されている人だけ(見学・参加は誰でもできる)
@@ -1069,6 +1093,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 					canvasHeight,
 					keepAfterEnd: params.keepAfterEnd,
 					cw: params.cw ?? null,
+					description: params.description ?? null,
 					isSensitive: params.isSensitive ?? false,
 				}).then(x => em.findOneByOrFail(MiDrawRoom, x.identifiers[0]));
 				// 部屋主もメンバー(描ける人)の1人として数える
@@ -1178,6 +1203,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 		maxMembers?: number;
 		keepAfterEnd?: boolean;
 		cw?: string | null;
+		description?: string | null;
 		isSensitive?: boolean;
 		// 途中で大きさを変えるときは左上を基準に広げる・切り詰める(線はそのまま残り、はみ出た分は見えなくなるだけ)
 		canvasWidth?: number;
@@ -1193,6 +1219,7 @@ export class DrawRoomService implements OnApplicationShutdown {
 			...(params.maxMembers !== undefined ? { maxMembers: params.maxMembers } : {}),
 			...(params.keepAfterEnd !== undefined ? { keepAfterEnd: params.keepAfterEnd } : {}),
 			...(params.cw !== undefined ? { cw: params.cw } : {}),
+			...(params.description !== undefined ? { description: params.description } : {}),
 			...(params.isSensitive !== undefined ? { isSensitive: params.isSensitive } : {}),
 			...(params.canvasWidth !== undefined ? { canvasWidth: params.canvasWidth } : {}),
 			...(params.canvasHeight !== undefined ? { canvasHeight: params.canvasHeight } : {}),

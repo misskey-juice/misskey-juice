@@ -9,6 +9,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar :class="$style.avatar" :user="room.owner"/>
 	<div :class="$style.body">
 		<div :class="$style.title">{{ room.title }}</div>
+		<!-- JUICE: 部屋の説明(どんな絵を描く部屋か)。全部出す(サーバーで10行までにしている。改行はそのまま) -->
+		<div v-if="room.description != null" :class="$style.description">{{ room.description }}</div>
 		<!-- JUICE: 注意書き(CW)・センシティブ(NSFW) -->
 		<div v-if="room.cw != null || room.isSensitive" :class="$style.warning">
 			<span v-if="room.isSensitive" :class="$style.sensitive">{{ i18n.ts._drawRoom.roomSensitiveBadge }}</span>
@@ -53,6 +55,13 @@ const remainingMinutes = computed(() => (props.room.deletesAt == null ? 0 : Math
 		text-decoration: none;
 		background: var(--MI_THEME-panelHighlight);
 	}
+}
+
+.description {
+	font-size: 0.9em;
+	opacity: 0.8;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .warning {

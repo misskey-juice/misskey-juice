@@ -6820,6 +6820,7 @@ export type components = {
             canvasHeight: number;
             keepAfterEnd: boolean;
             cw: string | null;
+            description: string | null;
             isSensitive: boolean;
             isEnded: boolean;
             /** Format: date-time */
@@ -23211,6 +23212,7 @@ export interface operations {
                     /** @default false */
                     keepAfterEnd?: boolean;
                     cw?: string | null;
+                    description?: string | null;
                     /** @default false */
                     isSensitive?: boolean;
                 };
@@ -24038,6 +24040,7 @@ export interface operations {
                     maxMembers?: number;
                     keepAfterEnd?: boolean;
                     cw?: string | null;
+                    description?: string | null;
                     isSensitive?: boolean;
                     canvasWidth?: number;
                     canvasHeight?: number;

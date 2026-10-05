@@ -3894,6 +3894,8 @@ _drawRoom:
   keepAfterEndCaption: "끄면 종료 1시간 후에 그림과 채팅이 삭제됩니다(그때까지 이미지를 저장・게시할 수 있습니다)"
   roomCw: "주의 문구(CW)"
   roomCwCaption: "잔인한 표현 등 보기 전에 알리고 싶은 내용이 있으면 적습니다. 방을 열면 그림 대신 이 문구가 나오고, 열기로 한 사람만 볼 수 있습니다(128자까지)"
+  roomDescription: "방 설명"
+  roomDescriptionCaption: "어떤 그림을 그리는 방인지(주제·규칙 등). 방 목록에도 표시됩니다. 줄바꿈할 수 있습니다(10줄까지)"
   roomSensitive: "민감한(NSFW) 그림의 방"
   roomSensitiveCaption: "민감한 미디어를 숨기는 설정의 사람에게는 열기로 할 때까지 그림을 숨깁니다. 이 방의 그림을 노트에 올릴 때는 민감한 파일로 올립니다"
   roomSensitiveBadge: "NSFW"

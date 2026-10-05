@@ -802,6 +802,7 @@ export class ClientServerService {
 					id: room.id,
 					title: room.title,
 					cw: room.cw,
+					description: room.description,
 					ownerName: packed.owner.name ?? packed.owner.username,
 					ownerUsername: packed.owner.username,
 					drawerCount: packed.members.length,

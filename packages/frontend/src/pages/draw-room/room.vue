@@ -238,6 +238,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i class="ti ti-eye-exclamation" :class="$style.contentGateIcon"></i>
 					<div v-if="room.isSensitive" :class="$style.contentGateBadge">{{ i18n.ts._drawRoom.roomSensitiveBadge }}</div>
 					<div v-if="room.cw != null" :class="$style.contentGateCw">{{ room.cw }}</div>
+					<!-- JUICE: 部屋の説明(開く前でも、どんな部屋かは分かるように) -->
+					<div v-if="room.description != null" :class="$style.contentGateDescription">{{ room.description }}</div>
 					<div v-else :class="$style.contentGateText">{{ i18n.ts._drawRoom.roomSensitiveGate }}</div>
 					<MkButton primary rounded @click="acceptContent"><i class="ti ti-eye"></i> {{ i18n.ts._drawRoom.openRoomContent }}</MkButton>
 					<!-- JUICE: 開く前に、サーバーのルールの「絵チャでのNSFWについて」を読んでもらう -->
@@ -1485,6 +1487,7 @@ async function loadDoodle(id: string): Promise<Misskey.entities.DrawRoom> {
 		canvasHeight: doodle.meta.height,
 		keepAfterEnd: true,
 		cw: null,
+		description: null,
 		isSensitive: false,
 		isEnded: false,
 		endedAt: null,
@@ -4224,6 +4227,15 @@ async function openRoomSettings(): Promise<void> {
 			description: i18n.ts._drawRoom.keepAfterEndCaption,
 			default: room.value.keepAfterEnd,
 		},
+		// JUICE: 部屋の説明(どんな絵を描く部屋か。一覧にも出す。改行できる)
+		description: {
+			type: 'string',
+			label: i18n.ts._drawRoom.roomDescription,
+			description: i18n.ts._drawRoom.roomDescriptionCaption,
+			multiline: true,
+			required: false,
+			default: room.value.description ?? '',
+		},
 		// JUICE: 注意書き(CW)とセンシティブ(NSFW)
 		cw: {
 			type: 'string',
@@ -4268,10 +4280,18 @@ async function openRoomSettings(): Promise<void> {
 		maxMembers: clampMaxMembers(result.maxMembers, room.value.maxMembers),
 		keepAfterEnd: result.keepAfterEnd,
 		cw: result.cw?.trim() ? result.cw.trim().slice(0, 128) : null,
+		description: result.description?.trim() ? result.description.trim().slice(0, 512) : null,
 		isSensitive: result.isSensitive,
 		...(canvasWidth !== room.value.canvasWidth ? { canvasWidth } : {}),
 		...(canvasHeight !== room.value.canvasHeight ? { canvasHeight } : {}),
 	});
+}
+
+// JUICE: 部屋の説明を見せる(改行もそのまま)
+function showRoomDescription(): void {
+	const r = room.value;
+	if (r?.description == null) return;
+	os.alert({ type: 'info', title: r.title, text: `<plain>${r.description.replaceAll('</plain>', '')}</plain>` });
 }
 
 async function endRoom(): Promise<void> {
@@ -4618,6 +4638,14 @@ const headerActions = computed(() => {
 			handler: openDoodleSettings,
 		});
 		return collapseHeaderActions(actions, isNarrow.value);
+	}
+	// JUICE: 部屋の説明(書いてあるときだけ)
+	if (room.value?.description != null) {
+		actions.push({
+			icon: 'ti ti-info-circle',
+			text: i18n.ts._drawRoom.roomDescription,
+			handler: showRoomDescription,
+		});
 	}
 	// JUICE: 部屋の共有(保存しないで終了した部屋は、まもなく消えるので出さない)
 	if (room.value != null && !(room.value.isEnded && !room.value.keepAfterEnd)) {
@@ -5118,6 +5146,17 @@ definePage(() => ({
 	font-weight: bold;
 	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+.contentGateDescription {
+	max-width: 480px;
+	max-height: 8em;
+	overflow: auto;
+	font-size: 0.9em;
+	opacity: 0.8;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	text-align: center;
 }
 
 .contentGateText {

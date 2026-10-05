@@ -3894,6 +3894,8 @@ _drawRoom:
   keepAfterEndCaption: "关闭时，结束1小时后会删除画作和聊天(在此之前可以保存或发布图片)"
   roomCw: "内容警告(CW)"
   roomCwCaption: "如有血腥等需要事先告知的内容请填写。打开房间时会先显示此警告而不是画作，只有选择打开的人才能看到(最多128字)"
+  roomDescription: "房间说明"
+  roomDescriptionCaption: "这是一个画什么的房间(主题·规则等)。也会显示在房间列表中。可以换行(最多10行)"
   roomSensitive: "敏感(NSFW)画作的房间"
   roomSensitiveCaption: "对设置了隐藏敏感媒体的人，在选择打开前会隐藏画作。从此房间投稿图片时会作为敏感文件上传"
   roomSensitiveBadge: "NSFW"

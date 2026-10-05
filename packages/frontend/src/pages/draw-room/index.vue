@@ -72,6 +72,9 @@ import { definePage } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { ensureSignin } from '@/i.js';
 import { activeDrawRoomIds } from '@/utility/draw-room-session.js';
+
+// JUICE: 部屋の説明の長さの上限(サーバーのDRAW_ROOM_DESCRIPTION_MAX_LENGTHと同じ)
+const DRAW_ROOM_DESCRIPTION_MAX_LENGTH = 512;
 import { clampCanvasSize, clampMaxMembers, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE } from '@/utility/draw-canvas.js';
 
 const $i = ensureSignin();
@@ -203,6 +206,15 @@ async function createRoom(): Promise<void> {
 			description: i18n.ts._drawRoom.keepAfterEndCaption,
 			default: false,
 		},
+		// JUICE: 部屋の説明(どんな絵を描く部屋か。一覧にも出す。改行できる)
+		description: {
+			type: 'string',
+			label: i18n.ts._drawRoom.roomDescription,
+			description: i18n.ts._drawRoom.roomDescriptionCaption,
+			multiline: true,
+			required: false,
+			default: '',
+		},
 		// JUICE: 注意書き(CW)とセンシティブ(NSFW)
 		cw: {
 			type: 'string',
@@ -237,6 +249,7 @@ async function createRoom(): Promise<void> {
 		...canvas,
 		keepAfterEnd: result.keepAfterEnd,
 		cw: result.cw?.trim() ? result.cw.trim().slice(0, 128) : null,
+		description: result.description?.trim() ? result.description.trim().slice(0, DRAW_ROOM_DESCRIPTION_MAX_LENGTH) : null,
 		isSensitive: result.isSensitive,
 	});
 	// JUICE: 作った直後は、そのまま描ける状態で開く(入り直したときは見学中から始まる)
