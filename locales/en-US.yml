@@ -4453,7 +4453,7 @@ _juice:
   doodleTimelapseWatermarkFailed: "Failed to render the watermark"
   _federationDiagnosis:
     title: "Diagnosis"
-    description: "Checks where federation with this server is failing. It looks at this server's settings and makes real requests to the remote server (nothing is delivered to it)."
+    description: "Checks where federation with this server is failing. It looks at this server's settings and makes real requests to the remote server (nothing is delivered to it; the inbox only receives an empty unsigned request to see how it responds)."
     run: "Run diagnosis"
     rerun: "Run again"
     running: "Diagnosing (this may take tens of seconds)"
@@ -4514,6 +4514,16 @@ _juice:
       internalError: "The check failed inside this server"
       userGone: "The user used for this check no longer exists on the remote server (this is not necessarily a problem with the server itself)"
       actorFetched: "Fetched successfully (note that many servers answer without verifying the signature, so this can pass even if the remote blocks this server)"
+      inboxNotFound: "The remote server's inbox does not accept deliveries (the inbox may not exist or its URL may have changed)"
+    _keys:
+      title: "Signature keys"
+      note: "Signatures from the remote are verified with the remote key stored on this server (if the remote changed its key but the stored one is outdated, verification fails)"
+      unknown: "Unknown"
+      _sources:
+        local: "This server signs with"
+        publicKey: "Key published by the remote (publicKey)"
+        assertionMethod: "Key published by the remote (assertionMethod)"
+        stored: "Remote key stored on this server"
   doodleRecent: "Continue drawing"
   doodleEmpty: "No doodles yet"
   doodleDeleteConfirm: "Delete \"{name}\"? It will be removed from this browser and cannot be restored."

@@ -5,7 +5,8 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { lookup } from 'node:dns/promises';
-import { FederationDiagnosisService, FEDERATION_DIAGNOSIS_CHECK_IDS, describeFederationRequestError } from '@/core/FederationDiagnosisService.js';
+import { generateKeyPairSync } from 'node:crypto';
+import { FederationDiagnosisService, FEDERATION_DIAGNOSIS_CHECK_IDS, describeFederationRequestError, describeActorKeys, describeMultikey, describePublicKeyPem } from '@/core/FederationDiagnosisService.js';
 import type { FederationDiagnosisCheck } from '@/core/FederationDiagnosisService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { StatusError } from '@/misc/status-error.js';
@@ -39,9 +40,36 @@ const DEFAULT_RESPONSES: Record<string, FakeResponse> = {
 	[`https://${HOST}/`]: { status: 200 },
 	[`https://${HOST}/.well-known/nodeinfo`]: { status: 200, body: { links: [{ rel: 'http://nodeinfo.diaspora.software/ns/schema/2.1', href: `https://${HOST}/nodeinfo/2.1` }] } },
 	[`https://${HOST}/nodeinfo/2.1`]: { status: 200, body: { software: { name: 'misskey', version: '2025.1.0' } } },
-	[`https://${HOST}/inbox`]: { status: 405 },
-	[`https://${HOST}/users/alice/inbox`]: { status: 405 },
+	[`https://${HOST}/inbox`]: { status: 401 },
+	[`https://${HOST}/users/alice/inbox`]: { status: 401 },
 };
+
+// 鍵の種類を確かめるための、本物の鍵
+const LOCAL_RSA = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+const REMOTE_RSA = generateKeyPairSync('rsa', { modulusLength: 4096, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+const REMOTE_ED25519 = generateKeyPairSync('ed25519');
+
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function encodeBase58(bytes: Buffer): string {
+	let n = BigInt(`0x${bytes.toString('hex') || '0'}`);
+	let text = '';
+	while (n > 0n) {
+		text = BASE58_ALPHABET[Number(n % 58n)] + text;
+		n /= 58n;
+	}
+	for (const byte of bytes) {
+		if (byte !== 0) break;
+		text = `1${text}`;
+	}
+	return text;
+}
+
+/** Multikey(publicKeyMultibase)の形にする */
+function multikey(prefix: number[], key: Buffer): string {
+	return `z${encodeBase58(Buffer.concat([Buffer.from(prefix), key]))}`;
+}
+
+const REMOTE_ED25519_MULTIKEY = multikey([0xed, 0x01], Buffer.from(REMOTE_ED25519.publicKey.export({ format: 'jwk' }).x!, 'base64url'));
 
 function instanceOf(overrides: Partial<MiInstance> = {}): MiInstance {
 	return {
@@ -64,6 +92,7 @@ function setup(options: {
 	responses?: Record<string, FakeResponse>;
 	webfinger?: () => Promise<unknown>;
 	signedGet?: () => Promise<unknown>;
+	storedKeyPem?: string | null;
 } = {}) {
 	const meta = {
 		federation: 'all',
@@ -95,20 +124,27 @@ function setup(options: {
 	const webfinger = vi.fn(options.webfinger ?? (async () => ({ subject: `acct:alice@${HOST}`, links: [{ rel: 'self', type: 'application/activity+json', href: KNOWN_USER.uri }] })));
 	const signedGet = vi.fn(options.signedGet ?? (async () => ({ id: KNOWN_USER.uri, type: 'Person', inbox: KNOWN_USER.inbox })));
 	const fetchSystemAccount = vi.fn(async (_type: string) => ({ id: 'system-actor' }));
+	const getUserKeypair = vi.fn(async (_userId: string) => ({ publicKey: LOCAL_RSA.publicKey }));
+	const findStoredKey = vi.fn(async (_query: unknown) => {
+		const pem = options.storedKeyPem === undefined ? REMOTE_RSA.publicKey : options.storedKeyPem;
+		return pem == null ? null : { keyPem: pem };
+	});
 
 	const service = new FederationDiagnosisService(
 		config,
 		meta,
 		{ findOne } as never,
+		{ findOneBy: findStoredKey } as never,
 		{ getJobs } as never,
 		{ send } as never,
 		new UtilityService(config, meta),
 		{ webfinger } as never,
 		{ signedGet } as never,
 		{ fetch: fetchSystemAccount } as never,
+		{ getUserKeypair } as never,
 	);
 
-	return { service, send, findOne, getJobs, webfinger, signedGet, fetchSystemAccount };
+	return { service, send, findOne, getJobs, webfinger, signedGet, fetchSystemAccount, getUserKeypair, findStoredKey };
 }
 
 async function diagnose(options: Parameters<typeof setup>[0] = {}, instance: Partial<MiInstance> = {}) {
@@ -240,12 +276,19 @@ describe('FederationDiagnosisService', () => {
 			expect(byId.dns.detail).toBe('203.0.113.10, 2001:db8::10');
 			expect(byId.https.detail).toBe('HTTP 200');
 			expect(byId.nodeinfo.detail).toBe('misskey 2025.1.0');
-			expect(byId.inbox.detail).toBe('HTTP 405');
+			expect(byId.inbox.detail).toBe('HTTP 401');
 
-			// 相手のサーバーには、読み取り(GET)の問い合わせしかしない
+			// 相手のサーバーには、読み取り(GET)の問い合わせと、inboxへの署名の無い空のPOSTしかしない(何も配送しない)
 			expect(send.mock.calls.length).toBeGreaterThan(0);
 			for (const call of send.mock.calls) {
-				expect((call[1] as { method: string }).method).toBe('GET');
+				const args = call[1] as { method: string; body?: unknown; headers: Record<string, string> };
+				if (call[0] === `https://${HOST}/inbox`) {
+					expect(args.method).toBe('POST');
+					expect(args.body).toBe('{}');
+					expect(Object.keys(args.headers).map(key => key.toLowerCase())).not.toContain('signature');
+				} else {
+					expect(args.method).toBe('GET');
+				}
 			}
 			// 共有inboxがあれば、そちらを見る
 			expect(send.mock.calls.map(call => call[0])).toContain(`https://${HOST}/inbox`);
@@ -261,12 +304,12 @@ describe('FederationDiagnosisService', () => {
 		describe('federationMode', () => {
 			test('連合しない設定(none) → error federationDisabled', async () => {
 				const { byId } = await diagnose({ meta: { federation: 'none' } });
-				expect(byId.federationMode).toEqual({ id: 'federationMode', status: 'error', code: 'federationDisabled', detail: null, elapsedMs: null });
+				expect(byId.federationMode).toEqual({ id: 'federationMode', status: 'error', code: 'federationDisabled', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('指定したサーバーだけ(specified)で、一覧に無い → error notInAllowlist', async () => {
 				const { byId } = await diagnose({ meta: { federation: 'specified', federationHosts: ['other.example', 'emote.example'] } });
-				expect(byId.federationMode).toEqual({ id: 'federationMode', status: 'error', code: 'notInAllowlist', detail: null, elapsedMs: null });
+				expect(byId.federationMode).toEqual({ id: 'federationMode', status: 'error', code: 'notInAllowlist', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('指定したサーバーだけ(specified)で、一覧にある(親のドメインでもよい) → ok', async () => {
@@ -278,7 +321,7 @@ describe('FederationDiagnosisService', () => {
 		describe('blocked', () => {
 			test('ブロックしているサーバー → error blocked', async () => {
 				const { byId } = await diagnose({ meta: { blockedHosts: [HOST] } });
-				expect(byId.blocked).toEqual({ id: 'blocked', status: 'error', code: 'blocked', detail: null, elapsedMs: null });
+				expect(byId.blocked).toEqual({ id: 'blocked', status: 'error', code: 'blocked', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('ブロックしているサーバーのサブドメイン → error blocked', async () => {
@@ -296,17 +339,17 @@ describe('FederationDiagnosisService', () => {
 		describe('silenced', () => {
 			test('サイレンスだけ → warn silenced', async () => {
 				const { byId } = await diagnose({ meta: { silencedHosts: [HOST] } });
-				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'silenced', detail: null, elapsedMs: null });
+				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'silenced', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('メディアサイレンスだけ → warn mediaSilenced', async () => {
 				const { byId } = await diagnose({ meta: { mediaSilencedHosts: [HOST] } });
-				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'mediaSilenced', detail: null, elapsedMs: null });
+				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'mediaSilenced', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('両方 → warn silencedAndMediaSilenced', async () => {
 				const { byId } = await diagnose({ meta: { silencedHosts: [HOST], mediaSilencedHosts: [HOST] } });
-				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'silencedAndMediaSilenced', detail: null, elapsedMs: null });
+				expect(byId.silenced).toEqual({ id: 'silenced', status: 'warn', code: 'silencedAndMediaSilenced', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('どちらでもない → ok', async () => {
@@ -318,7 +361,7 @@ describe('FederationDiagnosisService', () => {
 		describe('suspension', () => {
 			test.each(['manuallySuspended', 'goneSuspended', 'autoSuspendedForNotResponding'] as const)('配送の停止(%s) → error', async (suspensionState) => {
 				const { byId } = await diagnose({}, { suspensionState });
-				expect(byId.suspension).toEqual({ id: 'suspension', status: 'error', code: suspensionState, detail: null, elapsedMs: null });
+				expect(byId.suspension).toEqual({ id: 'suspension', status: 'error', code: suspensionState, detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('ソフトウェアの指定による配送の停止 → error softwareSuspended(補足はソフトウェアの名前とバージョン)', async () => {
@@ -326,7 +369,7 @@ describe('FederationDiagnosisService', () => {
 					{ meta: { deliverSuspendedSoftware: [{ software: 'badware', versionRange: '>=1.0.0' }] } },
 					{ softwareName: 'badware', softwareVersion: '1.2.3' },
 				);
-				expect(byId.suspension).toEqual({ id: 'suspension', status: 'error', code: 'softwareSuspended', detail: 'badware 1.2.3', elapsedMs: null });
+				expect(byId.suspension).toEqual({ id: 'suspension', status: 'error', code: 'softwareSuspended', detail: 'badware 1.2.3', elapsedMs: null, keys: null });
 			});
 
 			test('ソフトウェアの指定に当てはまらないバージョンは、停止の扱いにしない', async () => {
@@ -350,31 +393,31 @@ describe('FederationDiagnosisService', () => {
 			test('応答がない状態 → warn notResponding(補足は応答がなくなった日時)', async () => {
 				const since = new Date('2026-01-02T03:04:05.000Z');
 				const { byId } = await diagnose({}, { isNotResponding: true, notRespondingSince: since });
-				expect(byId.responding).toEqual({ id: 'responding', status: 'warn', code: 'notResponding', detail: '2026-01-02T03:04:05.000Z', elapsedMs: null });
+				expect(byId.responding).toEqual({ id: 'responding', status: 'warn', code: 'notResponding', detail: '2026-01-02T03:04:05.000Z', elapsedMs: null, keys: null });
 			});
 
 			test('応答がなくなった日時が無くても落ちない', async () => {
 				const { byId } = await diagnose({}, { isNotResponding: true, notRespondingSince: null });
-				expect(byId.responding).toEqual({ id: 'responding', status: 'warn', code: 'notResponding', detail: null, elapsedMs: null });
+				expect(byId.responding).toEqual({ id: 'responding', status: 'warn', code: 'notResponding', detail: null, elapsedMs: null, keys: null });
 			});
 		});
 
 		describe('lastReceived', () => {
 			test('一度も届いていない → warn neverReceived', async () => {
 				const { byId } = await diagnose({}, { latestRequestReceivedAt: null });
-				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'warn', code: 'neverReceived', detail: null, elapsedMs: null });
+				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'warn', code: 'neverReceived', detail: null, elapsedMs: null, keys: null });
 			});
 
 			test('1週間より長く届いていない → warn stale', async () => {
 				const at = new Date(Date.now() - 1000 * 60 * 60 * 24 * 8);
 				const { byId } = await diagnose({}, { latestRequestReceivedAt: at });
-				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'warn', code: 'stale', detail: at.toISOString(), elapsedMs: null });
+				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'warn', code: 'stale', detail: at.toISOString(), elapsedMs: null, keys: null });
 			});
 
 			test('最近届いている → ok(補足は届いた日時)', async () => {
 				const at = new Date(Date.now() - 1000 * 60 * 60 * 24 * 6);
 				const { byId } = await diagnose({}, { latestRequestReceivedAt: at });
-				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'ok', code: null, detail: at.toISOString(), elapsedMs: null });
+				expect(byId.lastReceived).toEqual({ id: 'lastReceived', status: 'ok', code: null, detail: at.toISOString(), elapsedMs: null, keys: null });
 			});
 		});
 
@@ -394,13 +437,13 @@ describe('FederationDiagnosisService', () => {
 						undefined,
 					],
 				});
-				expect(byId.deliverQueue).toEqual({ id: 'deliverQueue', status: 'warn', code: 'delayed', detail: '3', elapsedMs: null });
+				expect(byId.deliverQueue).toEqual({ id: 'deliverQueue', status: 'warn', code: 'delayed', detail: '3', elapsedMs: null, keys: null });
 				expect(getJobs).toHaveBeenCalledWith(['delayed'], 0, 4999);
 			});
 
 			test('そのサーバー宛てのジョブが無ければok', async () => {
 				const { byId } = await diagnose({ jobs: [{ data: { to: 'https://other.example/inbox' } }] });
-				expect(byId.deliverQueue).toEqual({ id: 'deliverQueue', status: 'ok', code: null, detail: '0', elapsedMs: null });
+				expect(byId.deliverQueue).toEqual({ id: 'deliverQueue', status: 'ok', code: null, detail: '0', elapsedMs: null, keys: null });
 			});
 
 			test('キューを読めなくても、ほかの項目は続ける', async () => {
@@ -409,7 +452,7 @@ describe('FederationDiagnosisService', () => {
 				const checks = await context.service.diagnose(instanceOf());
 				expect(checks.map(check => check.id)).toEqual([...FEDERATION_DIAGNOSIS_CHECK_IDS]);
 				// このサーバーの中の失敗は、相手のサーバーの問題として出さない
-				expect(checks.find(check => check.id === 'deliverQueue')).toEqual({ id: 'deliverQueue', status: 'skipped', code: 'internalError', detail: null, elapsedMs: null });
+				expect(checks.find(check => check.id === 'deliverQueue')).toEqual({ id: 'deliverQueue', status: 'skipped', code: 'internalError', detail: null, elapsedMs: null, keys: null });
 				expect(checks.find(check => check.id === 'https')?.status).toBe('ok');
 			});
 		});
@@ -450,7 +493,7 @@ describe('FederationDiagnosisService', () => {
 				const { byId, send, webfinger, signedGet } = await diagnose({ responses: { [`https://${HOST}/`]: systemError('ECONNREFUSED') } });
 				expect(byId.https).toMatchObject({ status: 'error', code: 'connectionFailed', detail: 'ECONNREFUSED' });
 				for (const id of ['nodeinfo', 'webfinger', 'actor', 'inbox'] as const) {
-					expect(byId[id]).toEqual({ id, status: 'skipped', code: 'unreachable', detail: null, elapsedMs: null });
+					expect(byId[id]).toEqual({ id, status: 'skipped', code: 'unreachable', detail: null, elapsedMs: null, keys: null });
 				}
 				expect(send).toHaveBeenCalledTimes(1);
 				expect(webfinger).not.toHaveBeenCalled();
@@ -495,7 +538,7 @@ describe('FederationDiagnosisService', () => {
 			test('webfinger・actor・inboxはskipped noKnownUser。nodeinfoは確かめる', async () => {
 				const { byId, webfinger, signedGet, send } = await diagnose({ user: null });
 				for (const id of ['webfinger', 'actor', 'inbox'] as const) {
-					expect(byId[id]).toEqual({ id, status: 'skipped', code: 'noKnownUser', detail: null, elapsedMs: null });
+					expect(byId[id]).toEqual({ id, status: 'skipped', code: 'noKnownUser', detail: null, elapsedMs: null, keys: null });
 				}
 				expect(byId.nodeinfo.status).toBe('ok');
 				expect(webfinger).not.toHaveBeenCalled();
@@ -643,9 +686,19 @@ describe('FederationDiagnosisService', () => {
 		});
 
 		describe('inbox', () => {
-			test.each([400, 401, 404, 405])('GETを受け付けない(%i)のは普通なので、応答があればok', async (status) => {
+			test.each([200, 202, 400, 401, 403])('署名の無いPOSTを断る・受け取る(%i)のは、inboxとして応答しているのでok', async (status) => {
 				const { byId } = await diagnose({ responses: { [`https://${HOST}/inbox`]: { status } } });
 				expect(byId.inbox).toMatchObject({ status: 'ok', code: null, detail: `HTTP ${status}` });
+			});
+
+			test.each([404, 405, 410])('%i → error inboxNotFound(配送先として受け付けていない)', async (status) => {
+				const { byId } = await diagnose({ responses: { [`https://${HOST}/inbox`]: { status } } });
+				expect(byId.inbox).toMatchObject({ status: 'error', code: 'inboxNotFound', detail: `HTTP ${status}` });
+			});
+
+			test('429 → warn rateLimited', async () => {
+				const { byId } = await diagnose({ responses: { [`https://${HOST}/inbox`]: { status: 429 } } });
+				expect(byId.inbox).toMatchObject({ status: 'warn', code: 'rateLimited', detail: 'HTTP 429' });
 			});
 
 			test.each([500, 502, 503])('5xx(%i) → error serverError', async (status) => {
@@ -660,8 +713,67 @@ describe('FederationDiagnosisService', () => {
 
 			test('共有inboxが無ければ、ユーザーのinboxを見る', async () => {
 				const { byId, send } = await diagnose({ user: { ...KNOWN_USER, sharedInbox: null } });
-				expect(byId.inbox).toMatchObject({ status: 'ok', detail: 'HTTP 405' });
+				expect(byId.inbox).toMatchObject({ status: 'ok', detail: 'HTTP 401' });
 				expect(send.mock.calls.map(call => call[0])).toContain(`https://${HOST}/users/alice/inbox`);
+			});
+		});
+
+		describe('署名の鍵の種類', () => {
+			test('このサーバーの鍵・相手が公開している鍵・このサーバーが保存している相手の鍵を、署名付きの取得の項目に付ける', async () => {
+				const { byId, getUserKeypair } = await diagnose({
+					signedGet: async () => ({
+						id: KNOWN_USER.uri,
+						publicKey: { id: `${KNOWN_USER.uri}#main-key`, publicKeyPem: REMOTE_RSA.publicKey },
+						assertionMethod: [{ id: `${KNOWN_USER.uri}#ed25519-key`, type: 'Multikey', publicKeyMultibase: REMOTE_ED25519_MULTIKEY }],
+					}),
+				});
+				expect(getUserKeypair).toHaveBeenCalledWith('system-actor');
+				expect(byId.actor.keys).toEqual([
+					{ source: 'local', type: 'rsa', bits: 2048, algorithm: 'rsa-sha256' },
+					{ source: 'publicKey', type: 'rsa', bits: 4096, algorithm: null },
+					{ source: 'assertionMethod', type: 'ed25519', bits: null, algorithm: null },
+					{ source: 'stored', type: 'rsa', bits: 4096, algorithm: null },
+				]);
+				// ほかの項目には付けない
+				expect(byId.inbox.keys).toBeNull();
+				expect(byId.webfinger.keys).toBeNull();
+			});
+
+			test('取得に失敗しても、このサーバーの鍵と保存している相手の鍵は出す', async () => {
+				const { byId } = await diagnose({ signedGet: async () => { throw statusError(401); } });
+				expect(byId.actor).toMatchObject({ status: 'error', code: 'rejected' });
+				expect(byId.actor.keys?.map(key => key.source)).toEqual(['local', 'stored']);
+			});
+
+			test('保存している相手の鍵が無ければ、出さない', async () => {
+				const { byId } = await diagnose({ storedKeyPem: null });
+				expect(byId.actor.keys?.map(key => key.source)).toEqual(['local']);
+			});
+
+			test('確かめなかったとき(知っているユーザーがいない)は、鍵も出さない', async () => {
+				const { byId } = await diagnose({ user: null });
+				expect(byId.actor.keys).toBeNull();
+			});
+
+			test('PEM・Multikeyの種類を見分ける', () => {
+				expect(describePublicKeyPem(REMOTE_ED25519.publicKey.export({ type: 'spki', format: 'pem' }) as string)).toEqual({ type: 'ed25519', bits: null });
+				const ec = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+				expect(describePublicKeyPem(ec.publicKey.export({ type: 'spki', format: 'pem' }) as string)).toEqual({ type: 'ec:prime256v1', bits: null });
+				expect(describePublicKeyPem('not a key')).toEqual({ type: 'unknown', bits: null });
+
+				const rsaDer = generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'pkcs1', format: 'der' });
+				expect(describeMultikey(multikey([0x85, 0x24], rsaDer))).toEqual({ type: 'rsa', bits: 2048 });
+				expect(describeMultikey(REMOTE_ED25519_MULTIKEY)).toEqual({ type: 'ed25519', bits: null });
+				expect(describeMultikey('uAAAA')).toEqual({ type: 'unknown', bits: null });
+				expect(describeMultikey('z0OIl')).toEqual({ type: 'unknown', bits: null });
+				expect(describeMultikey(`z${'2'.repeat(3000)}`)).toEqual({ type: 'unknown', bits: null });
+			});
+
+			test('actorの鍵は、配列でも1つでも読む。おかしな値は無視する', () => {
+				expect(describeActorKeys({ publicKey: [{ publicKeyPem: REMOTE_RSA.publicKey }, { publicKeyPem: 123 }, null] }).map(key => key.type)).toEqual(['rsa']);
+				expect(describeActorKeys({ assertionMethod: { publicKeyMultibase: REMOTE_ED25519_MULTIKEY } }).map(key => key.type)).toEqual(['ed25519']);
+				expect(describeActorKeys(null)).toEqual([]);
+				expect(describeActorKeys('text')).toEqual([]);
 			});
 		});
 	});

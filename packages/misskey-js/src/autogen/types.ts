@@ -10954,6 +10954,13 @@ export interface operations {
                             code: string | null;
                             detail: string | null;
                             elapsedMs: number | null;
+                            keys: {
+                                /** @enum {string} */
+                                source: 'local' | 'publicKey' | 'assertionMethod' | 'stored';
+                                type: string;
+                                bits: number | null;
+                                algorithm: string | null;
+                            }[] | null;
                         }[];
                     };
                 };

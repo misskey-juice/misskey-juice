@@ -4453,7 +4453,7 @@ _juice:
   doodleTimelapseWatermarkFailed: "无法生成水印"
   _federationDiagnosis:
     title: "诊断"
-    description: "当与此服务器的联合不正常时，检查问题出在哪里。依次检查本服务器的设置以及对对方服务器的实际请求（不会向对方服务器投递任何内容）。"
+    description: "当与此服务器的联合不正常时，检查问题出在哪里。依次检查本服务器的设置以及对对方服务器的实际请求（不会向对方服务器投递任何内容；只会向 inbox 发送不带签名的空请求，查看其响应）。"
     run: "开始诊断"
     rerun: "重新诊断"
     running: "正在诊断（可能需要几十秒）"
@@ -4514,6 +4514,16 @@ _juice:
       internalError: "在本服务器内部检查失败"
       userGone: "用于检查的用户已不在对方服务器上（不一定是服务器本身的问题）"
       actorFetched: "已获取（但许多服务器不验证签名就会返回，因此即使对方屏蔽了本服务器，这里也可能显示正常）"
+      inboxNotFound: "对方服务器的 inbox 不接受投递（可能不存在 inbox，或其 URL 已变更）"
+    _keys:
+      title: "签名密钥"
+      note: "对方发来的签名使用本服务器保存的对方密钥验证（如果对方更换了密钥而保存的密钥仍是旧的，则无法验证）"
+      unknown: "未知"
+      _sources:
+        local: "本服务器的签名"
+        publicKey: "对方公开的密钥（publicKey）"
+        assertionMethod: "对方公开的密钥（assertionMethod）"
+        stored: "本服务器保存的对方密钥"
   doodleRecent: "继续画"
   doodleEmpty: "还没有涂鸦"
   doodleDeleteConfirm: "要删除「{name}」吗？它将从此浏览器中删除，且无法恢复。"
