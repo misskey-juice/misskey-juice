@@ -34508,6 +34508,7 @@ export interface operations {
                         mediaTimelineEnabled: boolean;
                         latexEnabled: boolean;
                         reactionPiggybackOnRemoteEnabled: boolean;
+                        importApprovalRequiredTypes: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                         contactFormEnabled: boolean;
                         contactFormRequireAuth: boolean;
                         contactFormContentMaxLength: number;

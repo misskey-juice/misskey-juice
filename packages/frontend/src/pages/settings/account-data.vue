@@ -87,7 +87,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSwitch v-model="withReplies">
 								{{ i18n.ts._exportOrImport.withReplies }}
 							</MkSwitch>
-							<MkButton primary :class="$style.button" inline @click="importFollowing($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importFollowing($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('following')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -106,7 +106,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportUserLists" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importUserLists($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importUserLists($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('userLists')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -125,7 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportMuting" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importMuting($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importMuting($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('muting')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -144,7 +144,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportBlocking" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importBlocking($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importBlocking($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('blocking')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -163,7 +163,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportAntennas" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importAntennas($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importAntennas($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('antennas')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -187,6 +187,7 @@ import { definePage } from '@/page.js';
 import { $i } from '@/i.js';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
 import { prefer } from '@/preferences.js';
+import { juicePublicSettingsCache } from '@/cache.js';
 
 const excludeMutingUsers = ref(false);
 const excludeInactiveUsers = ref(false);
@@ -207,6 +208,16 @@ const onImportSuccess = (res?: { requiresApproval: boolean }) => {
 	});
 	if (res?.requiresApproval) fetchImportRequests();
 };
+
+// JUICE: この種類のインポートに、運営の承認が要るか(審査できる人は、自分のインポートを承認なしで行える)
+const importApprovalRequiredTypes = computed(() => juicePublicSettingsCache.value.value?.importApprovalRequiredTypes ?? []);
+
+function importNeedsApproval(type: Misskey.entities.ImportRequest['type']): boolean {
+	if ($i == null || $i.isModerator || $i.isAdmin || $i.policies.canApproveImportRequests) return false;
+	return importApprovalRequiredTypes.value.includes(type);
+}
+
+juicePublicSettingsCache.fetch().catch(() => { /* empty */ });
 
 // JUICE: 自分のインポートの申請(新しい順に、最近のものだけ)
 const importRequests = ref<Misskey.entities.ImportRequest[]>([]);
@@ -329,6 +340,14 @@ definePage(() => ({
 <style module>
 .button {
 	margin-right: 16px;
+}
+
+/* JUICE: 色の付いたボタンの上のJUICEバッジは、ボタンの文字の色で塗りつぶして、ボタンの色の字にする(橙の上に橙の枠だと見えないため) */
+.juiceOnPrimary.juiceOnPrimary {
+	color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-fgOnAccent);
+	border-color: var(--MI_THEME-fgOnAccent);
+	font-weight: bold;
 }
 
 .importRequest {

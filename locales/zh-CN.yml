@@ -4798,6 +4798,7 @@ _importRequest:
   thereArePendingWarning: "有待审核的导入申请。"
   myRequests: "导入申请"
   requested: "已收到导入申请。管理员确认后将进行导入。结果会通过通知告知。"
+  importWithApproval: "导入(需要批准)"
   cancel: "撤回"
   cancelConfirm: "要撤回这个导入申请吗?"
   approve: "批准并导入"

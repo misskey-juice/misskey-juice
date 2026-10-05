@@ -4798,6 +4798,7 @@ _importRequest:
   thereArePendingWarning: "심사 대기 중인 가져오기 신청이 있습니다."
   myRequests: "가져오기 신청"
   requested: "가져오기 신청이 접수되었습니다. 운영진이 확인한 후 가져옵니다. 결과는 알림으로 알려 드립니다."
+  importWithApproval: "가져오기(승인 필요)"
   cancel: "취하"
   cancelConfirm: "이 가져오기 신청을 취하할까요?"
   approve: "승인하고 가져오기"

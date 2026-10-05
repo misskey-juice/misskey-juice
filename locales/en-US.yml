@@ -4798,6 +4798,7 @@ _importRequest:
   thereArePendingWarning: "There are pending import requests."
   myRequests: "Import requests"
   requested: "Your import request has been received. It will be imported after the moderators check it. You will be notified of the result."
+  importWithApproval: "Import (requires approval)"
   cancel: "Withdraw"
   cancelConfirm: "Withdraw this import request?"
   approve: "Approve and import"

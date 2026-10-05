@@ -4800,6 +4800,7 @@ _importRequest:
   thereArePendingWarning: "有待審查的匯入申請。"
   myRequests: "匯入申請"
   requested: "已收到匯入申請。管理員確認後將進行匯入。結果會透過通知告知。"
+  importWithApproval: "匯入（需要核准）"
   cancel: "撤回"
   cancelConfirm: "要撤回這個匯入申請嗎？"
   approve: "核准並匯入"

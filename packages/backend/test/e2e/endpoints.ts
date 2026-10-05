@@ -2801,6 +2801,7 @@ describe('Endpoints', () => {
 				mediaTimelineEnabled: false,
 				latexEnabled: true,
 				reactionPiggybackOnRemoteEnabled: false,
+				importApprovalRequiredTypes: ['following'],
 				contactFormEnabled: true,
 				contactFormRequireAuth: false,
 				contactFormContentMaxLength: 10000,

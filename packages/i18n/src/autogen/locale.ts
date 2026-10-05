@@ -18604,6 +18604,10 @@ export interface Locale extends ILocale {
          */
         "requested": string;
         /**
+         * インポート(承認が必要)
+         */
+        "importWithApproval": string;
+        /**
          * 取り下げる
          */
         "cancel": string;
