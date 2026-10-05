@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import ms from 'ms';
 import { Endpoint } from '@/server/api/endpoint-base.js';
-import { DrawRoomService, normalizeCw, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
+import { DrawRoomService, normalizeCw, normalizeDescription, DRAW_ROOM_DESCRIPTION_MAX_LENGTH, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE, DRAW_ROOM_MAX_MEMBERS, DRAW_ROOM_MIN_MEMBERS } from '@/core/DrawRoomService.js';
 import { drawRoomErrors, rethrowDrawRoomError } from '@/server/api/draw-room-errors.js';
 
 // JUICE: 部屋主が、絵チャの部屋のタイトル・人数上限・終了後に保存するかを変える
@@ -47,6 +47,8 @@ export const paramDef = {
 		keepAfterEnd: { type: 'boolean' },
 		// JUICE: 注意書き(CW。nullか空で外す)と、センシティブ(NSFW)の印
 		cw: { type: 'string', nullable: true, maxLength: 128 },
+		// JUICE: 部屋の説明(どんな絵を描く部屋か。一覧にも出す。nullか空で外す)
+		description: { type: 'string', nullable: true, maxLength: DRAW_ROOM_DESCRIPTION_MAX_LENGTH },
 		isSensitive: { type: 'boolean' },
 		// JUICE: キャンバスの大きさ(左上を基準に広げる・切り詰める。線は消えない)
 		canvasWidth: { type: 'integer', minimum: DRAW_ROOM_CANVAS_MIN_SIZE, maximum: DRAW_ROOM_CANVAS_MAX_SIZE },
@@ -68,6 +70,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					maxMembers: ps.maxMembers,
 					keepAfterEnd: ps.keepAfterEnd,
 					cw: ps.cw === undefined ? undefined : normalizeCw(ps.cw),
+					description: ps.description === undefined ? undefined : normalizeDescription(ps.description),
 					isSensitive: ps.isSensitive,
 					canvasWidth: ps.canvasWidth,
 					canvasHeight: ps.canvasHeight,

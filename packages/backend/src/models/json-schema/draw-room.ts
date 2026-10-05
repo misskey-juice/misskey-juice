@@ -55,6 +55,11 @@ export const packedDrawRoomSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		// JUICE: 部屋の説明(どんな絵を描く部屋か)。無ければnull
+		description: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 		// JUICE: センシティブ(NSFW)な絵の部屋か
 		isSensitive: {
 			type: 'boolean',

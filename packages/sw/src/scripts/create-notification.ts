@@ -250,6 +250,28 @@ async function composeNotification(data: PushNotificationDataMap[keyof PushNotif
 						data,
 					}];
 
+				// JUICE: 承認式にしたインポートの結果と、新しい申請
+				case 'importRequestApproved':
+					return [i18n.tsx._notification.importRequestApproved({ type: i18n.ts._importRequest._types[data.body.importType] }), {
+						badge: iconUrl('circle-check'),
+						data,
+					}];
+
+				case 'importRequestRejected':
+					return [i18n.tsx._notification.importRequestRejected({ type: i18n.ts._importRequest._types[data.body.importType] }), {
+						body: data.body.reason ?? undefined,
+						badge: iconUrl('bell'),
+						data,
+					}];
+
+				case 'newImportRequest':
+					return [i18n.tsx._notification.newImportRequest({ type: i18n.ts._importRequest._types[data.body.importType] }), {
+						body: getUserName(data.body.requester),
+						icon: data.body.requester.avatarUrl ?? undefined,
+						badge: iconUrl('bell'),
+						data,
+					}];
+
 				case 'newEmojiRequest':
 					// JUICE: 専用バッジ画像が無いため、bellを流用。申請者はミュートフィルタを迂回するため
 					// notifierIdではなくrequesterで持つ(NotificationEntityService参照)

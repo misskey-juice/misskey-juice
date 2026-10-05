@@ -8556,6 +8556,10 @@ export interface Locale extends ILocale {
              */
             "canApproveAvatarDecorationRequests": string;
             /**
+             * インポートの申請の承認・却下
+             */
+            "canApproveImportRequests": string;
+            /**
              * 承認式新規登録の承認・却下
              */
             "canApproveSignups": string;
@@ -9673,6 +9677,14 @@ export interface Locale extends ILocale {
          * グロテスクな表現など、見る前に知らせたいことがあれば書きます。部屋を開いたとき、絵の代わりにこの注意書きが出て、開くと決めた人だけが見られます(128文字まで)
          */
         "roomCwCaption": string;
+        /**
+         * 部屋の説明
+         */
+        "roomDescription": string;
+        /**
+         * どんな絵を描く部屋か(テーマ・ルールなど)。部屋の一覧にも出ます。改行できます(10行まで)
+         */
+        "roomDescriptionCaption": string;
         /**
          * センシティブ(NSFW)な絵の部屋
          */
@@ -11794,6 +11806,14 @@ export interface Locale extends ILocale {
          */
         "write:admin:avatar-decoration-requests-reject": string;
         /**
+         * インポートの申請の一覧を見る
+         */
+        "read:admin:import-requests": string;
+        /**
+         * インポートの申請を承認・却下する
+         */
+        "write:admin:import-requests": string;
+        /**
          * お問い合わせの一覧を見る
          */
         "read:admin:contact-form": string;
@@ -13324,6 +13344,22 @@ export interface Locale extends ILocale {
          */
         "newAvatarDecorationRequestHeader": ParameterizedString<"name">;
         /**
+         * {type}のインポートが承認されました
+         */
+        "importRequestApproved": ParameterizedString<"type">;
+        /**
+         * {type}のインポートが却下されました
+         */
+        "importRequestRejected": ParameterizedString<"type">;
+        /**
+         * {type}のインポートの申請が届きました
+         */
+        "newImportRequest": ParameterizedString<"type">;
+        /**
+         * {type}のインポートの申請
+         */
+        "newImportRequestHeader": ParameterizedString<"type">;
+        /**
          * アバターデコレーション申請「{name}」ほか{n}件
          */
         "newAvatarDecorationRequestsHeader": ParameterizedString<"name" | "n">;
@@ -13444,6 +13480,18 @@ export interface Locale extends ILocale {
              * アバターデコレーション申請が届いた(モデレーター・承認権限保持者向け)
              */
             "newAvatarDecorationRequest": string;
+            /**
+             * インポートの申請が承認・却下された
+             */
+            "importRequestApproved": string;
+            /**
+             * インポートの申請が承認・却下された
+             */
+            "importRequestRejected": string;
+            /**
+             * インポートの申請が届いた(モデレーター・承認権限保持者向け)
+             */
+            "newImportRequest": string;
             /**
              * 承認式登録の申請が届いた(モデレーター・承認権限保持者向け)
              */
@@ -13927,6 +13975,14 @@ export interface Locale extends ILocale {
          * アバターデコレーション申請を却下
          */
         "rejectAvatarDecorationRequest": string;
+        /**
+         * インポートの申請を承認
+         */
+        "approveImportRequest": string;
+        /**
+         * インポートの申請を却下
+         */
+        "rejectImportRequest": string;
         /**
          * 孤立したオブジェクトストレージファイルの整理
          */
@@ -18532,6 +18588,152 @@ export interface Locale extends ILocale {
              * 文字数が上限を超えています。
              */
             "contentTooLong": string;
+        };
+    };
+    "_importRequest": {
+        /**
+         * インポートの申請
+         */
+        "approvalsTitle": string;
+        /**
+         * 運営の承認が要るインポート(コントロールパネルのJUICE設定で選んだ種類)の申請です。開くとファイルの中身の一部を確認できます。承認すると、そのままインポートを始めます。
+         */
+        "approvalsDescription": string;
+        /**
+         * 審査待ちのインポートの申請があります。
+         */
+        "thereArePendingWarning": string;
+        /**
+         * インポートの申請
+         */
+        "myRequests": string;
+        /**
+         * インポートの申請を受け付けました。運営が確認した後にインポートします。結果は通知でお知らせします。
+         */
+        "requested": string;
+        /**
+         * インポート(承認が必要)
+         */
+        "importWithApproval": string;
+        /**
+         * 取り下げる
+         */
+        "cancel": string;
+        /**
+         * このインポートの申請を取り下げますか?
+         */
+        "cancelConfirm": string;
+        /**
+         * 承認してインポートする
+         */
+        "approve": string;
+        /**
+         * 却下
+         */
+        "reject": string;
+        /**
+         * この{type}のインポートを承認して、インポートを始めますか?
+         */
+        "approveConfirm": ParameterizedString<"type">;
+        /**
+         * 却下の理由
+         */
+        "rejectReasonTitle": string;
+        /**
+         * 却下の理由
+         */
+        "rejectReason": string;
+        /**
+         * 申請した人
+         */
+        "requester": string;
+        /**
+         * 審査した人
+         */
+        "reviewer": string;
+        /**
+         * ファイル
+         */
+        "file": string;
+        /**
+         * 種類
+         */
+        "type": string;
+        /**
+         * 申請した人がファイルを削除したため、承認できません。却下してください。
+         */
+        "fileDeleted": string;
+        /**
+         * ファイルの中身を読めませんでした。
+         */
+        "previewUnavailable": string;
+        /**
+         * 全{n}件
+         */
+        "lineCount": ParameterizedString<"n">;
+        /**
+         * ほか{n}件
+         */
+        "moreLines": ParameterizedString<"n">;
+        /**
+         * ホストなし
+         */
+        "noHost": string;
+        /**
+         * 審査待ちの申請はありません
+         */
+        "noPendingRequests": string;
+        /**
+         * 申請はありません
+         */
+        "noRequests": string;
+        /**
+         * インポートの承認
+         */
+        "settingsTitle": string;
+        /**
+         * オンにした種類のインポート(設定 → アカウントのデータ)は、すぐには行わず申請にして、運営(モデレーター・「インポートの申請の承認・却下」のロールポリシーを持つ人)が確認して承認した後に行います。運営自身のインポートには承認は要りません。
+         */
+        "settingsDescription": string;
+        "_types": {
+            /**
+             * フォロー
+             */
+            "following": string;
+            /**
+             * ミュート
+             */
+            "muting": string;
+            /**
+             * ブロック
+             */
+            "blocking": string;
+            /**
+             * リスト
+             */
+            "userLists": string;
+            /**
+             * アンテナ
+             */
+            "antennas": string;
+        };
+        "_statuses": {
+            /**
+             * 審査待ち
+             */
+            "pending": string;
+            /**
+             * 承認済み
+             */
+            "approved": string;
+            /**
+             * 却下
+             */
+            "rejected": string;
+            /**
+             * 取り下げ
+             */
+            "cancelled": string;
         };
     };
 }

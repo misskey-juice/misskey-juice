@@ -10,6 +10,8 @@ import { QueueService } from '@/core/QueueService.js';
 import { AccountMoveService } from '@/core/AccountMoveService.js';
 import type { DriveFilesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
+import { ImportRequestService } from '@/core/ImportRequestService.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -23,6 +25,13 @@ export const meta = {
 	},
 
 	errors: {
+		// JUICE: 承認式にしたインポートで、同じ種類の審査待ちの申請がもうある
+		alreadyRequested: {
+			message: 'There is already a pending import request of this kind.',
+			code: 'ALREADY_REQUESTED',
+			id: '5a8f2c1e-7b3d-4e9a-b6c4-1d2e3f4a5b60',
+		},
+
 		noSuchFile: {
 			message: 'No such file.',
 			code: 'NO_SUCH_FILE',
@@ -47,6 +56,18 @@ export const meta = {
 			id: '31a1b42c-06f7-42ae-8a38-a661c5c9f691',
 		},
 	},
+
+	// JUICE: 運営の承認が要る(承認式にした)インポートなら、すぐには行わず申請にしたことを返す
+	res: {
+		type: 'object',
+		optional: false, nullable: false,
+		properties: {
+			requiresApproval: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+		},
+	},
 } as const;
 
 export const paramDef = {
@@ -65,6 +86,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFilesRepository: DriveFilesRepository,
 
 		private queueService: QueueService,
+		private importRequestService: ImportRequestService,
 		private accountMoveService: AccountMoveService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -81,7 +103,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			);
 			if (checkMoving ? file.size > 32 * 1024 * 1024 : file.size > 64 * 1024) throw new ApiError(meta.errors.tooBigFile);
 
-			this.queueService.createImportFollowingJob(me, file.id, ps.withReplies);
+			// JUICE: 運営の承認が要る種類なら、申請にする(承認されたら、同じインポートを行う)
+			if (await this.importRequestService.requiresApproval(me, 'following')) {
+				try {
+					await this.importRequestService.createRequest(me, 'following', file, { withReplies: ps.withReplies });
+				} catch (err) {
+					if (err instanceof IdentifiableError && err.id === ImportRequestService.ALREADY_REQUESTED) throw new ApiError(meta.errors.alreadyRequested);
+					throw err;
+				}
+				return { requiresApproval: true };
+			}
+
+			await this.queueService.createImportFollowingJob(me, file.id, ps.withReplies);
+			return { requiresApproval: false };
 		});
 	}
 }

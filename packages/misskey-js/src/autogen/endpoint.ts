@@ -89,6 +89,12 @@ import type {
 	AdminGetTableStatsResponse,
 	AdminGetUserIpsRequest,
 	AdminGetUserIpsResponse,
+	AdminImportRequestsApproveRequest,
+	AdminImportRequestsListRequest,
+	AdminImportRequestsListResponse,
+	AdminImportRequestsRejectRequest,
+	AdminImportRequestsShowRequest,
+	AdminImportRequestsShowResponse,
 	AdminInviteCreateRequest,
 	AdminInviteCreateResponse,
 	AdminInviteListRequest,
@@ -503,10 +509,15 @@ import type {
 	IGalleryPostsRequest,
 	IGalleryPostsResponse,
 	IImportAntennasRequest,
+	IImportAntennasResponse,
 	IImportBlockingRequest,
+	IImportBlockingResponse,
 	IImportFollowingRequest,
+	IImportFollowingResponse,
 	IImportMutingRequest,
+	IImportMutingResponse,
 	IImportUserListsRequest,
+	IImportUserListsResponse,
 	IJuiceUpdateAutoLocalOnlyForMfmRequest,
 	IJuiceUpdateEmailLangRequest,
 	IJuiceUpdateMuteAiGeneratedRequest,
@@ -555,6 +566,9 @@ import type {
 	IWebhooksShowResponse,
 	IWebhooksTestRequest,
 	IWebhooksUpdateRequest,
+	ImportRequestsCancelRequest,
+	ImportRequestsListRequest,
+	ImportRequestsListResponse,
 	InviteCreateResponse,
 	InviteDeleteRequest,
 	InviteLimitResponse,
@@ -829,6 +843,10 @@ export type Endpoints = {
 	'admin/get-index-stats': { req: EmptyRequest; res: AdminGetIndexStatsResponse };
 	'admin/get-table-stats': { req: EmptyRequest; res: AdminGetTableStatsResponse };
 	'admin/get-user-ips': { req: AdminGetUserIpsRequest; res: AdminGetUserIpsResponse };
+	'admin/import-requests/approve': { req: AdminImportRequestsApproveRequest; res: EmptyResponse };
+	'admin/import-requests/list': { req: AdminImportRequestsListRequest; res: AdminImportRequestsListResponse };
+	'admin/import-requests/reject': { req: AdminImportRequestsRejectRequest; res: EmptyResponse };
+	'admin/import-requests/show': { req: AdminImportRequestsShowRequest; res: AdminImportRequestsShowResponse };
 	'admin/invite/create': { req: AdminInviteCreateRequest; res: AdminInviteCreateResponse };
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
 	'admin/juice/approve-signup': { req: AdminJuiceApproveSignupRequest; res: EmptyResponse };
@@ -1099,11 +1117,11 @@ export type Endpoints = {
 	'i/favorites': { req: IFavoritesRequest; res: IFavoritesResponse };
 	'i/gallery/likes': { req: IGalleryLikesRequest; res: IGalleryLikesResponse };
 	'i/gallery/posts': { req: IGalleryPostsRequest; res: IGalleryPostsResponse };
-	'i/import-antennas': { req: IImportAntennasRequest; res: EmptyResponse };
-	'i/import-blocking': { req: IImportBlockingRequest; res: EmptyResponse };
-	'i/import-following': { req: IImportFollowingRequest; res: EmptyResponse };
-	'i/import-muting': { req: IImportMutingRequest; res: EmptyResponse };
-	'i/import-user-lists': { req: IImportUserListsRequest; res: EmptyResponse };
+	'i/import-antennas': { req: IImportAntennasRequest; res: IImportAntennasResponse };
+	'i/import-blocking': { req: IImportBlockingRequest; res: IImportBlockingResponse };
+	'i/import-following': { req: IImportFollowingRequest; res: IImportFollowingResponse };
+	'i/import-muting': { req: IImportMutingRequest; res: IImportMutingResponse };
+	'i/import-user-lists': { req: IImportUserListsRequest; res: IImportUserListsResponse };
 	'i/juice/update-auto-local-only-for-mfm': { req: IJuiceUpdateAutoLocalOnlyForMfmRequest; res: EmptyResponse };
 	'i/juice/update-email-lang': { req: IJuiceUpdateEmailLangRequest; res: EmptyResponse };
 	'i/juice/update-mute-ai-generated': { req: IJuiceUpdateMuteAiGeneratedRequest; res: EmptyResponse };
@@ -1135,6 +1153,8 @@ export type Endpoints = {
 	'i/webhooks/show': { req: IWebhooksShowRequest; res: IWebhooksShowResponse };
 	'i/webhooks/test': { req: IWebhooksTestRequest; res: EmptyResponse };
 	'i/webhooks/update': { req: IWebhooksUpdateRequest; res: EmptyResponse };
+	'import-requests/cancel': { req: ImportRequestsCancelRequest; res: EmptyResponse };
+	'import-requests/list': { req: ImportRequestsListRequest; res: ImportRequestsListResponse };
 	'invite/create': { req: EmptyRequest; res: InviteCreateResponse };
 	'invite/delete': { req: InviteDeleteRequest; res: EmptyResponse };
 	'invite/limit': { req: EmptyRequest; res: InviteLimitResponse };

@@ -1681,6 +1681,7 @@ describe('Endpoints', () => {
 				customSplashText: [],
 				newAccountFollowRequestEnabled: false,
 				newAccountFollowRequestThresholdMs: 24 * 60 * 60 * 1000,
+				importApprovalRequiredTypes: ['following'],
 				reportCategories: [
 					{ key: 'spam', text: 'スパム', enabled: true, order: 1, isDefault: false },
 					{ key: 'harassment', text: '嫌がらせ・迷惑行為', enabled: true, order: 2, isDefault: false },
@@ -2800,6 +2801,7 @@ describe('Endpoints', () => {
 				mediaTimelineEnabled: false,
 				latexEnabled: true,
 				reactionPiggybackOnRemoteEnabled: false,
+				importApprovalRequiredTypes: ['following'],
 				contactFormEnabled: true,
 				contactFormRequireAuth: false,
 				contactFormContentMaxLength: 10000,

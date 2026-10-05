@@ -11,6 +11,8 @@ import type { AntennasRepository, DriveFilesRepository, UsersRepository, MiAnten
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { DownloadService } from '@/core/DownloadService.js';
+import { ImportRequestService } from '@/core/ImportRequestService.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { ApiError } from '../../error.js';
 
 export const meta = {
@@ -24,6 +26,13 @@ export const meta = {
 		max: 1,
 	},
 	errors: {
+		// JUICE: 承認式にしたインポートで、同じ種類の審査待ちの申請がもうある
+		alreadyRequested: {
+			message: 'There is already a pending import request of this kind.',
+			code: 'ALREADY_REQUESTED',
+			id: '9ecd6052-bf71-42de-ba08-5b6c7d8e9fa4',
+		},
+
 		noSuchFile: {
 			message: 'No such file.',
 			code: 'NO_SUCH_FILE',
@@ -43,6 +52,18 @@ export const meta = {
 			message: 'You cannot create antenna any more.',
 			code: 'TOO_MANY_ANTENNAS',
 			id: '600917d4-a4cb-4cc5-8ba8-7ac8ea3c7779',
+		},
+	},
+
+	// JUICE: 運営の承認が要る(承認式にした)インポートなら、すぐには行わず申請にしたことを返す
+	res: {
+		type: 'object',
+		optional: false, nullable: false,
+		properties: {
+			requiresApproval: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
 		},
 	},
 } as const;
@@ -69,6 +90,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 
 		private roleService: RoleService,
 		private queueService: QueueService,
+		private importRequestService: ImportRequestService,
 		private downloadService: DownloadService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -82,7 +104,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> {
 			if (currentAntennasCount + antennas.length >= (await this.roleService.getUserPolicies(me.id)).antennaLimit) {
 				throw new ApiError(meta.errors.tooManyAntennas);
 			}
+			// JUICE: 運営の承認が要る種類なら、申請にする(承認されたら、同じインポートを行う)
+			if (await this.importRequestService.requiresApproval(me, 'antennas')) {
+				try {
+					await this.importRequestService.createRequest(me, 'antennas', file, {});
+				} catch (err) {
+					if (err instanceof IdentifiableError && err.id === ImportRequestService.ALREADY_REQUESTED) throw new ApiError(meta.errors.alreadyRequested);
+					throw err;
+				}
+				return { requiresApproval: true };
+			}
+
 			this.queueService.createImportAntennasJob(me, antennas);
+			return { requiresApproval: false };
 		});
 	}
 }

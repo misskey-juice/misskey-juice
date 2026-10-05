@@ -75,6 +75,14 @@ export class MiDrawRoom {
 	})
 	public cw: string | null;
 
+	// JUICE: 部屋の説明(どんな絵を描く部屋か。一覧にも出す)。無ければnull
+	@Column('varchar', {
+		length: 512,
+		nullable: true,
+		comment: 'The description of the room shown in the room list (JUICE).',
+	})
+	public description: string | null;
+
 	@Column('boolean', {
 		default: false,
 		comment: 'Whether the room contains sensitive (NSFW) drawings (JUICE).',

@@ -50,6 +50,10 @@ import {
 	packedAvatarDecorationRequestEntrySchema,
 	packedAvatarDecorationRequestEntryDetailedAdminSchema,
 } from '@/models/json-schema/avatar-decoration-request.js';
+import {
+	packedImportRequestSchema,
+	packedImportRequestDetailedAdminSchema,
+} from '@/models/json-schema/import-request.js';
 import { packedFlashSchema } from '@/models/json-schema/flash.js';
 import { packedAnnouncementSchema } from '@/models/json-schema/announcement.js';
 import { packedAnnouncementReactionSchema } from '@/models/json-schema/announcement-reaction.js';
@@ -135,6 +139,8 @@ export const refs = {
 	EmojiRequestEntryDetailedAdmin: packedEmojiRequestEntryDetailedAdminSchema,
 	AvatarDecorationRequestEntry: packedAvatarDecorationRequestEntrySchema,
 	AvatarDecorationRequestEntryDetailedAdmin: packedAvatarDecorationRequestEntryDetailedAdminSchema,
+	ImportRequest: packedImportRequestSchema,
+	ImportRequestDetailedAdmin: packedImportRequestDetailedAdminSchema,
 	Flash: packedFlashSchema,
 	Signin: packedSigninSchema,
 	RoleCondFormulaLogics: packedRoleCondFormulaLogicsSchema,

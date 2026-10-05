@@ -10,6 +10,7 @@ import { MiAccessToken } from './AccessToken.js';
 import { MiRole } from './Role.js';
 import { MiDriveFile } from './DriveFile.js';
 import { MiNoteDraft } from './NoteDraft.js';
+import type { ImportRequestType } from './ImportRequest.js';
 
 // misskey-js の notificationTypes と同期すべし
 export type MiNotification = {
@@ -143,6 +144,30 @@ export type MiNotification = {
 	requestId: string;
 	name: string;
 	reason: string | null;
+} | {
+	// JUICE: インポートの申請が承認されたとき(インポートを始めた)
+	type: 'importRequestApproved';
+	id: string;
+	createdAt: string;
+	requestId: string;
+	importType: ImportRequestType;
+} | {
+	// JUICE: インポートの申請が却下されたとき
+	type: 'importRequestRejected';
+	id: string;
+	createdAt: string;
+	requestId: string;
+	importType: ImportRequestType;
+	reason: string | null;
+} | {
+	// JUICE: インポートの申請が新しく来たとき(モデレーター・canApproveImportRequestsロールポリシー保持者向け)。
+	// requesterIdについてはnewEmojiRequestと同じ理由でnotifierIdを使わない
+	type: 'newImportRequest';
+	id: string;
+	createdAt: string;
+	requesterId: MiUser['id'];
+	requestId: string;
+	importType: ImportRequestType;
 } | {
 	// JUICE: 絵文字申請が新しく来たとき(モデレーター・canApproveEmojiRequestsロールポリシー保持者向け)。
 	// 申請者はnotifierIdではなくrequesterIdで持つ(あえて別フィールドにしている。notifierIdにすると

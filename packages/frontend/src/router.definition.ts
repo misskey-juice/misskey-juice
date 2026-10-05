@@ -410,6 +410,9 @@ export const ROUTE_DEF = [{
 	path: '/avatar-decoration-requests-manager',
 	component: page(() => import('@/pages/admin/avatar-decoration-requests.vue')),
 }, {
+	path: '/import-requests-manager',
+	component: page(() => import('@/pages/admin/import-requests.vue')),
+}, {
 	path: '/signup-approvals-manager',
 	component: page(() => import('@/pages/admin/juice-approvals.vue')),
 }, {
@@ -571,6 +574,10 @@ export const ROUTE_DEF = [{
 		path: '/avatar-decoration-requests',
 		name: 'avatar-decoration-requests',
 		component: page(() => import('@/pages/admin/avatar-decoration-requests.vue')),
+	}, {
+		path: '/import-requests',
+		name: 'import-requests',
+		component: page(() => import('@/pages/admin/import-requests.vue')),
 	}, {
 		// JUICE: misskey-tempuraのコンタクトフォームを参考に追加
 		path: '/contact-form',

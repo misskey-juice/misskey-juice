@@ -474,6 +474,78 @@ export const packedNotificationSchema = {
 			},
 		},
 	}, {
+		// JUICE: インポートの申請が承認されたとき
+		type: 'object',
+		properties: {
+			...baseSchema.properties,
+			type: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['importRequestApproved'],
+			},
+			requestId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+			importType: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'],
+			},
+		},
+	}, {
+		// JUICE: インポートの申請が却下されたとき
+		type: 'object',
+		properties: {
+			...baseSchema.properties,
+			type: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['importRequestRejected'],
+			},
+			requestId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+			importType: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'],
+			},
+			reason: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+		},
+	}, {
+		// JUICE: インポートの申請が新しく来たとき(申請者はrequesterIdからパックするので、ミュートの影響を受けない)
+		type: 'object',
+		properties: {
+			...baseSchema.properties,
+			type: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['newImportRequest'],
+			},
+			requester: {
+				type: 'object',
+				ref: 'UserLite',
+				optional: false, nullable: false,
+			},
+			requestId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+			importType: {
+				type: 'string',
+				optional: false, nullable: false,
+				enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'],
+			},
+		},
+	}, {
 		// JUICE: 絵文字申請が新しく来たとき
 		type: 'object',
 		properties: {

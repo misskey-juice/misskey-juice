@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					'approveSignup',
 					'approveEmojiRequest',
 					'approveAvatarDecorationRequest',
+					'approveImportRequest',
 				].includes(log.type),
 				[$style.logYellow]: [
 					'markSensitiveDriveFile',
@@ -53,6 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					'declineSignup',
 					'rejectEmojiRequest',
 					'rejectAvatarDecorationRequest',
+					'rejectImportRequest',
 				].includes(log.type)
 			}"
 		>{{ i18n.ts._moderationLogTypes[log.type] }}</b>
@@ -103,6 +105,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'rejectEmojiRequest'">: {{ log.info.requestedName }}</span>
 		<span v-else-if="log.type === 'approveAvatarDecorationRequest'">: {{ log.info.avatarDecorationName }}</span>
 		<span v-else-if="log.type === 'rejectAvatarDecorationRequest'">: {{ log.info.requestedName }}</span>
+		<span v-else-if="log.type === 'approveImportRequest' || log.type === 'rejectImportRequest'">: @{{ log.info.requesterUsername }}{{ log.info.requesterHost ? '@' + log.info.requesterHost : '' }}</span>
 		<span v-else-if="log.type === 'deleteDrawRoom'">: {{ log.info.room.title }}</span>
 		<span v-else-if="log.type === 'cleanupOrphanedObjectStorageFiles'">: {{ log.info.deletedCount }} / {{ log.info.scanned }}{{ log.info.dryRun ? ` (${i18n.ts._moderationLogTypes.cleanupDryRunSuffix})` : '' }}</span>
 	</template>
@@ -157,6 +160,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i v-else-if="log.type === 'rejectEmojiRequest'" class="ti ti-x"></i>
 		<i v-else-if="log.type === 'approveAvatarDecorationRequest'" class="ti ti-check"></i>
 		<i v-else-if="log.type === 'rejectAvatarDecorationRequest'" class="ti ti-x"></i>
+		<i v-else-if="log.type === 'approveImportRequest'" class="ti ti-check"></i>
+		<i v-else-if="log.type === 'rejectImportRequest'" class="ti ti-x"></i>
 		<i v-else-if="log.type === 'deleteDrawRoom'" class="ti ti-trash"></i>
 		<i v-else-if="log.type === 'updateJuiceSettings'" class="ti ti-settings"></i>
 		<i v-else-if="log.type === 'cleanupOrphanedObjectStorageFiles'" class="ti ti-trash"></i>
@@ -285,6 +290,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.requesterId}`" class="_link">@{{ log.info.requesterUsername }}{{ log.info.requesterHost ? '@' + log.info.requesterHost : '' }}</MkA></div>
 			<div class="_selectable">{{ i18n.ts._emojiRequestPage.rejectReason }}: {{ log.info.reason }}</div>
 		</template>
+		<!-- JUICE: 承認式にしたインポートの承認・却下 -->
+		<template v-else-if="log.type === 'approveImportRequest' || log.type === 'rejectImportRequest'">
+			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.requesterId}`" class="_link">@{{ log.info.requesterUsername }}{{ log.info.requesterHost ? '@' + log.info.requesterHost : '' }}</MkA></div>
+			<div>{{ i18n.ts._importRequest.type }}: {{ (i18n.ts._importRequest._types as Record<string, string>)[log.info.importType] ?? log.info.importType }}</div>
+			<div class="_selectable">{{ i18n.ts._importRequest.file }}: {{ log.info.fileName }}</div>
+			<div v-if="log.type === 'rejectImportRequest'" class="_selectable">{{ i18n.ts._importRequest.rejectReason }}: {{ log.info.reason }}</div>
+		</template>
 		<template v-else-if="log.type === 'deleteDrawRoom'">
 			<div>{{ i18n.ts._drawRoom.owner }}: <MkA :to="`/admin/user/${log.info.room.ownerId}`" class="_link">@{{ log.info.room.ownerUsername }}{{ log.info.room.ownerHost ? '@' + log.info.room.ownerHost : '' }}</MkA></div>
 			<div class="_selectable">{{ i18n.ts._drawRoom.roomTitle }}: {{ log.info.room.title }}</div>
@@ -328,6 +340,8 @@ const juiceLogTypes: readonly string[] = [
 	'rejectEmojiRequest',
 	'approveAvatarDecorationRequest',
 	'rejectAvatarDecorationRequest',
+	'approveImportRequest',
+	'rejectImportRequest',
 	'updateJuiceSettings',
 	'cleanupOrphanedObjectStorageFiles',
 	'deleteDrawRoom',

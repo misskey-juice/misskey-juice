@@ -68,6 +68,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
+				<!-- JUICE: 運営の承認が要るインポートの種類(設定 → アカウントのデータ) -->
+				<SearchMarker v-slot="slotProps">
+					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
+						<template #label><SearchLabel>{{ i18n.ts._importRequest.settingsTitle }}</SearchLabel></template>
+
+						<div class="_gaps_m">
+							<MkInfo>{{ i18n.ts._importRequest.settingsDescription }}</MkInfo>
+							<SearchMarker v-for="type in IMPORT_APPROVAL_TYPES" :key="type">
+								<MkSwitch :modelValue="importApprovalRequiredTypes.includes(type)" @update:modelValue="v => setImportApprovalRequired(type, v)">
+									<template #label><SearchLabel>{{ i18n.ts._importRequest._types[type] }}</SearchLabel></template>
+								</MkSwitch>
+							</SearchMarker>
+						</div>
+					</MkFolder>
+				</SearchMarker>
+
 				<SearchMarker v-slot="slotProps">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 						<template #label><SearchLabel>{{ i18n.ts._juice.exploreOtherServers }}</SearchLabel></template>
@@ -515,6 +531,15 @@ const contactFormLimit = ref(settings.contactFormLimit);
 const contactFormRequireAuth = ref(settings.contactFormRequireAuth);
 const contactFormContentMaxLength = ref(settings.contactFormContentMaxLength);
 const newAccountFollowRequestEnabled = ref(settings.newAccountFollowRequestEnabled);
+// JUICE: 運営の承認が要るインポートの種類
+const IMPORT_APPROVAL_TYPES = ['following', 'muting', 'blocking', 'userLists', 'antennas'] as const;
+const importApprovalRequiredTypes = ref<(typeof IMPORT_APPROVAL_TYPES)[number][]>([...settings.importApprovalRequiredTypes]);
+
+function setImportApprovalRequired(type: (typeof IMPORT_APPROVAL_TYPES)[number], required: boolean) {
+	const others = importApprovalRequiredTypes.value.filter(t => t !== type);
+	importApprovalRequiredTypes.value = required ? [...others, type] : others;
+}
+
 // JUICE: しきい値はミリ秒でやり取りするが、入力しやすいよう数値+単位(投票の期限指定と同じ構成)で編集する。
 // 単位変換は保存時にのみ行い、MkPollEditorのafter/unitと同様、読み込み時は常に時間単位で表示する
 const newAccountFollowRequestThresholdValue = ref(settings.newAccountFollowRequestThresholdMs / (60 * 60 * 1000));
@@ -660,6 +685,7 @@ function save() {
 		contactFormContentMaxLength: contactFormContentMaxLength.value,
 		customSplashText: customSplashTextLines.value,
 		newAccountFollowRequestEnabled: newAccountFollowRequestEnabled.value,
+		importApprovalRequiredTypes: importApprovalRequiredTypes.value,
 		newAccountFollowRequestThresholdMs: newAccountFollowRequestThresholdMs.value,
 		blockEmailDotAliasRegistration: blockEmailDotAliasRegistration.value,
 		blockEmailPlusAliasRegistration: blockEmailPlusAliasRegistration.value,

@@ -377,6 +377,10 @@ export const packedRolePoliciesSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		canApproveImportRequests: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		canApproveSignups: {
 			type: 'boolean',
 			optional: false, nullable: false,

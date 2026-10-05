@@ -16,6 +16,8 @@ export const thereIsUnresolvedAbuseReport = ref(false);
 export const thereArePendingEmojiRequests = ref(false);
 export const thereArePendingSignupApplications = ref(false);
 export const thereArePendingAvatarDecorationRequests = ref(false);
+// JUICE: 承認式にしたインポートの審査待ちがあるか
+export const thereArePendingImportRequests = ref(false);
 export const thereArePendingContactForms = ref(false);
 
 let initialized = false;
@@ -34,6 +36,7 @@ export function refreshJuiceAdminPendingBanners(): void {
 	const canApproveSignups = iAmModerator || $i.policies.canApproveSignups;
 	const canApproveAvatarDecorationRequests = iAmModerator || $i.policies.canApproveAvatarDecorationRequests;
 	const canProcessContactForms = iAmModerator || $i.policies.canProcessContactForms;
+	const canApproveImportRequests = iAmModerator || $i.policies.canApproveImportRequests;
 
 	if (iAmModerator) {
 		misskeyApi('admin/abuse-user-reports', {
@@ -70,6 +73,15 @@ export function refreshJuiceAdminPendingBanners(): void {
 		});
 	}
 
+	if (canApproveImportRequests) {
+		misskeyApi('admin/import-requests/list', {
+			state: 'pending',
+			limit: 1,
+		}).then(requests => {
+			thereArePendingImportRequests.value = requests.length > 0;
+		});
+	}
+
 	if (canProcessContactForms) {
 		misskeyApi('admin/contact-form/list', {
 			status: 'pending',
@@ -95,8 +107,9 @@ export function initJuiceAdminNotifications(): void {
 	const canApproveSignups = iAmModerator || $i.policies.canApproveSignups;
 	const canApproveAvatarDecorationRequests = iAmModerator || $i.policies.canApproveAvatarDecorationRequests;
 	const canProcessContactForms = iAmModerator || $i.policies.canProcessContactForms;
+	const canApproveImportRequests = iAmModerator || $i.policies.canApproveImportRequests;
 
-	if (!iAmModerator && !canApproveEmojiRequests && !canApproveSignups && !canApproveAvatarDecorationRequests && !canProcessContactForms) return;
+	if (!iAmModerator && !canApproveEmojiRequests && !canApproveSignups && !canApproveAvatarDecorationRequests && !canProcessContactForms && !canApproveImportRequests) return;
 
 	initialized = true;
 
@@ -123,6 +136,10 @@ export function initJuiceAdminNotifications(): void {
 
 	connection.on('newAvatarDecorationRequest', () => {
 		thereArePendingAvatarDecorationRequests.value = true;
+	});
+
+	connection.on('newImportRequest', () => {
+		thereArePendingImportRequests.value = true;
 	});
 
 	connection.on('newContactForm', () => {

@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveImportApprovalSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -82,6 +82,12 @@ export const meta = {
 			reactionPiggybackOnRemoteEnabled: {
 				type: 'boolean',
 				optional: false, nullable: false,
+			},
+			// JUICE: 運営の承認が要るインポートの種類(設定 → アカウントのデータのボタンに出す)
+			importApprovalRequiredTypes: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: { type: 'string', optional: false, nullable: false, enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'] },
 			},
 			contactFormEnabled: {
 				type: 'boolean',
@@ -187,6 +193,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveMediaTimelineSettings(settings),
 				...resolveLatexSettings(settings),
 				...resolveReactionPiggybackSettings(settings),
+				...resolveImportApprovalSettings(settings),
 				contactFormEnabled,
 				contactFormRequireAuth,
 				contactFormContentMaxLength,

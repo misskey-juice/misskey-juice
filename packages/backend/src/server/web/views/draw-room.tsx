@@ -12,6 +12,7 @@ export function DrawRoomPage(props: CommonProps<{
 		id: string;
 		title: string;
 		cw: string | null;
+		description: string | null;
 		ownerName: string;
 		ownerUsername: string;
 		drawerCount: number;
@@ -22,9 +23,11 @@ export function DrawRoomPage(props: CommonProps<{
 }>) {
 	const title = props.room.title;
 	const owner = `${props.room.ownerName} (@${props.room.ownerUsername})`;
+	// JUICE: 注意書き(CW)の部屋は注意書きだけを出し、そうでなければ部屋の説明(長ければ切る)も出す
+	const roomDescription = props.room.description != null ? props.room.description.replace(/\s+/g, ' ').slice(0, 200) : null;
 	const description = props.room.cw != null
 		? `⚠ ${props.room.cw} — 🎨 ${owner}`
-		: `🎨 ${owner}${props.room.isEnded ? '' : ` · ✏️ ${props.room.drawerCount}`}`;
+		: `${roomDescription != null ? `${roomDescription} — ` : ''}🎨 ${owner}${props.room.isEnded ? '' : ` · ✏️ ${props.room.drawerCount}`}`;
 
 	function ogBlock() {
 		return (

@@ -73,6 +73,17 @@ function toolsMenuItems(): MenuItem[] {
 		});
 	}
 
+	// JUICE: 承認式にしたインポートの審査
+	if ($i && ($i.isModerator || $i.isAdmin || $i.policies.canApproveImportRequests)) {
+		items.push({
+			type: 'link',
+			to: '/import-requests-manager',
+			text: i18n.ts._importRequest.approvalsTitle,
+			icon: 'ti ti-file-import',
+			badge: true,
+		});
+	}
+
 	if ($i && ($i.isModerator || $i.isAdmin || $i.policies.canApproveSignups)) {
 		items.push({
 			type: 'link',

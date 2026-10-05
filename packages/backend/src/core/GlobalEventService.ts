@@ -207,6 +207,12 @@ export interface AdminEventTypes {
 		count: number;
 		requests: { id: string; name: string; category: string | null }[];
 	};
+	// JUICE: インポートの申請が作成された時のリアルタイム通知
+	newImportRequest: {
+		id: string;
+		importType: string;
+		requester: Packed<'UserLite'>;
+	};
 	// JUICE: お問い合わせが送信された時のリアルタイム通知。本文にメールアドレス・IPアドレス等の
 	// PIIを含むため、こちらはWebhookペイロード(ContactFormPayload)と異なりPIIを含まない
 	newContactForm: {

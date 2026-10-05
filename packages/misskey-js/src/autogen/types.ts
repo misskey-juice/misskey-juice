@@ -589,6 +589,42 @@ export type paths = {
          */
         post: operations['admin___get-user-ips'];
     };
+    '/admin/import-requests/approve': {
+        /**
+         * admin/import-requests/approve
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:import-requests*
+         */
+        post: operations['admin___import-requests___approve'];
+    };
+    '/admin/import-requests/list': {
+        /**
+         * admin/import-requests/list
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:import-requests*
+         */
+        post: operations['admin___import-requests___list'];
+    };
+    '/admin/import-requests/reject': {
+        /**
+         * admin/import-requests/reject
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:import-requests*
+         */
+        post: operations['admin___import-requests___reject'];
+    };
+    '/admin/import-requests/show': {
+        /**
+         * admin/import-requests/show
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:import-requests*
+         */
+        post: operations['admin___import-requests___show'];
+    };
     '/admin/invite/create': {
         /**
          * admin/invite/create
@@ -3384,6 +3420,24 @@ export type paths = {
          */
         post: operations['i___webhooks___update'];
     };
+    '/import-requests/cancel': {
+        /**
+         * import-requests/cancel
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:account*
+         */
+        post: operations['import-requests___cancel'];
+    };
+    '/import-requests/list': {
+        /**
+         * import-requests/list
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['import-requests___list'];
+    };
     '/invite/create': {
         /**
          * invite/create
@@ -4984,6 +5038,24 @@ export type components = {
                     /** Format: misskey:id */
                     userListId: string;
                 };
+                importRequestApproved?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                importRequestRejected?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
                 newEmojiRequest?: {
                     /** @enum {string} */
                     type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
@@ -4994,6 +5066,15 @@ export type components = {
                     userListId: string;
                 };
                 newAvatarDecorationRequest?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                newImportRequest?: {
                     /** @enum {string} */
                     type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
                 } | {
@@ -5589,6 +5670,41 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
+            type: 'importRequestApproved';
+            /** Format: id */
+            requestId: string;
+            /** @enum {string} */
+            importType: 'following' | 'muting' | 'blocking' | 'userLists' | 'antennas';
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            type: 'importRequestRejected';
+            /** Format: id */
+            requestId: string;
+            /** @enum {string} */
+            importType: 'following' | 'muting' | 'blocking' | 'userLists' | 'antennas';
+            reason: string | null;
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            type: 'newImportRequest';
+            requester: components['schemas']['UserLite'];
+            /** Format: id */
+            requestId: string;
+            /** @enum {string} */
+            importType: 'following' | 'muting' | 'blocking' | 'userLists' | 'antennas';
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
             type: 'newEmojiRequest';
             requester: components['schemas']['UserLite'];
             /** Format: id */
@@ -6161,6 +6277,28 @@ export type components = {
             user: components['schemas']['UserLite'];
             reviewer: components['schemas']['UserLite'] | null;
         };
+        ImportRequest: {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            type: 'following' | 'muting' | 'blocking' | 'userLists' | 'antennas';
+            /** Format: id */
+            fileId: string | null;
+            fileName: string;
+            fileSize: number;
+            withReplies: boolean | null;
+            /** @enum {string} */
+            status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+            rejectReason: string | null;
+            /** Format: date-time */
+            reviewedAt: string | null;
+        };
+        ImportRequestDetailedAdmin: components['schemas']['ImportRequest'] & {
+            user: components['schemas']['UserLite'];
+            reviewer: components['schemas']['UserLite'] | null;
+        };
         Flash: {
             /**
              * Format: id
@@ -6334,6 +6472,7 @@ export type components = {
             drawRoomMaxStrokeMegabytes: number;
             canApproveEmojiRequests: boolean;
             canApproveAvatarDecorationRequests: boolean;
+            canApproveImportRequests: boolean;
             canApproveSignups: boolean;
             canProcessContactForms: boolean;
         };
@@ -6681,6 +6820,7 @@ export type components = {
             canvasHeight: number;
             keepAfterEnd: boolean;
             cw: string | null;
+            description: string | null;
             isSensitive: boolean;
             isEnded: boolean;
             /** Format: date-time */
@@ -11319,6 +11459,286 @@ export interface operations {
             };
         };
     };
+    'admin___import-requests___approve': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___import-requests___list': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /**
+                     * @default pending
+                     * @enum {string}
+                     */
+                    state?: 'pending' | 'approved' | 'rejected' | 'cancelled';
+                    /** @enum {string} */
+                    type?: 'following' | 'muting' | 'blocking' | 'userLists' | 'antennas';
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ImportRequestDetailedAdmin'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___import-requests___reject': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___import-requests___show': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        request: components['schemas']['ImportRequestDetailedAdmin'];
+                        preview: {
+                            lines: string[];
+                            totalLines: number;
+                            hosts: {
+                                host: string;
+                                count: number;
+                            }[];
+                        } | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     admin___invite___create: {
         requestBody: {
             content: {
@@ -11709,6 +12129,7 @@ export interface operations {
                         customSplashText: string[];
                         newAccountFollowRequestEnabled: boolean;
                         newAccountFollowRequestThresholdMs: number;
+                        importApprovalRequiredTypes: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                         reportCategories: {
                             key: string;
                             text: string;
@@ -11919,6 +12340,7 @@ export interface operations {
                     customSplashText?: string[];
                     newAccountFollowRequestEnabled?: boolean;
                     newAccountFollowRequestThresholdMs?: number;
+                    importApprovalRequiredTypes?: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                     reportCategories?: {
                         key: string;
                         text: string;
@@ -22790,6 +23212,7 @@ export interface operations {
                     /** @default false */
                     keepAfterEnd?: boolean;
                     cw?: string | null;
+                    description?: string | null;
                     /** @default false */
                     isSensitive?: boolean;
                 };
@@ -23617,6 +24040,7 @@ export interface operations {
                     maxMembers?: number;
                     keepAfterEnd?: boolean;
                     cw?: string | null;
+                    description?: string | null;
                     isSensitive?: boolean;
                     canvasWidth?: number;
                     canvasHeight?: number;
@@ -30950,10 +31374,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK (without any results) */
-            204: {
+            /** @description OK (with results) */
+            200: {
                 headers: {
                     [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        requiresApproval: boolean;
+                    };
                 };
             };
             /** @description Client error */
@@ -31022,10 +31451,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK (without any results) */
-            204: {
+            /** @description OK (with results) */
+            200: {
                 headers: {
                     [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        requiresApproval: boolean;
+                    };
                 };
             };
             /** @description Client error */
@@ -31095,10 +31529,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK (without any results) */
-            204: {
+            /** @description OK (with results) */
+            200: {
                 headers: {
                     [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        requiresApproval: boolean;
+                    };
                 };
             };
             /** @description Client error */
@@ -31167,10 +31606,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK (without any results) */
-            204: {
+            /** @description OK (with results) */
+            200: {
                 headers: {
                     [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        requiresApproval: boolean;
+                    };
                 };
             };
             /** @description Client error */
@@ -31239,10 +31683,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK (without any results) */
-            204: {
+            /** @description OK (with results) */
+            200: {
                 headers: {
                     [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        requiresApproval: boolean;
+                    };
                 };
             };
             /** @description Client error */
@@ -31578,8 +32027,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'importRequestApproved' | 'importRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newImportRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'importRequestApproved' | 'importRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newImportRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -31663,8 +32112,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'importRequestApproved' | 'importRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newImportRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'loginFailed' | 'emojiRequestApproved' | 'emojiRequestRejected' | 'avatarDecorationRequestApproved' | 'avatarDecorationRequestRejected' | 'importRequestApproved' | 'importRequestRejected' | 'newEmojiRequest' | 'newAvatarDecorationRequest' | 'newImportRequest' | 'newSignupApplication' | 'newContactForm' | 'newAbuseUserReport' | 'createToken' | 'app' | 'test' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -33649,6 +34098,141 @@ export interface operations {
             };
         };
     };
+    'import-requests___cancel': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'import-requests___list': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @enum {string} */
+                    state?: 'pending' | 'approved' | 'rejected' | 'cancelled';
+                    /** @default 10 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ImportRequest'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     invite___create: {
         responses: {
             /** @description OK (with results) */
@@ -33927,6 +34511,7 @@ export interface operations {
                         mediaTimelineEnabled: boolean;
                         latexEnabled: boolean;
                         reactionPiggybackOnRemoteEnabled: boolean;
+                        importApprovalRequiredTypes: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                         contactFormEnabled: boolean;
                         contactFormRequireAuth: boolean;
                         contactFormContentMaxLength: number;

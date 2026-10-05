@@ -17,6 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="thereArePendingEmojiRequests" warn>{{ i18n.ts._juice.thereArePendingEmojiRequestsWarning }} <MkA to="/admin/emoji-requests" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereArePendingSignupApplications" warn>{{ i18n.ts._juice.thereArePendingSignupApplicationsWarning }} <MkA to="/admin/juice-approvals" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereArePendingAvatarDecorationRequests" warn>{{ i18n.ts._juice.thereArePendingAvatarDecorationRequestsWarning }} <MkA to="/admin/avatar-decoration-requests" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
+					<MkInfo v-if="thereArePendingImportRequests" warn>{{ i18n.ts._importRequest.thereArePendingWarning }} <MkA to="/admin/import-requests" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereArePendingContactForms" warn>{{ i18n.ts._juice.thereArePendingContactFormsWarning }} <MkA to="/admin/contact-form" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="noMaintainerInformation" warn>{{ i18n.ts.noMaintainerInformationWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noInquiryUrl" warn>{{ i18n.ts.noInquiryUrlWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
@@ -54,6 +55,7 @@ import {
 	thereArePendingEmojiRequests,
 	thereArePendingSignupApplications,
 	thereArePendingAvatarDecorationRequests,
+	thereArePendingImportRequests,
 	thereArePendingContactForms,
 	refreshJuiceAdminPendingBanners,
 } from '@/utility/juice-admin-notifications.js';
@@ -263,6 +265,13 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts._avatarDecorationRequestApprovals.title,
 		to: '/admin/avatar-decoration-requests',
 		active: currentPage.value?.route.name === 'avatar-decoration-requests',
+		badge: true,
+	}, {
+		// JUICE: 承認式にしたインポートの審査
+		icon: 'ti ti-file-import',
+		text: i18n.ts._importRequest.approvalsTitle,
+		to: '/admin/import-requests',
+		active: currentPage.value?.route.name === 'import-requests',
 		badge: true,
 	}, {
 		icon: 'ti ti-mail',

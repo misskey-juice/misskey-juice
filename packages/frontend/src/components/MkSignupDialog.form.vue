@@ -148,6 +148,7 @@ const props = withDefaults(defineProps<{
 		midiPlayerMaxSize: 500 * 1024,
 		drawRoomEnabled: true,
 		drawRoomMaxRoomMegabytes: 256,
+		importApprovalRequiredTypes: [],
 	}),
 });
 

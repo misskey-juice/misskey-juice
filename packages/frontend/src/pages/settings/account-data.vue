@@ -10,6 +10,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<SearchText>{{ i18n.ts._settings.accountDataBanner }}</SearchText>
 		</MkFeatureBanner>
 
+		<!-- JUICE: 運営の承認が要るインポートの申請(審査待ち・最近の結果)。審査待ちは取り下げられる -->
+		<MkFolder v-if="importRequests.length > 0" :defaultOpen="importRequests.some(r => r.status === 'pending')">
+			<template #icon><i class="ti ti-file-import"></i></template>
+			<template #label>{{ i18n.ts._importRequest.myRequests }}<span class="_juice">JUICE</span></template>
+			<div class="_gaps_s">
+				<div v-for="request in importRequests" :key="request.id" :class="$style.importRequest">
+					<div :class="$style.importRequestMain">
+						<div><b>{{ i18n.ts._importRequest._types[request.type] }}</b> <span :class="[$style.importRequestStatus, $style[`status_${request.status}`]]">{{ i18n.ts._importRequest._statuses[request.status] }}</span></div>
+						<div :class="$style.importRequestSub">{{ request.fileName }} · <MkTime :time="request.createdAt"/></div>
+						<div v-if="request.status === 'rejected' && request.rejectReason" :class="$style.importRequestSub">{{ i18n.ts._importRequest.rejectReason }}: {{ request.rejectReason }}</div>
+					</div>
+					<MkButton v-if="request.status === 'pending'" small rounded @click="cancelImportRequest(request.id)">{{ i18n.ts._importRequest.cancel }}</MkButton>
+				</div>
+			</div>
+		</MkFolder>
+
 		<div class="_gaps_s">
 			<SearchMarker :keywords="['notes']">
 				<MkFolder>
@@ -71,7 +87,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSwitch v-model="withReplies">
 								{{ i18n.ts._exportOrImport.withReplies }}
 							</MkSwitch>
-							<MkButton primary :class="$style.button" inline @click="importFollowing($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importFollowing($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('following')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -90,7 +106,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportUserLists" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importUserLists($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importUserLists($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('userLists')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -109,7 +125,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportMuting" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importMuting($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importMuting($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('muting')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -128,7 +144,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportBlocking" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importBlocking($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importBlocking($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('blocking')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -147,7 +163,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkFolder v-if="$i && !$i.movedTo && $i.policies.canImportAntennas" :defaultOpen="true">
 							<template #label>{{ i18n.ts.import }}</template>
 							<template #icon><i class="ti ti-upload"></i></template>
-							<MkButton primary :class="$style.button" inline @click="importAntennas($event)"><i class="ti ti-upload"></i> {{ i18n.ts.import }}</MkButton>
+							<MkButton primary :class="$style.button" inline @click="importAntennas($event)"><i class="ti ti-upload"></i> <template v-if="importNeedsApproval('antennas')">{{ i18n.ts._importRequest.importWithApproval }}<span class="_juice" :class="$style.juiceOnPrimary">JUICE</span></template><template v-else>{{ i18n.ts.import }}</template></MkButton>
 						</MkFolder>
 					</div>
 				</MkFolder>
@@ -159,6 +175,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { ref, computed } from 'vue';
+import type * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -170,6 +187,7 @@ import { definePage } from '@/page.js';
 import { $i } from '@/i.js';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
 import { prefer } from '@/preferences.js';
+import { juicePublicSettingsCache } from '@/cache.js';
 
 const excludeMutingUsers = ref(false);
 const excludeInactiveUsers = ref(false);
@@ -182,12 +200,46 @@ const onExportSuccess = () => {
 	});
 };
 
-const onImportSuccess = () => {
+// JUICE: 運営の承認が要るインポートなら、申請を受け付けたことを伝える(承認されたらインポートする)
+const onImportSuccess = (res?: { requiresApproval: boolean }) => {
 	os.alert({
 		type: 'info',
-		text: i18n.ts.importRequested,
+		text: res?.requiresApproval ? i18n.ts._importRequest.requested : i18n.ts.importRequested,
 	});
+	if (res?.requiresApproval) fetchImportRequests();
 };
+
+// JUICE: この種類のインポートに、運営の承認が要るか(審査できる人は、自分のインポートを承認なしで行える)
+const importApprovalRequiredTypes = computed(() => juicePublicSettingsCache.value.value?.importApprovalRequiredTypes ?? []);
+
+function importNeedsApproval(type: Misskey.entities.ImportRequest['type']): boolean {
+	if ($i == null || $i.isModerator || $i.isAdmin || $i.policies.canApproveImportRequests) return false;
+	return importApprovalRequiredTypes.value.includes(type);
+}
+
+juicePublicSettingsCache.fetch().catch(() => { /* empty */ });
+
+// JUICE: 自分のインポートの申請(新しい順に、最近のものだけ)
+const importRequests = ref<Misskey.entities.ImportRequest[]>([]);
+
+function fetchImportRequests() {
+	if ($i == null) return;
+	misskeyApi('import-requests/list', { limit: 10 }).then(requests => {
+		importRequests.value = requests;
+	}).catch(() => {});
+}
+
+async function cancelImportRequest(requestId: string) {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.ts._importRequest.cancelConfirm,
+	});
+	if (canceled) return;
+	await os.apiWithDialog('import-requests/cancel', { requestId });
+	fetchImportRequests();
+}
+
+fetchImportRequests();
 
 const onError = (ev: Error) => {
 	os.alert({
@@ -288,5 +340,50 @@ definePage(() => ({
 <style module>
 .button {
 	margin-right: 16px;
+}
+
+/* JUICE: 色の付いたボタンの上のJUICEバッジは、ボタンの文字の色で塗りつぶして、ボタンの色の字にする(橙の上に橙の枠だと見えないため) */
+.juiceOnPrimary.juiceOnPrimary {
+	color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-fgOnAccent);
+	border-color: var(--MI_THEME-fgOnAccent);
+	font-weight: bold;
+}
+
+.importRequest {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.importRequestMain {
+	flex: 1;
+	min-width: 0;
+}
+
+.importRequestSub {
+	font-size: 0.85em;
+	opacity: 0.7;
+	overflow-wrap: anywhere;
+}
+
+.importRequestStatus {
+	margin-left: 4px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 0.8em;
+	background: var(--MI_THEME-buttonBg);
+}
+
+.status_pending {
+	color: var(--MI_THEME-warn);
+}
+
+.status_approved {
+	color: var(--MI_THEME-success);
+}
+
+.status_rejected {
+	color: var(--MI_THEME-error);
 }
 </style>

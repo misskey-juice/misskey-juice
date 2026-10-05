@@ -381,6 +381,30 @@ describe('絵チャ', () => {
 		await call('admin/roles/unassign', { userId: dave.id, roleId: limited.id }, alice);
 	});
 
+	test('部屋に説明を書け(改行は残す)、一覧にも出て、後から変えられる。注意書き(CW)とは別に持つ', async () => {
+		const room = await call('draw-rooms/create', { title: 'desc room', visibility: 'local', maxMembers: 2, description: '  模写の練習\r\n\n\n\nお題: 手  ', cw: '注意' }, alice);
+		assert.strictEqual(room.status, 200);
+		// 改行は残し、3行以上の空行は2行にし、前後の空白を取る
+		assert.strictEqual(room.body.description, '模写の練習\n\nお題: 手');
+		assert.strictEqual(room.body.cw, '注意');
+		const list = await call('draw-rooms/list', {}, bob);
+		assert.strictEqual(list.body.find((r: { id: string }) => r.id === room.body.id)?.description, '模写の練習\n\nお題: 手');
+		// 説明だけを変えても、注意書きはそのまま
+		const updated = await call('draw-rooms/update', { roomId: room.body.id, description: '自由に描く部屋' }, alice);
+		assert.strictEqual(updated.body.description, '自由に描く部屋');
+		assert.strictEqual(updated.body.cw, '注意');
+		// 空白だけなら説明無し
+		const cleared = await call('draw-rooms/update', { roomId: room.body.id, description: '  \n ' }, alice);
+		assert.strictEqual(cleared.body.description, null);
+		// 行は10行まで(それより後ろは10行目に空白でつなげる)
+		const manyLines = await call('draw-rooms/update', { roomId: room.body.id, description: Array.from({ length: 13 }, (_, i) => `${i + 1}行目`).join('\n') }, alice);
+		assert.deepStrictEqual(manyLines.body.description.split('\n'), ['1行目', '2行目', '3行目', '4行目', '5行目', '6行目', '7行目', '8行目', '9行目', '10行目 11行目 12行目 13行目']);
+		// 長すぎる説明は断る
+		const tooLong = await call('draw-rooms/update', { roomId: room.body.id, description: 'あ'.repeat(513) }, alice);
+		assert.strictEqual(tooLong.status, 400);
+		await call('draw-rooms/end', { roomId: room.body.id }, alice);
+	});
+
 	test('部屋に注意書き(CW)とセンシティブの印を付け、後から変えられる', async () => {
 		const room = await call('draw-rooms/create', { title: 'cw room', visibility: 'local', maxMembers: 2, cw: '  グロ\nあり  ', isSensitive: true }, alice);
 		assert.strictEqual(room.status, 200);
