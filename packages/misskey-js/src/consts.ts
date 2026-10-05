@@ -41,9 +41,12 @@ export const notificationTypes = [
 	'emojiRequestRejected',
 	'avatarDecorationRequestApproved',
 	'avatarDecorationRequestRejected',
+	'importRequestApproved',
+	'importRequestRejected',
 	// JUICE: モデレーター・canApproveXxxロールポリシー保持者向け、新着申請の通知
 	'newEmojiRequest',
 	'newAvatarDecorationRequest',
+	'newImportRequest',
 	'newSignupApplication',
 	'newContactForm',
 	// JUICE: モデレーター向け、新着通報の通知
@@ -131,6 +134,8 @@ export const permissions = [
 	'read:admin:avatar-decoration-requests',
 	'write:admin:avatar-decoration-requests-approve',
 	'write:admin:avatar-decoration-requests-reject',
+	'read:admin:import-requests',
+	'write:admin:import-requests',
 	'read:admin:contact-form',
 	'write:admin:contact-form',
 	'write:admin:user-note',
@@ -231,6 +236,8 @@ export const moderationLogTypes = [
 	'rejectEmojiRequest',
 	'approveAvatarDecorationRequest',
 	'rejectAvatarDecorationRequest',
+	'approveImportRequest',
+	'rejectImportRequest',
 	'cleanupOrphanedObjectStorageFiles',
 	'deleteDrawRoom',
 ] as const;
@@ -285,6 +292,7 @@ export const rolePolicies = [
 	'drawRoomMaxStrokeMegabytes',
 	'canApproveEmojiRequests',
 	'canApproveAvatarDecorationRequests',
+	'canApproveImportRequests',
 	'canApproveSignups',
 ] as const;
 
@@ -656,6 +664,24 @@ export type ModerationLogPayloads = {
 		requesterUsername: string;
 		requesterHost: string | null;
 		requestedName: string;
+		reason: string;
+	};
+	// JUICE: 承認式にしたインポートの承認・却下
+	approveImportRequest: {
+		requestId: string;
+		requesterId: string;
+		requesterUsername: string;
+		requesterHost: string | null;
+		importType: string;
+		fileName: string;
+	};
+	rejectImportRequest: {
+		requestId: string;
+		requesterId: string;
+		requesterUsername: string;
+		requesterHost: string | null;
+		importType: string;
+		fileName: string;
 		reason: string;
 	};
 	cleanupOrphanedObjectStorageFiles: {

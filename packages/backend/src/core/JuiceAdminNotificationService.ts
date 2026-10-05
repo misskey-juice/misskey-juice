@@ -12,6 +12,7 @@ import { NotificationService } from '@/core/NotificationService.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import type Logger from '@/logger.js';
 import type { Packed } from '@/misc/json-schema.js';
+import type { ImportRequestType } from '@/models/ImportRequest.js';
 
 // JUICE: 絵文字申請・承認式登録申請が来たことをモデレータに通知する。
 // AbuseReportNotificationService(通報の通知)と同じ「モデレータ一覧取得→admin streamへpublish→
@@ -47,7 +48,7 @@ export class JuiceAdminNotificationService {
 	 * 通知先から漏れる(RoleService.getModeratorIdsのincludeRootは既定false)ため必須
 	 */
 	@bindThis
-	private async getRecipientIds(policyName: 'canApproveEmojiRequests' | 'canApproveAvatarDecorationRequests' | 'canApproveSignups' | 'canProcessContactForms'): Promise<string[]> {
+	private async getRecipientIds(policyName: 'canApproveEmojiRequests' | 'canApproveAvatarDecorationRequests' | 'canApproveImportRequests' | 'canApproveSignups' | 'canProcessContactForms'): Promise<string[]> {
 		const [moderatorIds, policyHolderIds] = await Promise.all([
 			this.roleService.getModeratorIds({ includeAdmins: true, includeRoot: true, excludeExpire: true }),
 			this.roleService.getUserIdsWithRolePolicy(policyName, { excludeExpire: true }),
@@ -96,6 +97,28 @@ export class JuiceAdminNotificationService {
 			await this.systemWebhookService.enqueueSystemWebhook('emojiRequestCreated', payload);
 		} catch (err) {
 			this.logger.error('Failed to notify new emoji request', { stack: err });
+		}
+	}
+
+	/**
+	 * JUICE: 承認式にしたインポートの申請が来たことを知らせる
+	 */
+	@bindThis
+	public async notifyNewImportRequest(requester: Packed<'UserLite'>, request: { id: string; importType: string }): Promise<void> {
+		try {
+			const recipientIds = await this.getRecipientIds('canApproveImportRequests');
+			for (const recipientId of recipientIds) {
+				// 申請した本人がモデレーターのときも、自分の申請は自分で通せないわけではないので、そのまま知らせる
+				this.globalEventService.publishAdminStream(recipientId, 'newImportRequest', { id: request.id, importType: request.importType, requester });
+				// JUICE: notifierIdを使わない理由はnotifyNewEmojiRequestと同じ
+				this.notificationService.createNotification(recipientId, 'newImportRequest', {
+					requesterId: requester.id,
+					requestId: request.id,
+					importType: request.importType as ImportRequestType,
+				});
+			}
+		} catch (err) {
+			this.logger.error('Failed to notify new import request', { stack: err });
 		}
 	}
 

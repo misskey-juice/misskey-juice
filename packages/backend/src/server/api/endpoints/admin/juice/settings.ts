@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DisposableEmailDomainService } from '@/core/DisposableEmailDomainService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveDisposableEmailSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveImportApprovalSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveDisposableEmailSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -146,6 +146,11 @@ export const meta = {
 			newAccountFollowRequestThresholdMs: {
 				type: 'number',
 				optional: false, nullable: false,
+			},
+			importApprovalRequiredTypes: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: { type: 'string', optional: false, nullable: false, enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'] },
 			},
 			reportCategories: {
 				type: 'array',
@@ -305,6 +310,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveContactFormSettings(settings),
 				...resolveCustomSplashTextSettings(settings),
 				...resolveNewAccountFollowRequestSettings(settings),
+				...resolveImportApprovalSettings(settings),
 				...resolveReportCategorySettings(settings),
 				...resolveEmailAliasSettings(settings),
 				...resolveDisposableEmailSettings(settings),

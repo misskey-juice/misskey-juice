@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="[$style.root, { [$style.contentVisibilityAuto]: contentVisibilityAuto }]">
 	<div :class="$style.head">
 		<MkAvatar v-if="['pollEnded', 'note'].includes(notification.type) && 'note' in notification" :class="$style.icon" :user="notification.note.user" link preview/>
-		<MkAvatar v-else-if="['roleAssigned', 'achievementEarned', 'exportCompleted', 'login', 'loginFailed', 'emojiRequestApproved', 'emojiRequestRejected', 'avatarDecorationRequestApproved', 'avatarDecorationRequestRejected', 'createToken', 'scheduledNotePosted', 'scheduledNotePostFailed'].includes(notification.type)" :class="$style.icon" :user="$i" link preview/>
+		<MkAvatar v-else-if="['roleAssigned', 'achievementEarned', 'exportCompleted', 'login', 'loginFailed', 'emojiRequestApproved', 'emojiRequestRejected', 'avatarDecorationRequestApproved', 'avatarDecorationRequestRejected', 'importRequestApproved', 'importRequestRejected', 'createToken', 'scheduledNotePosted', 'scheduledNotePostFailed'].includes(notification.type)" :class="$style.icon" :user="$i" link preview/>
 		<div v-else-if="notification.type === 'reaction:grouped' && notification.note.reactionAcceptance === 'likeOnly'" :class="[$style.icon, $style.icon_reactionGroupHeart]"><i class="ti ti-heart" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'reaction:grouped'" :class="[$style.icon, $style.icon_reactionGroup]"><i class="ti ti-plus" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'renote:grouped'" :class="[$style.icon, $style.icon_renoteGroup]"><i class="ti ti-repeat" style="line-height: 1;"></i></div>
@@ -39,8 +39,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_emojiRequestRejected]: notification.type === 'emojiRequestRejected',
 				[$style.t_avatarDecorationRequestApproved]: notification.type === 'avatarDecorationRequestApproved',
 				[$style.t_avatarDecorationRequestRejected]: notification.type === 'avatarDecorationRequestRejected',
+				[$style.t_importRequestApproved]: notification.type === 'importRequestApproved',
+				[$style.t_importRequestRejected]: notification.type === 'importRequestRejected',
 				[$style.t_newEmojiRequest]: notification.type === 'newEmojiRequest',
 				[$style.t_newAvatarDecorationRequest]: notification.type === 'newAvatarDecorationRequest',
+				[$style.t_newImportRequest]: notification.type === 'newImportRequest',
 				[$style.t_newSignupApplication]: notification.type === 'newSignupApplication',
 				[$style.t_newAbuseUserReport]: notification.type === 'newAbuseUserReport',
 				[$style.t_createToken]: notification.type === 'createToken',
@@ -62,10 +65,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="notification.type === 'exportCompleted'" class="ti ti-archive"></i>
 			<i v-else-if="notification.type === 'login'" class="ti ti-login-2"></i>
 			<i v-else-if="notification.type === 'loginFailed'" class="ti ti-alert-triangle"></i>
-			<i v-else-if="notification.type === 'emojiRequestApproved' || notification.type === 'avatarDecorationRequestApproved'" class="ti ti-check"></i>
-			<i v-else-if="notification.type === 'emojiRequestRejected' || notification.type === 'avatarDecorationRequestRejected'" class="ti ti-x"></i>
+			<i v-else-if="notification.type === 'emojiRequestApproved' || notification.type === 'avatarDecorationRequestApproved' || notification.type === 'importRequestApproved'" class="ti ti-check"></i>
+			<i v-else-if="notification.type === 'emojiRequestRejected' || notification.type === 'avatarDecorationRequestRejected' || notification.type === 'importRequestRejected'" class="ti ti-x"></i>
 			<i v-else-if="notification.type === 'newEmojiRequest'" class="ti ti-mood-plus"></i>
 			<i v-else-if="notification.type === 'newAvatarDecorationRequest'" class="ti ti-sparkles"></i>
+			<i v-else-if="notification.type === 'newImportRequest'" class="ti ti-file-import"></i>
 			<i v-else-if="notification.type === 'newSignupApplication'" class="ti ti-user-question"></i>
 			<i v-else-if="notification.type === 'newAbuseUserReport'" class="ti ti-flag"></i>
 			<i v-else-if="notification.type === 'createToken'" class="ti ti-key"></i>
@@ -98,6 +102,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'emojiRequestRejected'">{{ i18n.tsx._notification.emojiRequestRejected({ name: notification.name }) }}</span>
 			<span v-else-if="notification.type === 'avatarDecorationRequestApproved'">{{ i18n.tsx._notification.avatarDecorationRequestApproved({ name: notification.name }) }}</span>
 			<span v-else-if="notification.type === 'avatarDecorationRequestRejected'">{{ i18n.tsx._notification.avatarDecorationRequestRejected({ name: notification.name }) }}</span>
+			<span v-else-if="notification.type === 'importRequestApproved'">{{ i18n.tsx._notification.importRequestApproved({ type: i18n.ts._importRequest._types[notification.importType] }) }}</span>
+			<span v-else-if="notification.type === 'importRequestRejected'">{{ i18n.tsx._notification.importRequestRejected({ type: i18n.ts._importRequest._types[notification.importType] }) }}</span>
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
 			<span v-else-if="notification.type === 'test'">{{ i18n.ts._notification.testNotification }}</span>
 			<span v-else-if="notification.type === 'exportCompleted'">{{ i18n.tsx._notification.exportOfXCompleted({ x: exportEntityName[notification.exportedEntity] }) }}</span>
@@ -109,6 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			無い場合にMkUserNameをクラッシュさせないよう、名前部分だけ省略して表示を継続する -->
 			<!-- JUICE: 1回の送信でまとめて作られた申請は「ほかN件」を付ける -->
 			<span v-else-if="notification.type === 'newEmojiRequest'">{{ notification.count > 1 ? i18n.tsx._notification.newEmojiRequestsHeader({ name: notification.name, n: notification.count - 1 }) : i18n.tsx._notification.newEmojiRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
+			<span v-else-if="notification.type === 'newImportRequest'">{{ i18n.tsx._notification.newImportRequestHeader({ type: i18n.ts._importRequest._types[notification.importType] }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
 			<span v-else-if="notification.type === 'newAvatarDecorationRequest'">{{ notification.count > 1 ? i18n.tsx._notification.newAvatarDecorationRequestsHeader({ name: notification.name, n: notification.count - 1 }) : i18n.tsx._notification.newAvatarDecorationRequestHeader({ name: notification.name }) }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
 			<span v-else-if="notification.type === 'newSignupApplication'">{{ i18n.ts._notification.newSignupApplicationHeader }}<template v-if="notification.requester">: <MkUserName :user="notification.requester"/></template></span>
 			<span v-else-if="notification.type === 'newAbuseUserReport'">{{ i18n.ts._notification.newAbuseUserReportHeader }}<template v-if="notification.targetUser">: <MkUserName :user="notification.targetUser"/></template></span>
@@ -177,6 +184,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<!-- JUICE: ヘッダーで既に名前(絵文字名等)や申請者名を表示しているため、本文は理由/件名等の
 			補足情報と、「確認」への導線(Misskeyの標準ボタン見た目=MkButton)のみにする。
 			リンク先はモデレーターでなくても到達できる"-manager"側のルート(custom-emojis-managerと同じ方式) -->
+			<!-- JUICE: 承認式にしたインポートの結果(却下なら理由も)。確認はアカウントのデータの設定で -->
+			<template v-else-if="notification.type === 'importRequestApproved' || notification.type === 'importRequestRejected'">
+				<div v-if="notification.type === 'importRequestRejected' && notification.reason" :class="$style.text" style="opacity: 0.6;">{{ notification.reason }}</div>
+				<div :class="$style.requestActions">
+					<MkButton small rounded type="routerLink" to="/settings/account-data">{{ i18n.ts.check }}</MkButton>
+				</div>
+			</template>
+			<template v-else-if="notification.type === 'newImportRequest'">
+				<div :class="$style.requestActions">
+					<MkButton small rounded type="routerLink" to="/import-requests-manager">{{ i18n.ts.check }}</MkButton>
+				</div>
+			</template>
 			<template v-else-if="notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest'">
 				<div :class="$style.requestActions">
 					<MkButton small rounded type="routerLink" :to="notification.type === 'newEmojiRequest' ? '/emoji-requests-manager' : '/avatar-decoration-requests-manager'">{{ i18n.ts.check }}</MkButton>
@@ -466,12 +485,12 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 	pointer-events: none;
 }
 
-.t_emojiRequestApproved, .t_avatarDecorationRequestApproved, .t_emojiRequestRejected, .t_avatarDecorationRequestRejected {
+.t_emojiRequestApproved, .t_avatarDecorationRequestApproved, .t_emojiRequestRejected, .t_avatarDecorationRequestRejected, .t_importRequestApproved, .t_importRequestRejected {
 	background: var(--eventOther);
 	pointer-events: none;
 }
 
-.t_newEmojiRequest, .t_newAvatarDecorationRequest, .t_newSignupApplication, .t_newAbuseUserReport {
+.t_newEmojiRequest, .t_newAvatarDecorationRequest, .t_newImportRequest, .t_newSignupApplication, .t_newAbuseUserReport {
 	background: var(--eventOther);
 	pointer-events: none;
 }

@@ -516,6 +516,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</XFolder>
 
+		<XFolder v-if="matchQuery([i18n.ts._role._options.canApproveImportRequests, 'canApproveImportRequests'])" v-model:policyMeta="policyMetaModel.canApproveImportRequests" :isBaseRole="isBaseRole" :readonly="readonly">
+			<template #label>{{ i18n.ts._role._options.canApproveImportRequests }}<span class="_juice">JUICE</span></template>
+			<template #valueText>{{ valuesModel.canApproveImportRequests ? i18n.ts.yes : i18n.ts.no }}</template>
+			<template #default="{ disabled }">
+				<MkSwitch v-model="valuesModel.canApproveImportRequests" :disabled="disabled">
+					<template #label>{{ i18n.ts.enable }}</template>
+				</MkSwitch>
+			</template>
+		</XFolder>
+
 		<XFolder v-if="matchQuery([i18n.ts._role._options.canApproveSignups, 'canApproveSignups'])" v-model:policyMeta="policyMetaModel.canApproveSignups" :isBaseRole="isBaseRole" :readonly="readonly">
 			<template #label>{{ i18n.ts._role._options.canApproveSignups }}<span class="_juice">JUICE</span></template>
 			<template #valueText>{{ valuesModel.canApproveSignups ? i18n.ts.yes : i18n.ts.no }}</template>

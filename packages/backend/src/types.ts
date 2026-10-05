@@ -26,6 +26,8 @@
  * emojiRequestRejected - 絵文字申請が却下された(JUICE)
  * avatarDecorationRequestApproved - アバターデコレーション申請が承認された(JUICE)
  * avatarDecorationRequestRejected - アバターデコレーション申請が却下された(JUICE)
+ * importRequestApproved - インポートの申請が承認された(JUICE)
+ * importRequestRejected - インポートの申請が却下された(JUICE)
  * createToken - トークン作成
  * app - アプリ通知
  * test - テスト通知（サーバー側）
@@ -55,9 +57,12 @@ export const notificationTypes = [
 	'emojiRequestRejected',
 	'avatarDecorationRequestApproved',
 	'avatarDecorationRequestRejected',
+	'importRequestApproved',
+	'importRequestRejected',
 	// JUICE: モデレーター・canApproveXxxロールポリシー保持者向け、新着申請の通知
 	'newEmojiRequest',
 	'newAvatarDecorationRequest',
+	'newImportRequest',
 	'newSignupApplication',
 	'newContactForm',
 	// JUICE: モデレーター向け、新着通報の通知
@@ -161,6 +166,8 @@ export const moderationLogTypes = [
 	'rejectEmojiRequest',
 	'approveAvatarDecorationRequest',
 	'rejectAvatarDecorationRequest',
+	'approveImportRequest',
+	'rejectImportRequest',
 	// JUICE
 	'cleanupOrphanedObjectStorageFiles',
 	'deleteDrawRoom',
@@ -480,6 +487,24 @@ export type ModerationLogPayloads = {
 		requesterUsername: string;
 		requesterHost: string | null;
 		requestedName: string;
+		reason: string;
+	};
+	// JUICE: 承認式にしたインポートの承認・却下
+	approveImportRequest: {
+		requestId: string;
+		requesterId: string;
+		requesterUsername: string;
+		requesterHost: string | null;
+		importType: string;
+		fileName: string;
+	};
+	rejectImportRequest: {
+		requestId: string;
+		requesterId: string;
+		requesterUsername: string;
+		requesterHost: string | null;
+		importType: string;
+		fileName: string;
 		reason: string;
 	};
 	// JUICE

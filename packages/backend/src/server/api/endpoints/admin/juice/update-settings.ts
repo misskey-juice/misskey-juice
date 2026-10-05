@@ -66,6 +66,12 @@ export const paramDef = {
 		},
 		newAccountFollowRequestEnabled: { type: 'boolean' },
 		newAccountFollowRequestThresholdMs: { type: 'integer', minimum: 1, maximum: 2592000000 }, // 30日
+		// JUICE: 運営の承認が要るインポートの種類
+		importApprovalRequiredTypes: {
+			type: 'array',
+			uniqueItems: true,
+			items: { type: 'string', enum: ['following', 'muting', 'blocking', 'userLists', 'antennas'] },
+		},
 		reportCategories: {
 			type: 'array',
 			items: {
@@ -150,6 +156,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.contactFormCategories !== undefined) set.contactFormCategories = ps.contactFormCategories;
 			if (ps.customSplashText !== undefined) set.customSplashText = ps.customSplashText;
 			if (ps.newAccountFollowRequestEnabled !== undefined) set.newAccountFollowRequestEnabled = ps.newAccountFollowRequestEnabled;
+			if (ps.importApprovalRequiredTypes !== undefined) set.importApprovalRequiredTypes = ps.importApprovalRequiredTypes;
 			if (ps.newAccountFollowRequestThresholdMs !== undefined) set.newAccountFollowRequestThresholdMs = ps.newAccountFollowRequestThresholdMs;
 			if (ps.reportCategories !== undefined) set.reportCategories = ps.reportCategories;
 			if (ps.blockEmailDotAliasRegistration !== undefined) set.blockEmailDotAliasRegistration = ps.blockEmailDotAliasRegistration;

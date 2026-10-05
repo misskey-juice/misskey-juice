@@ -172,7 +172,7 @@ export class NotificationEntityService implements OnModuleInit {
 		// クラッシュさせたりせず引き続き表示できるよう、notifierIdへのフォールバックを残す
 		// (レガシーデータにのみ存在するフィールドのためtype上には無く、anyでの読み取りになる)
 		const legacyNotifierId = (notification as { notifierId?: MiUser['id'] }).notifierId;
-		const requesterId = notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest'
+		const requesterId = notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest' || notification.type === 'newImportRequest'
 			? (notification.requesterId ?? legacyNotifierId)
 			: notification.type === 'newSignupApplication'
 				? (notification.applicantId ?? legacyNotifierId)
@@ -225,6 +225,20 @@ export class NotificationEntityService implements OnModuleInit {
 				requestId: notification.requestId,
 				name: notification.name,
 				reason: notification.reason,
+			} : {}),
+			// JUICE: インポートの申請
+			...(notification.type === 'importRequestApproved' ? {
+				requestId: notification.requestId,
+				importType: notification.importType,
+			} : {}),
+			...(notification.type === 'importRequestRejected' ? {
+				requestId: notification.requestId,
+				importType: notification.importType,
+				reason: notification.reason,
+			} : {}),
+			...(notification.type === 'newImportRequest' ? {
+				requestId: notification.requestId,
+				importType: notification.importType,
 			} : {}),
 			...(requesterIfNeed != null ? { requester: requesterIfNeed } : {}),
 			...(notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest' ? {
@@ -290,7 +304,7 @@ export class NotificationEntityService implements OnModuleInit {
 			// JUICE: 後方互換のため、requesterId/applicantIdが無い古い形式のレコードは
 			// レガシーのnotifierIdをフォールバックとして拾う(#packInternalの同名フォールバックと対応)
 			const legacyNotifierId = (notification as { notifierId?: MiUser['id'] }).notifierId;
-			if (notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest') {
+			if (notification.type === 'newEmojiRequest' || notification.type === 'newAvatarDecorationRequest' || notification.type === 'newImportRequest') {
 				const id = notification.requesterId ?? legacyNotifierId;
 				if (id != null) userIds.push(id);
 			}

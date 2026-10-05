@@ -261,6 +261,12 @@ export type Channels = {
 				count: number;
 				requests: { id: string; name: string; category: string | null }[];
 			};
+			// JUICE: 承認式にしたインポートの申請が作成されたとき
+			newImportRequest: {
+				id: string;
+				importType: string;
+				requester: UserLite;
+			};
 			// JUICE: お問い合わせが送信されたとき(PIIを含まない要約のみ)
 			newContactForm: {
 				id: string;

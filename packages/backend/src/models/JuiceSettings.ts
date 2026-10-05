@@ -66,6 +66,8 @@ export interface JuiceSettingsValue {
 	newAccountFollowRequestEnabled?: boolean;
 	/** 上記が有効な場合の、フォローリクエスト化の対象となるアカウント年齢のしきい値(ミリ秒) */
 	newAccountFollowRequestThresholdMs?: number;
+	/** 運営の承認が要るインポートの種類(設定 → アカウントのデータ)。following・muting・blocking・userLists・antennas */
+	importApprovalRequiredTypes?: string[];
 	/** 通報(ユーザー通報)時に選べるカテゴリ一覧 */
 	reportCategories?: ReportCategory[];
 	/**
@@ -176,6 +178,19 @@ export type ReportCategory = {
 	order: number;
 	isDefault: boolean;
 };
+
+// JUICE: 承認式にできるインポートの種類(ImportRequest.tsのimportRequestTypesと同じ)
+const IMPORT_APPROVAL_TYPES = ['following', 'muting', 'blocking', 'userLists', 'antennas'] as const;
+
+/** 運営の承認が要るインポートの種類。設定が無ければ、フォローだけ */
+export function resolveImportApprovalSettings(settings: JuiceSettingsValue): {
+	importApprovalRequiredTypes: (typeof IMPORT_APPROVAL_TYPES)[number][];
+} {
+	const types = settings.importApprovalRequiredTypes ?? ['following'];
+	return {
+		importApprovalRequiredTypes: IMPORT_APPROVAL_TYPES.filter(type => types.includes(type)),
+	};
+}
 
 /**
  * jsonb には存在しないキーがありうるため、デフォルト値を解決してから返す。

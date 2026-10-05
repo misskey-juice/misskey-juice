@@ -91,6 +91,8 @@ export type RolePolicies = {
 	drawRoomMaxStrokeMegabytes: number;
 	canApproveEmojiRequests: boolean;
 	canApproveAvatarDecorationRequests: boolean;
+	// JUICE: 承認式にしたインポートを承認・却下できる
+	canApproveImportRequests: boolean;
 	canApproveSignups: boolean;
 	canProcessContactForms: boolean;
 };
@@ -153,6 +155,7 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	drawRoomMaxStrokeMegabytes: 64,
 	canApproveEmojiRequests: false,
 	canApproveAvatarDecorationRequests: false,
+	canApproveImportRequests: false,
 	canApproveSignups: false,
 	canProcessContactForms: false,
 };
@@ -498,6 +501,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			drawRoomMaxStrokeMegabytes: calc('drawRoomMaxStrokeMegabytes', vs => Math.max(...vs)),
 			canApproveEmojiRequests: calc('canApproveEmojiRequests', vs => vs.some(v => v === true)),
 			canApproveAvatarDecorationRequests: calc('canApproveAvatarDecorationRequests', vs => vs.some(v => v === true)),
+			canApproveImportRequests: calc('canApproveImportRequests', vs => vs.some(v => v === true)),
 			canApproveSignups: calc('canApproveSignups', vs => vs.some(v => v === true)),
 			canProcessContactForms: calc('canProcessContactForms', vs => vs.some(v => v === true)),
 		};
@@ -577,7 +581,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 	 */
 	@bindThis
 	public async getUserIdsWithRolePolicy(
-		policyName: 'canApproveEmojiRequests' | 'canApproveAvatarDecorationRequests' | 'canApproveSignups' | 'canProcessContactForms',
+		policyName: 'canApproveEmojiRequests' | 'canApproveAvatarDecorationRequests' | 'canApproveImportRequests' | 'canApproveSignups' | 'canProcessContactForms',
 		opts?: {
 			excludeExpire?: boolean,
 		},
