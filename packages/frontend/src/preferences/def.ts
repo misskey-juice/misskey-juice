@@ -192,6 +192,11 @@ export const PREF_DEF = definePreferences({
 	juiceNavbarDoodleAdded: {
 		default: false,
 	},
+	// JUICE: 落書きのタイムラプスに重ねる、ウォーターマークのプリセット(画像のアップロードと同じプリセットから選ぶ。nullなら重ねない)
+	juiceDoodleTimelapseWatermarkPresetId: {
+		accountDependent: true,
+		default: null as string | null,
+	},
 
 	// JUICE: ネコのアカウントの投稿の文字を置き換えない(nyaizeしない。ネコミミは出す。misskey-tempuraを参考)
 	disableNoteNyaize: {

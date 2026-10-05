@@ -828,7 +828,7 @@ import { DRAW_LAYER_BLENDS, DRAW_ROOM_CANVAS_MAX_SIZE, DRAW_ROOM_CANVAS_MIN_SIZE
 import type { CanvasStroke, DrawLayerBlend, DrawStroke, DrawTool, Rect } from '@/utility/draw-canvas.js';
 import { canRenderLayersInWorker, DrawRoomLayerRenderer } from '@/utility/draw-room-layer-renderer.js';
 import { useInterval } from '@@/js/use-interval.js';
-import { LocalDrawRoomConnection } from '@/utility/draw-room-local.js';
+import { LocalDrawRoomConnection, shiftStrokeEdits } from '@/utility/draw-room-local.js';
 import { activeDrawRoomIds } from '@/utility/draw-room-session.js';
 import type { LocalDrawRoomState } from '@/utility/draw-room-local.js';
 import { getDoodle, saveDoodleData, updateDoodleMeta } from '@/utility/doodle-storage.js';
@@ -1470,7 +1470,7 @@ const DOODLE_THUMBNAIL_SIZE = 256;
 async function loadDoodle(id: string): Promise<Misskey.entities.DrawRoom> {
 	const doodle = await getDoodle(id);
 	if (doodle == null) throw new Error('Doodle not found');
-	doodleState = { strokes: doodle.data.strokes, layers: doodle.data.layers };
+	doodleState = { strokes: doodle.data.strokes, layers: doodle.data.layers, layerEvents: doodle.data.layerEvents, strokeEdits: doodle.data.strokeEdits };
 	loadedDoodleId = id;
 	const me = signedInUser!;
 	return {
@@ -1521,7 +1521,7 @@ function flushDoodle(): void {
 	const dirty = doodleDirty;
 	doodleDirty = null;
 	if (dirty == null) return;
-	saveDoodleData(dirty.id, { strokes: dirty.state.strokes, layers: dirty.state.layers }).catch(err => {
+	saveDoodleData(dirty.id, { strokes: dirty.state.strokes, layers: dirty.state.layers, layerEvents: dirty.state.layerEvents, strokeEdits: dirty.state.strokeEdits }).catch(err => {
 		console.error(err);
 		os.toast(i18n.ts._juice.doodleSaveFailed);
 	});
@@ -1773,14 +1773,15 @@ async function applyCrop(): Promise<void> {
 	doodleThumbnailTimer = null;
 	try {
 		// 線とキャンバスの大きさを、続けて保存する
-		await saveDoodleData(id, { strokes, layers: local.layers }, { width, height });
+		// 記録の中に持っている前の線も、同じだけずらす
+		await saveDoodleData(id, { strokes, layers: local.layers, layerEvents: local.layerEvents, strokeEdits: shiftStrokeEdits(local.strokeEdits, -c.left, -c.top) }, { width, height });
 	} catch (err) {
 		console.error(err);
 		os.toast(i18n.ts._juice.doodleSaveFailed);
 		// 枠は残して、もう一度適用できるようにする
 		cropApplying.value = false;
 		// 線だけ保存されて大きさが変わっていないことがあるので、今の(ずらす前の)線を保存し直す
-		if (generation === initGeneration && loadedDoodleId === id) onDoodleChange({ strokes: local.strokes, layers: local.layers });
+		if (generation === initGeneration && loadedDoodleId === id) onDoodleChange({ strokes: local.strokes, layers: local.layers, layerEvents: local.layerEvents, strokeEdits: local.strokeEdits });
 		return;
 	}
 	// 保存の途中で画面を離れた・別の落書きへ移ったなら、読み込み直さない
@@ -1813,6 +1814,8 @@ function openTimelapse(): void {
 		// 開いた後に描き足しても変わらないよう、今の内容を写して渡す
 		strokes: [...local.strokes],
 		layers: local.layers.map(layer => ({ ...layer })),
+		layerEvents: [...local.layerEvents],
+		strokeEdits: [...local.strokeEdits],
 		attachable: props.attachable,
 	}, {
 		attach: (file) => emit('attach', file),

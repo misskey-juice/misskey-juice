@@ -4438,6 +4438,7 @@ _juice:
   doodleTimelapseSaveToDrive: "Save to drive"
   doodleTimelapsePost: "Post as note"
   doodleTimelapseKeepOpen: "Keep this tab visible while the video is being made (it pauses while you are on another tab and continues when you return)"
+  doodleTimelapseWatermarkFailed: "Failed to render the watermark"
   _federationDiagnosis:
     title: "Diagnosis"
     description: "Checks where federation with this server is failing. It looks at this server's settings and makes real requests to the remote server (nothing is delivered to it)."

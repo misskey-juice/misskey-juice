@@ -8,6 +8,7 @@
 
 import type * as Misskey from 'misskey-js';
 import { get, set, del } from '@/utility/idb-proxy.js';
+import type { DrawLayerEvent, DrawStrokeEdit } from '@/utility/draw-room-local.js';
 import { $i } from '@/i.js';
 
 export type DoodleMeta = {
@@ -24,6 +25,10 @@ export type DoodleMeta = {
 export type DoodleData = {
 	strokes: Misskey.entities.DrawStroke[];
 	layers: Misskey.entities.DrawLayer[];
+	// レイヤーの見え方を変えた記録(タイムラプス用。前に作った落書きには無い)
+	layerEvents?: DrawLayerEvent[];
+	// 線を描く以外の操作(動かす・回す・取り消しなど)の記録(タイムラプス用。前に作った落書きには無い)
+	strokeEdits?: DrawStrokeEdit[];
 };
 
 const prefix = () => `juiceDoodle:${$i?.id ?? 'guest'}`;

@@ -295,13 +295,30 @@ async function createTextureFromText(text: string | null, resolution = 2048) {
 async function createTextureFromQr(options: { data: string | null }, resolution = 512) {
 	const $i = ensureSignin();
 
+	// JUICE: 真ん中に入れるアイコンを読み込めないと、二次元コードを作る処理が終わらない(ウォーターマークの編集画面・描画が止まったままになる)。
+	// 先に読み込めるかを確かめ、読み込めなければアイコンなしで作る(アバターが別オリジンで、CORSで断られるときなど)
+	const avatarLoadable = $i.avatarUrl != null && await new Promise<boolean>(resolve => {
+		const img = new Image();
+		const timer = window.setTimeout(() => resolve(false), 5000);
+		img.crossOrigin = 'anonymous';
+		img.onload = () => {
+			window.clearTimeout(timer);
+			resolve(true);
+		};
+		img.onerror = () => {
+			window.clearTimeout(timer);
+			resolve(false);
+		};
+		img.src = $i.avatarUrl!;
+	});
+
 	const qrCodeInstance = new QRCodeStyling({
 		width: resolution,
 		height: resolution,
 		margin: 42,
 		type: 'canvas',
 		data: options.data == null || options.data === '' ? `${url}/users/${$i.id}` : options.data,
-		image: $i.avatarUrl,
+		image: avatarLoadable ? $i.avatarUrl ?? undefined : undefined,
 		qrOptions: {
 			typeNumber: 0,
 			mode: 'Byte',

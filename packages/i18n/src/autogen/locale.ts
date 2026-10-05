@@ -16610,6 +16610,10 @@ export interface Locale extends ILocale {
          * 動画を作っている間は、このタブを表示したままにしてください(ほかのタブへ移っている間は止まり、戻ると続きから進みます)
          */
         "doodleTimelapseKeepOpen": string;
+        /**
+         * ウォーターマークを作れませんでした
+         */
+        "doodleTimelapseWatermarkFailed": string;
         "_federationDiagnosis": {
             /**
              * 診断

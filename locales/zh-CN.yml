@@ -4438,6 +4438,7 @@ _juice:
   doodleTimelapseSaveToDrive: "保存到网盘"
   doodleTimelapsePost: "发帖"
   doodleTimelapseKeepOpen: "生成视频期间请保持此标签页可见（切换到其他标签页时会暂停，返回后继续）"
+  doodleTimelapseWatermarkFailed: "无法生成水印"
   _federationDiagnosis:
     title: "诊断"
     description: "当与此服务器的联合不正常时，检查问题出在哪里。依次检查本服务器的设置以及对对方服务器的实际请求（不会向对方服务器投递任何内容）。"

@@ -4438,6 +4438,7 @@ _juice:
   doodleTimelapseSaveToDrive: "드라이브에 저장"
   doodleTimelapsePost: "노트로 게시"
   doodleTimelapseKeepOpen: "동영상을 만드는 동안 이 탭을 표시한 상태로 두세요(다른 탭에 있는 동안에는 멈추고, 돌아오면 이어서 진행됩니다)"
+  doodleTimelapseWatermarkFailed: "워터마크를 만들지 못했습니다"
   _federationDiagnosis:
     title: "진단"
     description: "이 서버와의 연합이 잘 되지 않을 때 어디에서 멈추는지 확인합니다. 이 서버의 설정과 상대 서버에 대한 실제 요청을 차례로 조사합니다(상대 서버에는 아무것도 배달하지 않습니다)."

@@ -4414,6 +4414,7 @@ _juice:
   doodleTimelapseSaveToDrive: "ドライブに保存"
   doodleTimelapsePost: "ノートに投稿"
   doodleTimelapseKeepOpen: "動画を作っている間は、このタブを表示したままにしてください(ほかのタブへ移っている間は止まり、戻ると続きから進みます)"
+  doodleTimelapseWatermarkFailed: "ウォーターマークを作れませんでした"
   _federationDiagnosis:
     title: "診断"
     description: "このサーバーとの連合がうまくいかないとき、どこで止まっているかを確かめます。このサーバーの設定と、相手のサーバーへの実際の問い合わせを順に調べます(相手のサーバーには何も配送しません)。"

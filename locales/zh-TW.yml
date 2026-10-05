@@ -4292,6 +4292,7 @@ _juice:
   doodleTimelapseSaveToDrive: "儲存到雲端硬碟"
   doodleTimelapsePost: "發文"
   doodleTimelapseKeepOpen: "產生影片期間請保持此分頁可見（切換到其他分頁時會暫停，返回後繼續）"
+  doodleTimelapseWatermarkFailed: "無法產生浮水印"
   _federationDiagnosis:
     title: "診斷"
     description: "當與此伺服器的聯邦不正常時，檢查問題出在哪裡。依序檢查本伺服器的設定以及對對方伺服器的實際請求（不會向對方伺服器傳送任何內容）。"
