@@ -91,6 +91,28 @@ const canToggle = computed(() => {
 // JUICE: リモートのカスタム絵文字によるリアクションも、ライセンス等の詳細情報を確認できるようにする
 const canGetInfo = computed(() => props.reaction.includes(':'));
 
+// リアクションを付けたことを、自分の画面に反映する
+async function emitReacted(userId: string): Promise<void> {
+	if (!isRemoteCustomEmoji.value) {
+		const emoji = customEmojisMap.get(emojiName.value);
+		if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) return;
+		noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction: props.reaction, emoji });
+		return;
+	}
+	// JUICE: ほかのサーバーの絵文字への相乗りは、このサーバーの絵文字の一覧に無いので、今までは画面に反映されなかった
+	// (読み込み直すまで、付けたことが分からなかった)。サーバーが別のリアクションに置き換えることもある
+	// (使えない絵文字なら既定のリアクションになる)ので、実際に付いたリアクションを取ってから反映する
+	const fresh = await misskeyApi('notes/show', { noteId: props.noteId }).catch(() => null);
+	const reaction = fresh?.myReaction ?? props.reaction;
+	if (reaction[0] !== ':') {
+		noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction });
+		return;
+	}
+	const name = getEmojiNameFromReaction(reaction);
+	const url = fresh?.reactionEmojis[name] ?? props.reactionEmojis[name] ?? customEmojisMap.get(name)?.url;
+	noteEvents.emit(`reacted:${props.noteId}`, { userId, reaction, emoji: url != null ? { name, url } : null });
+}
+
 async function toggleReaction() {
 	if (!canToggle.value) return;
 	if ($i == null) return;
@@ -126,17 +148,7 @@ async function toggleReaction() {
 				misskeyApi('notes/reactions/create', {
 					noteId: props.noteId,
 					reaction: props.reaction,
-				}).then(() => {
-					const emoji = customEmojisMap.get(emojiName.value);
-					if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) {
-						return;
-					}
-					noteEvents.emit(`reacted:${props.noteId}`, {
-						userId: me.id,
-						reaction: props.reaction,
-						emoji: emoji,
-					});
-				});
+				}).then(() => emitReacted(me.id));
 			}
 		});
 	} else {
@@ -160,18 +172,7 @@ async function toggleReaction() {
 		misskeyApi('notes/reactions/create', {
 			noteId: props.noteId,
 			reaction: props.reaction,
-		}).then(() => {
-			const emoji = customEmojisMap.get(emojiName.value);
-			if (emoji == null && getUnicodeEmojiOrNull(props.reaction) == null) {
-				return;
-			}
-
-			noteEvents.emit(`reacted:${props.noteId}`, {
-				userId: me.id,
-				reaction: props.reaction,
-				emoji: emoji,
-			});
-		});
+		}).then(() => emitReacted(me.id));
 		// TODO: 上位コンポーネントでやる
 		//if (props.note.text && props.note.text.length > 100 && (Date.now() - new Date(props.note.createdAt).getTime() < 1000 * 3)) {
 		//	claimAchievement('reactWithoutRead');
