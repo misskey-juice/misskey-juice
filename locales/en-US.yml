@@ -4731,6 +4731,8 @@ _juice:
   showQuickReactionButtonCaption: "Adds a button to the left of the \"+\" (reaction) button that reacts with the reaction chosen below in one tap. It is shown only on notes you have not reacted to yet."
   quickReaction: "Reaction to use"
   quickReactionChange: "Choose reaction"
+  reactionPiggybackOnRemote: "Piggyback on reactions with remote emojis"
+  reactionPiggybackOnRemoteCaption: "Lets you click a reaction that someone else made with a custom emoji from a remote server to add the same reaction. When off, you won't piggyback on remote emojis or add them to your emoji palette (using remote emoji images may happen without the copyright holder's permission)."
   quickReactWith: "React with {emoji}"
   bulkReviewSelect: "Select to review in bulk"
   bulkReviewSelectAll: "Select all"

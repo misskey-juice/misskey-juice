@@ -90,6 +90,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</SearchMarker>
 
+					<!-- JUICE: リモートの絵文字のリアクションへの相乗り(管理者が許可しているサーバーだけ出す) -->
+					<SearchMarker v-if="reactionPiggybackOnRemoteEnabled" :keywords="['reaction', 'piggyback', 'remote', 'emoji']">
+						<MkPreferenceContainer k="reactionPiggybackOnRemote">
+							<MkSwitch v-model="reactionPiggybackOnRemote">
+								<template #label><SearchLabel>{{ i18n.ts._juice.reactionPiggybackOnRemote }}</SearchLabel></template>
+								<template #caption>{{ i18n.ts._juice.reactionPiggybackOnRemoteCaption }}</template>
+							</MkSwitch>
+						</MkPreferenceContainer>
+					</SearchMarker>
+
 					<SearchMarker :keywords="['widget', 'side', 'left', 'right']">
 						<FormSection>
 							<template #label><SearchLabel>{{ i18n.ts._juice.widgetsSide }}</SearchLabel></template>
@@ -347,9 +357,12 @@ const relayTimelineEnabled = ref(false);
 const relays = ref<Misskey.entities.JuiceRelaysResponse>([]);
 // JUICE: メディアタイムラインが有効なインスタンスでのみ、タブの表示切り替え一覧に含める
 const mediaTimelineEnabled = ref(false);
+// JUICE: リモートの絵文字のリアクションへの相乗りを管理者が許可しているサーバーでのみ、自分の設定を出す
+const reactionPiggybackOnRemoteEnabled = ref(false);
 juicePublicSettingsCache.fetch().then(res => {
 	relayTimelineEnabled.value = res.relayTimelineEnabled;
 	mediaTimelineEnabled.value = res.mediaTimelineEnabled;
+	reactionPiggybackOnRemoteEnabled.value = res.reactionPiggybackOnRemoteEnabled;
 	if (relayTimelineEnabled.value) {
 		juiceRelaysCache.fetch().then(r => {
 			relays.value = r;
@@ -451,6 +464,7 @@ const novelTextDownloadDisabledByDefault = prefer.model('novelTextDownloadDisabl
 const QUICK_REACTION_DEFAULT = '🧡';
 const showQuickReactionButton = prefer.model('showQuickReactionButton');
 const quickReaction = prefer.model('quickReaction');
+const reactionPiggybackOnRemote = prefer.model('reactionPiggybackOnRemote');
 
 function pickQuickReaction(ev: PointerEvent) {
 	os.pickEmoji((ev.currentTarget ?? ev.target) as HTMLElement, { showPinned: false }).then((emoji) => {

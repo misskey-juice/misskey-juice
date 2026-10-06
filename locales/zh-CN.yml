@@ -4731,6 +4731,8 @@ _juice:
   showQuickReactionButtonCaption: "在\"+\"(回应)按钮左侧显示一个按钮,一次点击即可添加下方选择的回应。仅在尚未回应的帖子上显示。"
   quickReaction: "要添加的回应"
   quickReactionChange: "选择回应"
+  reactionPiggybackOnRemote: "跟随远程表情符号的回应"
+  reactionPiggybackOnRemoteCaption: "可以点击他人使用远程服务器自定义表情符号做出的回应，添加相同的回应。关闭后，将不会跟随远程表情符号，也不会将其添加到表情符号面板(因为可能会在未经著作权人许可的情况下使用远程表情符号图像)。"
   quickReactWith: "用{emoji}回应"
   bulkReviewSelect: "选择后批量审核"
   bulkReviewSelectAll: "全选"

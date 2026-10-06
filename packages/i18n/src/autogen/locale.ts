@@ -17495,6 +17495,14 @@ export interface Locale extends ILocale {
          */
         "quickReactionChange": string;
         /**
+         * リモートの絵文字のリアクションに相乗りする
+         */
+        "reactionPiggybackOnRemote": string;
+        /**
+         * ほかの人が付けたリモートのサーバーのカスタム絵文字のリアクションを押して、同じリアクションを付けられるようにします。オフにすると、リモートの絵文字への相乗りと、絵文字パレットへの追加をしません(リモートの絵文字画像を著作権者の許諾なく使うことになりうるため)。
+         */
+        "reactionPiggybackOnRemoteCaption": string;
+        /**
          * {emoji}でリアクション
          */
         "quickReactWith": ParameterizedString<"emoji">;
