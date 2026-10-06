@@ -37,6 +37,8 @@ const compiled = computed((): { html: string; failed: boolean } => {
 		// テキスト補間(自動エスケープ)で表示し、未検証のTeX文字列がHTMLとして注入されないようにする。
 		return {
 			html: katex.renderToString(props.formula, {
+				// JUICE: ブロックの数式(\[...\])は、ディスプレイ数式(中央寄せ・大きい演算子・上下の添字)として組む
+				displayMode: props.block,
 				throwOnError: false,
 				strict: true,
 				// リモートから届く未検証のTeX入力をレンダリングするため、
