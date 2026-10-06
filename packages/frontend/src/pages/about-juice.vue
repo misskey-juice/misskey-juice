@@ -260,6 +260,11 @@ const features = [
 	{ icon: 'ti ti-palette', text: i18n.ts._aboutJuice._features.drawRoom },
 	{ icon: 'ti ti-writing', text: i18n.ts._aboutJuice._features.novelEditor },
 	{ icon: 'ti ti-search', text: i18n.ts._aboutJuice._features.mfmSearchEngine },
+	{ icon: 'ti ti-brush', text: i18n.ts._aboutJuice._features.doodle },
+	{ icon: 'ti ti-file-import', text: i18n.ts._aboutJuice._features.importApproval },
+	{ icon: 'ti ti-stethoscope', text: i18n.ts._aboutJuice._features.federationDiagnosis },
+	{ icon: 'ti ti-door-enter', text: i18n.ts._aboutJuice._features.entrance },
+	{ icon: 'ti ti-metronome', text: i18n.ts._aboutJuice._features.bpmWidget },
 ];
 
 // JUICE: この一覧に載っている機能が、どういう経路で実装されたかをざっくり示す

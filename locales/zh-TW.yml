@@ -2444,6 +2444,11 @@ _aboutJuice:
     drawRoom: "繪圖聊天（支援壓感、每人多個圖層、設定參與人數和可見性、觀看、聊天、將完成的圖片儲存到雲端硬碟或發布為貼文）"
     novelEditor: "小說編輯器（直書和橫書預覽，注音、著重號、換頁等輸入輔助，字數顯示，發布前檢查，草稿自動儲存）"
     mfmSearchEngine: "每位使用者可選擇 MFM 的「○○ 搜尋」所使用的搜尋引擎（Google、Yahoo!、Yahoo! JAPAN、Bing、DuckDuckGo、Kagi、Brave Search、Startpage、Ecosia、Perplexity、任意 URL）"
+    doodle: "塗鴉（一個人畫的繪圖聊天。作品儲存在此瀏覽器中，可將繪製過程製作成附有名稱・ID 浮水印的縮時影片）"
+    importApproval: "可將帳戶資料的匯入（追隨等）設為需要管理員核准（管理員確認檔案內容後再匯入）"
+    federationDiagnosis: "與聯邦伺服器的聯邦診斷（依序檢查 DNS・HTTPS・NodeInfo・WebFinger・簽章取得・inbox，並可查看簽章金鑰類型）"
+    entrance: "JUICE 入口頁（一覽使用者數・線上人數・已連線的伺服器數、時間軸和熱門貼文的歡迎頁面。可與原版入口頁切換）"
+    bpmWidget: "BPM 測量小工具（透過點擊或時間軸・通知的速度測量 BPM，並可播放節拍器）"
   route: "實作的途徑"
   _route:
     base: "上游 Misskey"

@@ -3768,6 +3768,11 @@ _aboutJuice:
     requestReplacement: "表情/头像装饰申请的「替换申请」(仅替换现有图片)"
     roleApprovalDelegation: "表情申请、头像装饰申请、审批式注册的审批/驳回权限,不限于版主,也可按角色单独授予"
     widgetsSide: "可切换小组件面板/抽屉的显示位置(左/右)"
+    doodle: "涂鸦(一个人画的绘图聊天。作品保存在此浏览器中，可将绘制过程制作成带有名称・ID水印的延时视频)"
+    importApproval: "可将账户数据的导入(关注等)设为需要管理员批准(管理员确认文件内容后再导入)"
+    federationDiagnosis: "与联合服务器的联合诊断(依次检查DNS・HTTPS・NodeInfo・WebFinger・签名获取・inbox，并可查看签名密钥类型)"
+    entrance: "JUICE入口页(一览用户数・在线人数・已连接的服务器数、时间线和热门帖子的欢迎页面。可与原版入口页切换)"
+    bpmWidget: "BPM测量小部件(通过点击或时间线・通知的速度测量BPM，并可播放节拍器)"
   _route:
     additional: "路线图之外的额外实现"
     additionalDesc: "为应对路线图实现过程中发现的问题,以及参考CherryPick、misskey-tempura等其他分支实现的功能(如昵称功能、登录失败通知等)"
