@@ -3772,7 +3772,7 @@ _aboutJuice:
     importApproval: "Account data imports (such as follows) can require approval by the server staff, who check the file before it is imported"
     federationDiagnosis: "Federation diagnosis for connected servers (checks DNS, HTTPS, NodeInfo, WebFinger, signed fetches and the inbox in order, and shows the signature key types)"
     entrance: "JUICE entrance (a welcome page showing the number of users, online users and connected servers, the timeline and popular posts; can be switched with the original entrances)"
-    bpmWidget: "BPM widget (measure BPM by tapping or from the speed of timelines and notifications, and play a metronome)"
+    bpmWidget: "BPM counter widget (measure BPM by tapping or from the speed of timelines and notifications, and play a metronome)"
   _route:
     additional: "Additional implementation beyond the roadmap"
     additionalDesc: "Added to address issues found while implementing the roadmap, and features inspired by other forks such as CherryPick and misskey-tempura (e.g. the nickname feature, failed sign-in notification)"

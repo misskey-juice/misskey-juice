@@ -202,12 +202,14 @@ onMounted(() => {
 	}
 
 	// ページの入れ物(_pageContainer)と、スクロールの入れ物(_pageScrollable)は地の色で塗っているので、
-	// 外側は塗らず、スクロールの入れ物を半透明にして、後ろのぼかした背景画像を透かす
-	.content :global(._pageContainer) {
+	// いちばん外のページの入れ物だけを半透明にして、後ろのぼかした背景画像を透かす(中の入れ物は塗らず、重ねて濃くしない)。
+	// スクロールの入れ物を使わない画面(見つからない・エラーなど)も、この半透明の地の上に出る
+	.content :global(._pageContainer),
+	.content :global(._pageScrollable) {
 		background: none;
 	}
 
-	.content :global(._pageScrollable) {
+	.content > :global(._pageContainer) {
 		background: color(from var(--MI_THEME-bg) srgb r g b / 0.55);
 	}
 
