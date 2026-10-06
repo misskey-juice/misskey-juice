@@ -9492,6 +9492,26 @@ export interface Locale extends ILocale {
              * MFMの「○○ 検索」で使う検索エンジンを、ユーザーごとに選べる(Google・Yahoo!・Yahoo! JAPAN・Bing・DuckDuckGo・Kagi・Brave Search・Startpage・Ecosia・Perplexity・任意のURL)
              */
             "mfmSearchEngine": string;
+            /**
+             * 落書き(1人で描く絵チャ。作品はこのブラウザに保存し、描いた過程をタイムラプスの動画にできる。名前・IDのウォーターマーク付き)
+             */
+            "doodle": string;
+            /**
+             * アカウントのデータのインポート(フォローなど)を運営の承認式にできる(運営がファイルの中身を確かめてから通す)
+             */
+            "importApproval": string;
+            /**
+             * 連合しているサーバーとの連合の診断(DNS・HTTPS・NodeInfo・WebFinger・署名付きの取得・inboxを順に確かめ、署名の鍵の種類も見られる)
+             */
+            "federationDiagnosis": string;
+            /**
+             * JUICEのエントランス(ユーザー・オンライン・つながっているサーバーの数、タイムライン、人気を一覧できるウェルカムページ。本家のエントランスと切り替え可能)
+             */
+            "entrance": string;
+            /**
+             * BPM計測ウィジェット(タップ・タイムラインや通知の速さでBPMを測り、メトロノームを鳴らせる)
+             */
+            "bpmWidget": string;
         };
         /**
          * どういう経路で実装されたか

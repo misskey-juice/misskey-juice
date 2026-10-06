@@ -3768,6 +3768,11 @@ _aboutJuice:
     requestReplacement: "\"Replacement requests\" for emoji/avatar decoration requests (replace only the image of an existing one)"
     roleApprovalDelegation: "Approval/rejection permission for emoji requests, avatar decoration requests, and approval-required signups can be granted per role, not only to moderators"
     widgetsSide: "Switch the display side (left/right) of the widgets panel/drawer"
+    doodle: "Doodles (drawing chat for one person; works are saved in this browser and the drawing process can be turned into a timelapse video with a name/ID watermark)"
+    importApproval: "Account data imports (such as follows) can require approval by the server staff, who check the file before it is imported"
+    federationDiagnosis: "Federation diagnosis for connected servers (checks DNS, HTTPS, NodeInfo, WebFinger, signed fetches and the inbox in order, and shows the signature key types)"
+    entrance: "JUICE entrance (a welcome page showing the number of users, online users and connected servers, the timeline and popular posts; can be switched with the original entrances)"
+    bpmWidget: "BPM counter widget (measure BPM by tapping or from the speed of timelines and notifications, and play a metronome)"
   _route:
     additional: "Additional implementation beyond the roadmap"
     additionalDesc: "Added to address issues found while implementing the roadmap, and features inspired by other forks such as CherryPick and misskey-tempura (e.g. the nickname feature, failed sign-in notification)"

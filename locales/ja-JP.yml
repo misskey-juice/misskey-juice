@@ -2485,6 +2485,11 @@ _aboutJuice:
     drawRoom: "絵チャ(お絵かきチャット。筆圧対応、1人で複数のレイヤー、参加人数・公開範囲の設定、見学、チャット、完成画像のドライブ保存・ノート投稿)"
     novelEditor: "小説エディター(縦書き・横書きのプレビュー、ルビ・傍点・改ページなどの入力補助、文字数の表示、投稿前のチェック、下書きの自動保存)"
     mfmSearchEngine: "MFMの「○○ 検索」で使う検索エンジンを、ユーザーごとに選べる(Google・Yahoo!・Yahoo! JAPAN・Bing・DuckDuckGo・Kagi・Brave Search・Startpage・Ecosia・Perplexity・任意のURL)"
+    doodle: "落書き(1人で描く絵チャ。作品はこのブラウザに保存し、描いた過程をタイムラプスの動画にできる。名前・IDのウォーターマーク付き)"
+    importApproval: "アカウントのデータのインポート(フォローなど)を運営の承認式にできる(運営がファイルの中身を確かめてから通す)"
+    federationDiagnosis: "連合しているサーバーとの連合の診断(DNS・HTTPS・NodeInfo・WebFinger・署名付きの取得・inboxを順に確かめ、署名の鍵の種類も見られる)"
+    entrance: "JUICEのエントランス(ユーザー・オンライン・つながっているサーバーの数、タイムライン、人気を一覧できるウェルカムページ。本家のエントランスと切り替え可能)"
+    bpmWidget: "BPM計測ウィジェット(タップ・タイムラインや通知の速さでBPMを測り、メトロノームを鳴らせる)"
   route: "どういう経路で実装されたか"
   _route:
     base: "本家Misskey"

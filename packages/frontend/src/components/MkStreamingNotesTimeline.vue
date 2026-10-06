@@ -507,7 +507,8 @@ defineExpose({
 
 .notes {
 	container-type: inline-size;
-	background: var(--MI_THEME-panel);
+	// JUICE: 入れ物の地の色だけを差し替えられるようにする(JUICEのエントランスで、背景画像の上で半透明にするため)
+	background: var(--juiceTimelineBg, var(--MI_THEME-panel));
 }
 
 .note:not(:empty) {

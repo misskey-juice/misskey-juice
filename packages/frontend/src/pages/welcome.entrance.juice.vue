@@ -15,28 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div :class="$style.body">
 			<!-- 数(訪問者にアクティビティを見せない設定のときは出さない) -->
-			<div v-if="showActivities" :class="$style.stats">
-				<div :class="[$style.panel, $style.stat]">
-					<div :class="$style.statIcon"><i class="ti ti-users"></i></div>
-					<div :class="$style.statLabel">{{ i18n.ts._juiceEntrance.registeredUsers }}</div>
-					<div :class="$style.statValue"><MkNumber v-if="stats" :value="stats.originalUsersCount"/><span v-else>-</span></div>
-				</div>
-				<div :class="[$style.panel, $style.stat]">
-					<div :class="$style.statIcon"><i class="ti ti-access-point"></i></div>
-					<div :class="$style.statLabel"><span :class="$style.onlineDot"></span>{{ i18n.ts._juiceEntrance.onlineUsers }}</div>
-					<div :class="$style.statValue"><MkNumber v-if="onlineUsersCount != null" :value="onlineUsersCount"/><span v-else>-</span></div>
-				</div>
-				<div v-if="meta.federation !== 'none'" :class="[$style.panel, $style.stat]">
-					<div :class="$style.statIcon"><i class="ti ti-world"></i></div>
-					<div :class="$style.statLabel">{{ i18n.ts._juiceEntrance.connectedServers }}</div>
-					<div :class="$style.statValue"><MkNumber v-if="stats" :value="stats.instances"/><span v-else>-</span></div>
-				</div>
-				<div :class="[$style.panel, $style.stat]">
-					<div :class="$style.statIcon"><i class="ti ti-pencil"></i></div>
-					<div :class="$style.statLabel">{{ i18n.ts._juiceEntrance.notes }}</div>
-					<div :class="$style.statValue"><MkNumber v-if="stats" :value="stats.originalNotesCount"/><span v-else>-</span></div>
-				</div>
-			</div>
+			<MkJuiceVisitorStats :translucent="!!meta.backgroundImageUrl"/>
 
 			<div :class="[$style.feeds, { [$style.feedsSingle]: !showTimeline }]">
 				<section v-if="showTimeline" :class="[$style.panel, $style.feed]">
@@ -81,14 +60,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { markRaw, ref } from 'vue';
 import * as Misskey from 'misskey-js';
-import { useInterval } from '@@/js/use-interval.js';
 import MkVisitorDashboard from '@/components/MkVisitorDashboard.vue';
-import MkNumber from '@/components/MkNumber.vue';
+import MkJuiceVisitorStats from '@/components/MkJuiceVisitorStats.vue';
 import MkMarqueeText from '@/components/MkMarqueeText.vue';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkStreamingNotesTimeline from '@/components/MkStreamingNotesTimeline.vue';
 import XActiveUsersChart from '@/components/MkVisitorDashboard.ActiveUsersChart.vue';
-import { misskeyApi, misskeyApiGet } from '@/utility/misskey-api.js';
+import { misskeyApiGet } from '@/utility/misskey-api.js';
 import { getProxiedImageUrl } from '@/utility/media-proxy.js';
 import { Paginator } from '@/utility/paginator.js';
 import { instance as meta } from '@/instance.js';
@@ -97,30 +75,12 @@ import { i18n } from '@/i18n.js';
 const showActivities = meta.clientOptions.showActivitiesForVisitor !== false;
 const showTimeline = meta.policies.ltlAvailable && meta.clientOptions.showTimelineForVisitor !== false;
 
-const stats = ref<Misskey.entities.StatsResponse | null>(null);
-const onlineUsersCount = ref<number | null>(null);
 const instances = ref<Misskey.entities.FederationInstance[]>();
 const trends = ref<Misskey.entities.HashtagsTrendResponse>([]);
 
 const featuredPaginator = markRaw(new Paginator('notes/featured', {
 	limit: 10,
 }));
-
-if (showActivities) {
-	misskeyApi('stats', {}).then(res => {
-		stats.value = res;
-	});
-
-	// オンラインの人数は、ウィジェット(WidgetOnlineUsers)と同じように時々読み直す
-	useInterval(() => {
-		misskeyApiGet('get-online-users-count').then(res => {
-			onlineUsersCount.value = res.count;
-		});
-	}, 1000 * 60, {
-		immediate: true,
-		afterMounted: true,
-	});
-}
 
 misskeyApiGet('hashtags/trend').then(res => {
 	trends.value = res;
@@ -204,64 +164,23 @@ function getInstanceIcon(instance: Misskey.entities.FederationInstance): string 
 	overflow: clip;
 }
 
-// 背景画像があるときは、パネルを半透明にして(ぼかして)背景画像が透けて見えるようにする。
-// タイムライン・人気の中のノートは、読みやすさと「もっと見る」(長いノートを畳んだときのフェード)のため、いつもの地で塗ったままにする
-.withBg .panel {
-	background: color(from var(--MI_THEME-panel) srgb r g b / 0.8);
-	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
-	backdrop-filter: var(--MI-blur, blur(15px));
-}
+// 背景画像があるときは、パネルを半透明にして(ぼかして)背景画像が透けて見えるようにする
+.withBg {
+	// 元のパネルの色(下で--MI_THEME-panelを差し替えるので、その前の値を取っておく)
+	--juicePanelBase: var(--MI_THEME-panel);
 
-.stats {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-	gap: 16px;
-
-	@media (max-width: 500px) {
-		grid-template-columns: 1fr 1fr;
-		gap: 12px;
+	.panel {
+		background: color(from var(--juicePanelBase) srgb r g b / 0.8);
+		-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+		backdrop-filter: var(--MI-blur, blur(15px));
 	}
-}
 
-.stat {
-	padding: 16px 20px;
-}
-
-.statIcon {
-	position: absolute;
-	top: 12px;
-	right: 14px;
-	font-size: 1.6em;
-	color: var(--MI_THEME-accent);
-	opacity: 0.25;
-}
-
-.statLabel {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.9em;
-	color: color(from var(--MI_THEME-fg) srgb r g b / 0.8);
-}
-
-.statValue {
-	margin-top: 4px;
-	font-size: 1.8em;
-	font-weight: bold;
-	color: var(--MI_THEME-accent);
-
-	@media (max-width: 500px) {
-		font-size: 1.4em;
+	// タイムライン・人気の中: ノートの入れ物は塗らず(パネルの半透明の地を透かす)、
+	// ノートの中で地の色を使う所(長いノートを畳んだときのフェード・「もっと見る」など)は、同じ半透明の色で塗る
+	.feedBody {
+		--juiceTimelineBg: transparent;
+		--MI_THEME-panel: color(from var(--juicePanelBase) srgb r g b / 0.8);
 	}
-}
-
-.onlineDot {
-	display: inline-block;
-	width: 8px;
-	height: 8px;
-	border-radius: 999px;
-	background: var(--MI_THEME-success);
-	box-shadow: 0 0 0 3px color(from var(--MI_THEME-success) srgb r g b / 0.25);
 }
 
 .feeds {
