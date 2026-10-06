@@ -5221,7 +5221,8 @@ definePage(() => ({
 	min-height: 300px;
 	overflow: hidden;
 	border-radius: var(--MI-radius);
-	background: var(--MI_THEME-bg);
+	// JUICE: 地の色だけを外から差し替えられるようにする(ログインしていないときのJUICEの見た目で、背景画像を透かすため)
+	background: var(--juiceDrawViewportBg, var(--MI_THEME-bg));
 	// JUICE: 指やペンでのドラッグをブラウザのスクロール・拡大に使わせず、描画・移動に使う
 	touch-action: none;
 	user-select: none;

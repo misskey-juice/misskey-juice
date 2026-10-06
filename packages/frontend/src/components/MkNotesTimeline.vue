@@ -77,7 +77,8 @@ defineExpose({
 	container-type: inline-size;
 
 	&.noGap {
-		background: var(--MI_THEME-panel);
+		// JUICE: 入れ物の地の色だけを差し替えられるようにする(JUICEのエントランスで、背景画像の上で半透明にするため)
+		background: var(--juiceTimelineBg, var(--MI_THEME-panel));
 
 		.note {
 			border-bottom: solid 0.5px var(--MI_THEME-divider);
