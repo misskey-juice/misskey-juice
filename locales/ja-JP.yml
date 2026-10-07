@@ -4638,6 +4638,8 @@ _juice:
   showQuickReactionButtonCaption: "「+」(リアクション)の左に、下で選んだリアクションを1回で付けるボタンを置きます。まだリアクションしていないノートにだけ出ます。"
   quickReaction: "付けるリアクション"
   quickReactionChange: "リアクションを選ぶ"
+  reactionPiggybackOnRemote: "リモートの絵文字のリアクションに相乗りする"
+  reactionPiggybackOnRemoteCaption: "ほかの人が付けたリモートのサーバーのカスタム絵文字のリアクションを押して、同じリアクションを付けられるようにします。オフにすると、リモートの絵文字への相乗りと、絵文字パレットへの追加をしません(リモートの絵文字画像を著作権者の許諾なく使うことになりうるため)。"
   quickReactWith: "{emoji}でリアクション"
   bulkReviewSelect: "選んでまとめて審査"
   bulkReviewSelectAll: "すべて選ぶ"

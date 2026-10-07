@@ -4516,6 +4516,8 @@ _juice:
   showQuickReactionButtonCaption: "在「+」（反應）的左側放置一鍵加上下方所選反應的按鈕。僅在尚未反應的貼文上顯示。"
   quickReaction: "要加上的反應"
   quickReactionChange: "選擇反應"
+  reactionPiggybackOnRemote: "跟隨遠端表情符號的反應"
+  reactionPiggybackOnRemoteCaption: "可以點擊他人使用遠端伺服器自訂表情符號做出的反應，加上相同的反應。關閉後，將不會跟隨遠端表情符號，也不會將其加入表情符號面板（因為可能會在未經著作權人許可的情況下使用遠端表情符號圖片）。"
   quickReactWith: "用 {emoji} 反應"
   bulkReviewSelect: "選取後批次審核"
   bulkReviewSelectAll: "全選"

@@ -4731,6 +4731,8 @@ _juice:
   showQuickReactionButtonCaption: "\"+\"(리액션) 버튼 왼쪽에, 아래에서 고른 리액션을 한 번에 다는 버튼을 표시합니다. 아직 리액션하지 않은 노트에만 표시됩니다."
   quickReaction: "달 리액션"
   quickReactionChange: "리액션 고르기"
+  reactionPiggybackOnRemote: "원격 이모지 리액션에 편승하기"
+  reactionPiggybackOnRemoteCaption: "다른 사람이 단 원격 서버의 커스텀 이모지 리액션을 눌러 같은 리액션을 달 수 있게 합니다. 끄면 원격 이모지에 편승하거나 이모지 팔레트에 추가하지 않습니다(원격 이모지 이미지를 저작권자의 허락 없이 사용하게 될 수 있기 때문입니다)."
   quickReactWith: "{emoji}(으)로 리액션"
   bulkReviewSelect: "선택해서 한꺼번에 심사"
   bulkReviewSelectAll: "모두 선택"

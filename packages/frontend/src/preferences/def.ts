@@ -152,6 +152,12 @@ export const PREF_DEF = definePreferences({
 		default: '🧡',
 	},
 
+	// JUICE: リモートのカスタム絵文字のリアクションへの相乗り(と絵文字パレットへの追加)を自分でも使うか。
+	// 管理者がJUICE設定で許可しているときだけ効く(utility/reaction-piggyback.ts)
+	reactionPiggybackOnRemote: {
+		default: true,
+	},
+
 	// JUICE: MFMの「○○ 検索」(検索窓)で使う検索エンジン(utility/juice-search-engines.tsのid、または'custom')
 	mfmSearchEngine: {
 		default: 'google' as import('@/utility/juice-search-engines.js').SearchEngineId,
