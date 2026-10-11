@@ -165,6 +165,7 @@ import { ensureSignin } from '@/i.js';
 import { instance } from '@/instance.js';
 import { genId } from '@/utility/id.js';
 import { buildMockLocalCustomEmojiReaction } from '@/utility/mock-note-reaction.js';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 const $i = ensureSignin();
 
@@ -326,7 +327,7 @@ function exampleNoteFor(draft: EmojiRequestDraft): Misskey.entities.Note {
 function draftMissingRequiredFields(d: EmojiRequestDraft): boolean {
 	if (d.targetEmojiId != null) return false;
 	if (requireCategory.value && !d.category) return true;
-	if (requireTags.value && d.aliases.split(' ').filter(x => x !== '').length === 0) return true;
+	if (requireTags.value && splitEmojiTags(d.aliases).length === 0) return true;
 	if (requireLicense.value && !d.license) return true;
 	return false;
 }
@@ -459,7 +460,7 @@ async function submit() {
 			fileId: fileIds[i],
 			name: d.name,
 			category: d.category || null,
-			aliases: d.aliases.split(' ').filter(x => x !== ''),
+			aliases: splitEmojiTags(d.aliases),
 			license: d.license || null,
 			isSensitive: d.isSensitive,
 			localOnly: d.localOnly,

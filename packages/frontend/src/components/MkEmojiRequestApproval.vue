@@ -83,6 +83,7 @@ import MkTextarea from '@/components/MkTextarea.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { customEmojisMap, customEmojiCategories } from '@/custom-emojis.js';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 const props = defineProps<{
 	request: Misskey.entities.AdminEmojiRequestsListResponse[number];
@@ -129,7 +130,7 @@ async function approve() {
 		...(editMode.value ? {
 			name: editName.value,
 			category: editCategory.value || null,
-			aliases: editAliases.value.split(' ').filter(x => x !== ''),
+			aliases: splitEmojiTags(editAliases.value),
 			license: editLicense.value || null,
 			isSensitive: editIsSensitive.value,
 			localOnly: editLocalOnly.value,

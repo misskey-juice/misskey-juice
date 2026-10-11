@@ -20,6 +20,7 @@ import { JuiceAdminNotificationService } from '@/core/JuiceAdminNotificationServ
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { FILE_TYPE_IMAGE } from '@/const.js';
 import { ApiError } from '@/server/api/error.js';
+import { normalizeEmojiAliases } from '@/misc/emoji-aliases.js';
 
 // JUICE: 同一画面から複数件の絵文字申請をまとめて作成するためのエンドポイント。
 // キャプチャは1リクエストにつき1回しか検証できない(hCaptcha等のトークンは使い切りのため)ので、
@@ -189,6 +190,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// JUICE: 管理者設定で必須にできるフィールドの未入力チェック。1件でも違反があれば
 			// 全体を拒否する(一部だけ作成される中途半端な状態を避ける)。差し替え申請
 			// (targetEmojiId指定時)はこれらのフィールド自体が使われないため対象外
+			// JUICE: タグは全角スペースなどの空白でも分ける
+			for (const req of ps.requests) req.aliases = normalizeEmojiAliases(req.aliases ?? []);
 			for (const req of ps.requests) {
 				if (req.targetEmojiId != null) continue;
 				if (emojiRequestRequireCategory && (req.category == null || req.category.trim() === '')) throw new ApiError(meta.errors.categoryRequired);

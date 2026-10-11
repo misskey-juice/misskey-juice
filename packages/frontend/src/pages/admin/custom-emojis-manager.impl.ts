@@ -34,10 +34,6 @@ export function emptyStrToNull(value: string) {
 	return value === '' ? null : value;
 }
 
-export function emptyStrToEmptyArray(value: string) {
-	return value === '' ? [] : value.split(' ').map(it => it.trim());
-}
-
 export function roleIdsParser(text: string): { id: string, name: string }[] {
 	// idとnameのペア配列をJSONで受け取る。それ以外の形式は許容しない
 	try {

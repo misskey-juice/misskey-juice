@@ -87,6 +87,7 @@ import { i18n } from '@/i18n.js';
 import { iAmAdmin } from '@/i.js';
 import { definePage } from '@/page.js';
 import { Paginator } from '@/utility/paginator.js';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 const tab = ref('local');
 const query = ref<string | null>(null);
@@ -284,7 +285,7 @@ const addTagBulk = async () => {
 	if (canceled || result == null) return;
 	await os.apiWithDialog('admin/emoji/add-aliases-bulk', {
 		ids: selectedEmojis.value,
-		aliases: result.split(' '),
+		aliases: splitEmojiTags(result),
 	});
 	paginator.reload();
 };
@@ -296,7 +297,7 @@ const removeTagBulk = async () => {
 	if (canceled || result == null) return;
 	await os.apiWithDialog('admin/emoji/remove-aliases-bulk', {
 		ids: selectedEmojis.value,
-		aliases: result.split(' '),
+		aliases: splitEmojiTags(result),
 	});
 	paginator.reload();
 };
@@ -308,7 +309,7 @@ const setTagBulk = async () => {
 	if (canceled || result == null) return;
 	await os.apiWithDialog('admin/emoji/set-aliases-bulk', {
 		ids: selectedEmojis.value,
-		aliases: result.split(' '),
+		aliases: splitEmojiTags(result),
 	});
 	paginator.reload();
 };

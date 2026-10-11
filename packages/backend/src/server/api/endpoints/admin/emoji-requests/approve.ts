@@ -16,6 +16,7 @@ import { EmailService } from '@/core/EmailService.js';
 import { EmailI18nService } from '@/core/EmailI18nService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { FILE_TYPE_IMAGE } from '@/const.js';
+import { normalizeEmojiAliases } from '@/misc/emoji-aliases.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -127,7 +128,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const isReplacement = request.targetEmojiId != null;
 			const effectiveName = (!isReplacement && ps.name !== undefined) ? ps.name : request.name;
 			const effectiveCategory = (!isReplacement && ps.category !== undefined) ? ps.category : request.category;
-			const effectiveAliases = (!isReplacement && ps.aliases !== undefined) ? ps.aliases : request.aliases;
+			// JUICE: タグは全角スペースなどの空白でも分ける
+			const effectiveAliases = (!isReplacement && ps.aliases !== undefined) ? normalizeEmojiAliases(ps.aliases) : request.aliases;
 			const effectiveLicense = (!isReplacement && ps.license !== undefined) ? ps.license : request.license;
 			const effectiveIsSensitive = (!isReplacement && ps.isSensitive !== undefined) ? ps.isSensitive : request.isSensitive;
 			const effectiveLocalOnly = (!isReplacement && ps.localOnly !== undefined) ? ps.localOnly : request.localOnly;
