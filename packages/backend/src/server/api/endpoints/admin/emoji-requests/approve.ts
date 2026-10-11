@@ -37,6 +37,12 @@ export const meta = {
 			code: 'ALREADY_REVIEWED',
 			id: '04175ccd-6d85-45c2-8692-6e8c0fa7dec4',
 		},
+		// JUICE: 申請者が画像を差し替えたため、見ていた申請と中身が変わった(もう一度確かめてもらう)
+		requestModified: {
+			message: 'The image of this emoji request has been replaced. Please check it again.',
+			code: 'REQUEST_MODIFIED',
+			id: '732b34eb-fd78-452a-9d4f-d98918f98e7d',
+		},
 		noSuchFile: {
 			message: 'The attached file no longer exists.',
 			code: 'NO_SUCH_FILE',
@@ -78,6 +84,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		requestId: { type: 'string', format: 'misskey:id' },
+		// JUICE: モデレーターが見ていた申請の画像。申請者がその後に差し替えていたら断る(見ていない画像を公開・却下しないため)
+		expectedFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		// JUICE: 承認時にモデレーターが申請内容を編集する場合に指定する(差し替え申請では無視される)。
 		// 各上限はemoji-requests/createと同じ(emoji_requestテーブルの列定義に合わせる)。
 		// いずれか1つでも申請時点の値と異なる場合、editReasonの指定が必須になる
@@ -118,6 +126,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const request = await this.emojiRequestsRepository.findOneBy({ id: ps.requestId });
 			if (request == null) throw new ApiError(meta.errors.noSuchRequest);
 			if (request.status !== 'pending') throw new ApiError(meta.errors.alreadyReviewed);
+			if (ps.expectedFileId !== undefined && ps.expectedFileId !== request.fileId) throw new ApiError(meta.errors.requestModified);
 
 			const driveFile = request.fileId == null ? null : await this.driveFilesRepository.findOneBy({ id: request.fileId });
 			if (driveFile == null) throw new ApiError(meta.errors.noSuchFile);
@@ -164,6 +173,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// JUICE: 差し替え申請なら対象絵文字の画像のみを差し替え、そうでなければ従来通り新規作成
 			let emoji: { id: string; name: string };
+			// JUICE: 承認の処理の間に画像が差し替えられて承認できなかったとき、差し替え申請の対象の絵文字を元の画像に戻す
+			let revertReplacement: (() => Promise<void>) | null = null;
 			if (request.targetEmojiId != null) {
 				const targetEmoji = await this.customEmojiService.getEmojiById(request.targetEmojiId);
 				if (targetEmoji == null) throw new ApiError(meta.errors.noSuchTargetEmoji);
@@ -174,6 +185,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					publicUrl: emojiFile.webpublicUrl ?? emojiFile.url,
 					fileType: emojiFile.webpublicType ?? emojiFile.type,
 				}, me);
+				revertReplacement = async () => {
+					await this.customEmojiService.update({
+						id: targetEmoji.id,
+						originalUrl: targetEmoji.originalUrl,
+						publicUrl: targetEmoji.publicUrl,
+						fileType: targetEmoji.type ?? undefined,
+					});
+				};
 
 				emoji = targetEmoji;
 			} else {
@@ -195,7 +214,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// JUICE: 冒頭のstatusチェックとこの更新の間(ファイル複製・絵文字作成という低速な処理を挟む)に
 			// 同時に別の審査(承認/却下)が割り込むTOCTOUを防ぐため、WHERE句にstatus='pending'を含めた
 			// 条件付きUPDATEで原子的に排他する。負けた側は既に絵文字を作成済みだが後続の通知・メールは送らない
-			const updateResult = await this.emojiRequestsRepository.update({ id: request.id, status: 'pending' }, {
+			const updateResult = await this.emojiRequestsRepository.update({ id: request.id, status: 'pending', fileId: driveFile.id }, {
 				status: 'approved',
 				reviewerId: me.id,
 				reviewedAt: new Date(),
@@ -211,7 +230,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					editReason: ps.editReason,
 				} : {}),
 			});
-			if (updateResult.affected === 0) throw new ApiError(meta.errors.alreadyReviewed);
+			if (updateResult.affected === 0) {
+				// JUICE: 承認の処理の間に申請者が画像を差し替えていたら(まだ審査待ちのまま)、作った絵文字を消して
+				// (差し替え申請なら元の画像に戻して)断る。見ていない画像の申請を承認済みにしないため
+				const current = await this.emojiRequestsRepository.findOneBy({ id: request.id });
+				if (current?.status === 'pending') {
+					if (revertReplacement != null) await revertReplacement();
+					else await this.customEmojiService.delete(emoji.id);
+					throw new ApiError(meta.errors.requestModified);
+				}
+				throw new ApiError(meta.errors.alreadyReviewed);
+			}
 
 			this.moderationLogService.log(me, 'approveEmojiRequest', {
 				requestId: request.id,

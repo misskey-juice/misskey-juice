@@ -7,8 +7,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkFolder>
 	<!-- JUICE: サムネイルで申請中の画像そのものを表示する。承認/却下後にファイルが削除されている場合はアイコンにフォールバック -->
 	<template #icon>
-		<img v-if="request.fileUrl" :src="request.fileUrl" :class="$style.thumbnail" alt=""/>
-		<i v-else-if="request.fileId" class="ti ti-sparkles"></i>
+		<img v-if="fileUrl" :src="fileUrl" :class="$style.thumbnail" alt=""/>
+		<i v-else-if="fileId" class="ti ti-sparkles"></i>
 	</template>
 	<template #label>{{ request.name }}</template>
 	<template #suffix>
@@ -17,6 +17,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<!-- JUICE: 審査待ちの間だけ、申請者自身の意思で取り下げられるようにする(モデレーターの却下とは別) -->
 	<template v-if="cancelable && request.status === 'pending'" #footer>
 		<div class="_buttons">
+			<!-- JUICE: 審査待ちの間は、申請し直さずに画像だけを差し替えられる -->
+			<MkButton @click="replaceFile"><i class="ti ti-replace"></i> {{ i18n.ts._avatarDecorationRequestPage.replaceImage }}</MkButton>
 			<MkButton danger @click="cancel"><i class="ti ti-x" style="color: var(--MI_THEME-error)"></i> {{ i18n.ts._avatarDecorationRequestPage.cancelRequest }}</MkButton>
 		</div>
 	</template>
@@ -34,12 +36,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkFolder from '@/components/MkFolder.vue';
 import MkButton from '@/components/MkButton.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+import { selectFileDeferred, uploadFile } from '@/utility/drive.js';
 
 const props = defineProps<{
 	request: Misskey.entities.AvatarDecorationRequestsListResponse[number];
@@ -51,6 +54,14 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(ev: 'cancelled', requestId: string): void;
 }>();
+
+// JUICE: 画像を差し替えたら、一覧を読み直さずにサムネイルだけ新しい画像にする
+const fileId = ref(props.request.fileId);
+const fileUrl = ref(props.request.fileUrl);
+watch(() => props.request, request => {
+	fileId.value = request.fileId;
+	fileUrl.value = request.fileUrl;
+});
 
 const statusLabel = computed(() => {
 	switch (props.request.status) {
@@ -69,6 +80,31 @@ const statusClass = computed(() => {
 		case 'cancelled': return 'statusCancelled';
 	}
 });
+
+async function replaceFile(ev: PointerEvent) {
+	// 「PCからアップロード」のときは、画像かどうかを確かめてからアップロードする(使わないファイルをドライブに残さない)
+	const [picked] = await selectFileDeferred({
+		anchorElement: ev.currentTarget ?? ev.target,
+		label: i18n.ts._avatarDecorationRequestPage.replaceImage,
+	});
+	if (picked == null) return;
+	if (!picked.type.startsWith('image/')) {
+		os.alert({
+			type: 'warning',
+			title: i18n.ts._watermarkEditor.driveFileTypeWarn,
+			text: i18n.ts._watermarkEditor.driveFileTypeWarnDescription,
+		});
+		return;
+	}
+	const file = picked instanceof File ? await os.promiseDialog(uploadFile(picked, { name: picked.name }).filePromise) : picked;
+	if (file == null) return;
+	const res = await os.apiWithDialog('avatar-decoration-requests/update-file', {
+		requestId: props.request.id,
+		fileId: file.id,
+	});
+	fileId.value = res.fileId;
+	fileUrl.value = res.fileUrl;
+}
 
 async function cancel() {
 	const confirm = await os.confirm({

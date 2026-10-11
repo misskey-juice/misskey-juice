@@ -771,6 +771,12 @@ type AvatarDecorationRequestsListRequest = operations['avatar-decoration-request
 type AvatarDecorationRequestsListResponse = operations['avatar-decoration-requests___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AvatarDecorationRequestsUpdateFileRequest = operations['avatar-decoration-requests___update-file']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AvatarDecorationRequestsUpdateFileResponse = operations['avatar-decoration-requests___update-file']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type Blocking = components['schemas']['Blocking'];
 
 // @public (undocumented)
@@ -1920,6 +1926,12 @@ type EmojiRequestsListRequest = operations['emoji-requests___list']['requestBody
 type EmojiRequestsListResponse = operations['emoji-requests___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type EmojiRequestsUpdateFileRequest = operations['emoji-requests___update-file']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type EmojiRequestsUpdateFileResponse = operations['emoji-requests___update-file']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type EmojiResponse = operations['emoji']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
@@ -2272,6 +2284,8 @@ declare namespace entities {
         AvatarDecorationRequestsCreateManyResponse,
         AvatarDecorationRequestsListRequest,
         AvatarDecorationRequestsListResponse,
+        AvatarDecorationRequestsUpdateFileRequest,
+        AvatarDecorationRequestsUpdateFileResponse,
         BlockingCreateRequest,
         BlockingCreateResponse,
         BlockingDeleteRequest,
@@ -2455,6 +2469,8 @@ declare namespace entities {
         EmojiRequestsCreateManyResponse,
         EmojiRequestsListRequest,
         EmojiRequestsListResponse,
+        EmojiRequestsUpdateFileRequest,
+        EmojiRequestsUpdateFileResponse,
         EmojisResponse,
         EndpointRequest,
         EndpointResponse,

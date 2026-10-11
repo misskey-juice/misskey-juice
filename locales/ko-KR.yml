@@ -3824,6 +3824,7 @@ _avatarDecorationRequestApprovals:
 _avatarDecorationRequestPage:
   cancelRequest: "취소"
   cancelRequestConfirm: "「{name}」의 신청을 취소할까요? 심사 대기 상태가 철회되어 더 이상 심사되지 않습니다"
+  replaceImage: "이미지 교체"
   category: "카테고리"
   changeTarget: "변경"
   dailyLimitExceededDescription: "아바타 장식 신청의 1일 전송 횟수 상한에 도달했습니다. 심사 대기 건수 상한과는 별개의 제한입니다. 잠시 후 다시 시도해 주세요."
@@ -4271,6 +4272,7 @@ _emojiRequestApprovals:
 _emojiRequestPage:
   cancelRequest: "취소"
   cancelRequestConfirm: "「{name}」의 신청을 취소할까요? 심사 대기 상태가 철회되어 더 이상 심사되지 않습니다"
+  replaceImage: "이미지 교체"
   category: "카테고리"
   changeTarget: "변경"
   dailyLimitExceededDescription: "이모지 신청의 1일 전송 횟수 상한에 도달했습니다. 심사 대기 건수 상한과는 별개의 제한입니다. 잠시 후 다시 시도해 주세요."

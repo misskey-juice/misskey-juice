@@ -18030,6 +18030,10 @@ export interface Locale extends ILocale {
          * 「{name}」の申請をキャンセルしますか？審査待ちの状態が取り下げられ、審査されなくなります
          */
         "cancelRequestConfirm": ParameterizedString<"name">;
+        /**
+         * 画像を差し替える
+         */
+        "replaceImage": string;
     };
     "_emojiRequestApprovals": {
         /**
@@ -18262,6 +18266,10 @@ export interface Locale extends ILocale {
          * 「{name}」の申請をキャンセルしますか？審査待ちの状態が取り下げられ、審査されなくなります
          */
         "cancelRequestConfirm": ParameterizedString<"name">;
+        /**
+         * 画像を差し替える
+         */
+        "replaceImage": string;
     };
     "_avatarDecorationRequestApprovals": {
         /**

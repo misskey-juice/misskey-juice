@@ -158,6 +158,7 @@ export * as 'avatar-decoration-requests/count' from './endpoints/avatar-decorati
 export * as 'avatar-decoration-requests/create' from './endpoints/avatar-decoration-requests/create.js';
 export * as 'avatar-decoration-requests/create-many' from './endpoints/avatar-decoration-requests/create-many.js';
 export * as 'avatar-decoration-requests/list' from './endpoints/avatar-decoration-requests/list.js';
+export * as 'avatar-decoration-requests/update-file' from './endpoints/avatar-decoration-requests/update-file.js';
 export * as 'blocking/create' from './endpoints/blocking/create.js';
 export * as 'blocking/delete' from './endpoints/blocking/delete.js';
 export * as 'blocking/list' from './endpoints/blocking/list.js';
@@ -230,6 +231,7 @@ export * as 'emoji-requests/count' from './endpoints/emoji-requests/count.js';
 export * as 'emoji-requests/create' from './endpoints/emoji-requests/create.js';
 export * as 'emoji-requests/create-many' from './endpoints/emoji-requests/create-many.js';
 export * as 'emoji-requests/list' from './endpoints/emoji-requests/list.js';
+export * as 'emoji-requests/update-file' from './endpoints/emoji-requests/update-file.js';
 export * as 'import-requests/cancel' from './endpoints/import-requests/cancel.js';
 export * as 'import-requests/list' from './endpoints/import-requests/list.js';
 export * as 'emojis' from './endpoints/emojis.js';
