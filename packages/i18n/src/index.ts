@@ -56,6 +56,17 @@ function removeEmpty<T extends ILocale>(obj: T): T {
 	return obj;
 }
 
+/**
+ * JUICE: 文字化け(ja-MB)。UTF-8の日本語を、Shift_JISとして読んでしまったときの見た目にする(「こんにちは」→「縺薙ｓ縺ｫ縺｡縺ｯ」)。
+ * 英数字・記号(ASCII)はそのまま残すので、{name}のような差し込みや<b>などのタグは壊れない
+ */
+function mojibake<T extends ILocale>(locale: T): T {
+	const decoder = new TextDecoder('shift_jis');
+	const encoder = new TextEncoder();
+	const convert = (text: string) => text.replace(/[^\p{ASCII}]+/gu, run => decoder.decode(encoder.encode(run)));
+	return Object.fromEntries(Object.entries(locale).map(([k, v]) => [k, typeof v === 'string' ? convert(v) : mojibake(v as ILocale)])) as T;
+}
+
 function build(): Record<Language, Locale> {
 	// vitestの挙動を調整するため、一度ローカル変数化する必要がある
 	// https://github.com/vitest-dev/vitest/issues/3988#issuecomment-1686599577
@@ -79,6 +90,10 @@ function build(): Record<Language, Locale> {
 			case 'ja-KS':
 			case 'en-US':
 				a[key] = merge<Locale>(locales['ja-JP'] as Locale, v);
+				break;
+			// JUICE: 文字化けは、ja-JPの文言を全部文字化けさせる(ja-MB.ymlには言語の名前だけを書く)
+			case 'ja-MB':
+				a[key] = merge<Locale>(mojibake(locales['ja-JP'] as Locale), v);
 				break;
 			default: {
 				const primaryLang = lang as PrimaryLang;
