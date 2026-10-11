@@ -128,6 +128,7 @@ import {
 import { novelEditorExtensions } from '@/utility/novel-editor-extensions.js';
 import { collapseHeaderActions } from '@/utility/collapse-header-actions.js';
 import { isNovelTextFile } from '@/utility/novel-text-file.js';
+import { prefer } from '@/preferences.js';
 
 const XNovelViewer = defineAsyncComponent(() => import('@/pages/novel-viewer.vue'));
 
@@ -163,6 +164,10 @@ const editorStyle = computed(() => ({
 	'--novelEditorFontSize': `${novelEditorSettings.fontSize}px`,
 	'--novelEditorLineHeight': `${novelEditorSettings.lineHeight}`,
 }));
+
+// JUICE: 設定の「JUICE」にある「初めからほかの人にダウンロードさせない」と同じ設定(どちらで変えても同じ)。
+// 小説エディターから投稿するときにも、ここから切り替えられるようにする
+const novelTextDownloadDisabledByDefault = prefer.model('novelTextDownloadDisabledByDefault');
 
 function openSettings(ev: MouseEvent): void {
 	const items: MenuItem[] = [{
@@ -204,6 +209,11 @@ function openSettings(ev: MouseEvent): void {
 			ref: toRef(novelEditorSettings, 'sidePreview'),
 		});
 	}
+	items.push({ type: 'divider' }, {
+		type: 'switch',
+		text: i18n.ts._juice.novelTextDownloadDisabledByDefault,
+		ref: novelTextDownloadDisabledByDefault,
+	});
 	os.popupMenu(items, ev.currentTarget as HTMLElement);
 }
 //#endregion
@@ -671,7 +681,12 @@ async function postNovel(): Promise<void> {
 	}
 	const file = await os.promiseDialog((async () => {
 		const uploaded = await uploadFile(textBlob(), { name: fileName() }).filePromise;
-		return await misskeyApi('drive/files/update', { fileId: uploaded.id, isNovel: true });
+		// 設定の「初めからほかの人にダウンロードさせない」も、ここで付ける(投稿フォームは、最初から添付してあるファイルには当てないため)
+		return await misskeyApi('drive/files/update', {
+			fileId: uploaded.id,
+			isNovel: true,
+			...(prefer.s.novelTextDownloadDisabledByDefault ? { novelDownloadDisabled: true } : {}),
+		});
 	})());
 	if (file == null) return;
 	os.post({ initialFiles: [file], initialText: currentWork.value.title.trim() });
