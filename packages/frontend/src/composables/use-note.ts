@@ -158,7 +158,8 @@ export function useNote(
 	// 一本化し、MkNoteSub.vue と実装がずれないようにする。
 	// ノートの isAIGenerated は投稿後にストリーム経由で変わりうる ($appearNote.isAIGenerated, aiGeneratedChanged
 	// イベント) ため、初期値の算出だけでなく watch でも追従させる必要があり、hardMutedもrefにしている(下記)。
-	const aiGeneratedMuteMode = computed(() => checkAIGeneratedMute({ userId: appearNote.userId, isAIGenerated: $appearNote.isAIGenerated }, $i));
+	// 添付ファイルのどれかにAI生成物のフラグがあれば、ノートのフラグを外してもミュートは続く(その画像がAI生成物であることは変わらないため)
+	const aiGeneratedMuteMode = computed(() => checkAIGeneratedMute({ userId: appearNote.userId, isAIGenerated: $appearNote.isAIGenerated, files: appearNote.files }, $i));
 	const isAIGeneratedMuteTarget = computed(() => aiGeneratedMuteMode.value !== 'none');
 
 	const muted = ref(
