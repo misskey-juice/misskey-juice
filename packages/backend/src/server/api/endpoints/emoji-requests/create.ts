@@ -20,6 +20,7 @@ import { JuiceAdminNotificationService } from '@/core/JuiceAdminNotificationServ
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { FILE_TYPE_IMAGE } from '@/const.js';
 import { ApiError } from '@/server/api/error.js';
+import { normalizeEmojiAliases } from '@/misc/emoji-aliases.js';
 
 export const meta = {
 	tags: ['emoji-requests'],
@@ -151,6 +152,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userEntityService: UserEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
+			// JUICE: タグは全角スペースなどの空白でも分ける
+			ps.aliases = normalizeEmojiAliases(ps.aliases ?? []);
 			// JUICE
 			await this.captchaService.verifyRequestCaptcha(this.serverSettings, {
 				hcaptcha: ps['hcaptcha-response'],

@@ -3824,6 +3824,7 @@ _avatarDecorationRequestApprovals:
 _avatarDecorationRequestPage:
   cancelRequest: "取消"
   cancelRequestConfirm: "要取消「{name}」的申请吗？将从待审核队列中撤回，不再进行审核"
+  replaceImage: "更换图片"
   category: "分类"
   changeTarget: "变更"
   dailyLimitExceededDescription: "已达到头像装饰申请每日发送次数的上限。这与待审核件数的上限是不同的限制。请稍后重试。"
@@ -4271,6 +4272,7 @@ _emojiRequestApprovals:
 _emojiRequestPage:
   cancelRequest: "取消"
   cancelRequestConfirm: "要取消「{name}」的申请吗？将从待审核队列中撤回，不再进行审核"
+  replaceImage: "更换图片"
   category: "分类"
   changeTarget: "变更"
   dailyLimitExceededDescription: "已达到表情申请每日发送次数的上限。这与待审核件数的上限是不同的限制。请稍后重试。"

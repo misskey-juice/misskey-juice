@@ -77,7 +77,6 @@ import type { GridCellValidationEvent, GridCellValueChangeEvent, GridEvent } fro
 import type { GridSetting } from '@/components/grid/grid.js';
 import * as os from '@/os.js';
 import {
-	emptyStrToEmptyArray,
 	emptyStrToNull,
 	emptyStrToUndefined,
 	roleIdsParser,
@@ -91,6 +90,7 @@ import MkPagingButtons from '@/components/MkPagingButtons.vue';
 import { selectFile } from '@/utility/drive.js';
 import { copyGridDataToClipboard, removeDataFromGrid } from '@/components/grid/grid-utils.js';
 import { useLoading } from '@/composables/use-loading.js';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 type GridItem = {
 	checked: boolean;
@@ -339,7 +339,7 @@ async function onUpdateButtonClicked() {
 					id: item.id!,
 					name: item.name,
 					category: emptyStrToNull(item.category),
-					aliases: emptyStrToEmptyArray(item.aliases),
+					aliases: splitEmojiTags(item.aliases),
 					license: emptyStrToNull(item.license),
 					isSensitive: item.isSensitive,
 					localOnly: item.localOnly,

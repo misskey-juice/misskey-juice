@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { IsNull } from 'typeorm';
 import { Inject, Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { EmojiRequestsRepository, DriveFilesRepository } from '@/models/_.js';
@@ -28,6 +29,12 @@ export const meta = {
 			message: 'This emoji request has already been reviewed.',
 			code: 'ALREADY_REVIEWED',
 			id: '7b5306b9-dd3d-453f-89cb-3152cb8388c5',
+		},
+		// JUICE: 申請者が画像を差し替えたため、見ていた申請と中身が変わった(もう一度確かめてもらう)
+		requestModified: {
+			message: 'The image of this emoji request has been replaced. Please check it again.',
+			code: 'REQUEST_MODIFIED',
+			id: '37a7dcd6-f0c8-41a4-9d7a-677e5a78fd9b',
 		},
 	},
 } as const;
@@ -59,11 +66,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// JUICE: 冒頭のstatusチェックと本更新の間に、モデレーターによる審査(承認/却下)が
 			// 割り込むTOCTOUを防ぐため、WHERE句にstatus='pending'を含めた条件付きUPDATEで原子的に排他する
-			const updateResult = await this.emojiRequestsRepository.update({ id: request.id, status: 'pending' }, {
+			const updateResult = await this.emojiRequestsRepository.update({ id: request.id, status: 'pending', fileId: request.fileId ?? IsNull() }, {
 				status: 'cancelled',
 				reviewedAt: new Date(),
 			});
-			if (updateResult.affected === 0) throw new ApiError(meta.errors.alreadyReviewed);
+			if (updateResult.affected === 0) {
+				// JUICE: 同時に画像を差し替えていたら(まだ審査待ちのまま)、消すファイルを取り違えないよう断る
+				const current = await this.emojiRequestsRepository.findOneBy({ id: request.id });
+				throw new ApiError(current?.status === 'pending' ? meta.errors.requestModified : meta.errors.alreadyReviewed);
+			}
 
 			if (request.deleteFileAfterReview && request.fileId != null) {
 				const driveFile = await this.driveFilesRepository.findOneBy({ id: request.fileId });

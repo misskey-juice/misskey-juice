@@ -1388,6 +1388,15 @@ export type paths = {
          */
         post: operations['avatar-decoration-requests___list'];
     };
+    '/avatar-decoration-requests/update-file': {
+        /**
+         * avatar-decoration-requests/update-file
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:avatar-decoration-requests*
+         */
+        post: operations['avatar-decoration-requests___update-file'];
+    };
     '/blocking/create': {
         /**
          * blocking/create
@@ -2386,6 +2395,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:emoji-requests*
          */
         post: operations['emoji-requests___list'];
+    };
+    '/emoji-requests/update-file': {
+        /**
+         * emoji-requests/update-file
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:emoji-requests*
+         */
+        post: operations['emoji-requests___update-file'];
     };
     '/emojis': {
         /**
@@ -8275,6 +8293,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     requestId: string;
+                    /** Format: misskey:id */
+                    expectedFileId?: string | null;
                     name?: string;
                     description?: string;
                     category?: string | null;
@@ -8417,6 +8437,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     requestId: string;
+                    /** Format: misskey:id */
+                    expectedFileId?: string | null;
                     reason: string;
                 };
             };
@@ -9786,6 +9808,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     requestId: string;
+                    /** Format: misskey:id */
+                    expectedFileId?: string | null;
                     name?: string;
                     category?: string | null;
                     aliases?: string[];
@@ -9931,6 +9955,8 @@ export interface operations {
                 'application/json': {
                     /** Format: misskey:id */
                     requestId: string;
+                    /** Format: misskey:id */
+                    expectedFileId?: string | null;
                     reason: string;
                 };
             };
@@ -18122,6 +18148,87 @@ export interface operations {
             };
         };
     };
+    'avatar-decoration-requests___update-file': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                    /** Format: misskey:id */
+                    fileId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        fileId: string;
+                        fileUrl: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     blocking___create: {
         requestBody: {
             content: {
@@ -26133,6 +26240,87 @@ export interface operations {
             };
         };
     };
+    'emoji-requests___update-file': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    requestId: string;
+                    /** Format: misskey:id */
+                    fileId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: id */
+                        fileId: string;
+                        fileUrl: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     emojis: {
         responses: {
             /** @description OK (with results) */
@@ -31825,7 +32013,7 @@ export interface operations {
             content: {
                 'application/json': {
                     /** @enum {string|null} */
-                    emailLang: null | 'ar-SA' | 'ca-ES' | 'cs-CZ' | 'da-DK' | 'de-DE' | 'en-US' | 'es-ES' | 'fr-FR' | 'id-ID' | 'it-IT' | 'ja-JP' | 'ja-KS' | 'kab-KAB' | 'kn-IN' | 'ko-KR' | 'nl-NL' | 'no-NO' | 'pl-PL' | 'pt-PT' | 'ru-RU' | 'sk-SK' | 'th-TH' | 'tr-TR' | 'ug-CN' | 'uk-UA' | 'vi-VN' | 'zh-CN' | 'zh-TW';
+                    emailLang: null | 'ar-SA' | 'ca-ES' | 'cs-CZ' | 'da-DK' | 'de-DE' | 'en-US' | 'es-ES' | 'fr-FR' | 'id-ID' | 'it-IT' | 'ja-JP' | 'ja-KS' | 'ja-MB' | 'kab-KAB' | 'kn-IN' | 'ko-KR' | 'nl-NL' | 'no-NO' | 'pl-PL' | 'pt-PT' | 'ru-RU' | 'sk-SK' | 'th-TH' | 'tr-TR' | 'ug-CN' | 'uk-UA' | 'vi-VN' | 'zh-CN' | 'zh-TW';
                 };
             };
         };

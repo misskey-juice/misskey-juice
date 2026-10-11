@@ -6,7 +6,8 @@
 import { lang } from '@@/js/config.js';
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-export const versatileLang = (lang ?? 'ja-JP').replace('ja-KS', 'ja-JP');
+// JUICE: 文字化け(ja-MB)も、日付・数の書き方は日本語にする
+export const versatileLang = (lang ?? 'ja-JP').replace('ja-KS', 'ja-JP').replace('ja-MB', 'ja-JP');
 
 let _dateTimeFormat: Intl.DateTimeFormat;
 try {

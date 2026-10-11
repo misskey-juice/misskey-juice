@@ -93,6 +93,7 @@ import { customEmojiCategories } from '@/custom-emojis.js';
 import MkSwitch from '@/components/MkSwitch.vue';
 import { selectFile } from '@/utility/drive.js';
 import MkRolePreview from '@/components/MkRolePreview.vue';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 const props = defineProps<{
 	emoji?: Misskey.entities.EmojiDetailed,
@@ -151,7 +152,7 @@ async function done() {
 	const params = {
 		name: name.value,
 		category: category.value === '' ? null : category.value,
-		aliases: aliases.value.split(' ').filter(x => x !== ''),
+		aliases: splitEmojiTags(aliases.value),
 		license: license.value === '' ? null : license.value,
 		isSensitive: isSensitive.value,
 		localOnly: localOnly.value,

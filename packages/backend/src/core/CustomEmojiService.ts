@@ -18,6 +18,7 @@ import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
 import type { EmojisRepository, MiRole, MiUser } from '@/models/_.js';
 import type { MiEmoji } from '@/models/Emoji.js';
 import type { Serialized } from '@/types.js';
+import { normalizeEmojiAliases } from '@/misc/emoji-aliases.js';
 
 const parseEmojiStrRegexp = /^([-\w]+)(?:@([\w.-]+))?$/;
 
@@ -109,7 +110,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			name: data.name,
 			category: data.category,
 			host: data.host,
-			aliases: data.aliases,
+			aliases: normalizeEmojiAliases(data.aliases),
 			originalUrl: data.originalUrl,
 			publicUrl: data.publicUrl,
 			type: data.fileType,
@@ -172,7 +173,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			updatedAt: new Date(),
 			name: data.name,
 			category: data.category,
-			aliases: data.aliases,
+			aliases: data.aliases !== undefined ? normalizeEmojiAliases(data.aliases) : undefined,
 			license: data.license,
 			isSensitive: data.isSensitive,
 			localOnly: data.localOnly,
@@ -220,7 +221,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		for (const emoji of emojis) {
 			await this.emojisRepository.update(emoji.id, {
 				updatedAt: new Date(),
-				aliases: [...new Set(emoji.aliases.concat(aliases))],
+				aliases: normalizeEmojiAliases(emoji.aliases.concat(aliases)),
 			});
 		}
 
@@ -237,7 +238,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			id: In(ids),
 		}, {
 			updatedAt: new Date(),
-			aliases: aliases,
+			aliases: normalizeEmojiAliases(aliases),
 		});
 
 		this.localEmojisCache.refresh();
@@ -256,7 +257,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		for (const emoji of emojis) {
 			await this.emojisRepository.update(emoji.id, {
 				updatedAt: new Date(),
-				aliases: emoji.aliases.filter(x => !aliases.includes(x)),
+				aliases: emoji.aliases.filter(x => !normalizeEmojiAliases(aliases).includes(x)),
 			});
 		}
 

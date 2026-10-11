@@ -217,6 +217,8 @@ import type {
 	AvatarDecorationRequestsCreateManyResponse,
 	AvatarDecorationRequestsListRequest,
 	AvatarDecorationRequestsListResponse,
+	AvatarDecorationRequestsUpdateFileRequest,
+	AvatarDecorationRequestsUpdateFileResponse,
 	BlockingCreateRequest,
 	BlockingCreateResponse,
 	BlockingDeleteRequest,
@@ -400,6 +402,8 @@ import type {
 	EmojiRequestsCreateManyResponse,
 	EmojiRequestsListRequest,
 	EmojiRequestsListResponse,
+	EmojiRequestsUpdateFileRequest,
+	EmojiRequestsUpdateFileResponse,
 	EmojisResponse,
 	EndpointRequest,
 	EndpointResponse,
@@ -931,6 +935,7 @@ export type Endpoints = {
 	'avatar-decoration-requests/create': { req: AvatarDecorationRequestsCreateRequest; res: AvatarDecorationRequestsCreateResponse };
 	'avatar-decoration-requests/create-many': { req: AvatarDecorationRequestsCreateManyRequest; res: AvatarDecorationRequestsCreateManyResponse };
 	'avatar-decoration-requests/list': { req: AvatarDecorationRequestsListRequest; res: AvatarDecorationRequestsListResponse };
+	'avatar-decoration-requests/update-file': { req: AvatarDecorationRequestsUpdateFileRequest; res: AvatarDecorationRequestsUpdateFileResponse };
 	'blocking/create': { req: BlockingCreateRequest; res: BlockingCreateResponse };
 	'blocking/delete': { req: BlockingDeleteRequest; res: BlockingDeleteResponse };
 	'blocking/list': { req: BlockingListRequest; res: BlockingListResponse };
@@ -1042,6 +1047,7 @@ export type Endpoints = {
 	'emoji-requests/create': { req: EmojiRequestsCreateRequest; res: EmojiRequestsCreateResponse };
 	'emoji-requests/create-many': { req: EmojiRequestsCreateManyRequest; res: EmojiRequestsCreateManyResponse };
 	'emoji-requests/list': { req: EmojiRequestsListRequest; res: EmojiRequestsListResponse };
+	'emoji-requests/update-file': { req: EmojiRequestsUpdateFileRequest; res: EmojiRequestsUpdateFileResponse };
 	'emojis': { req: EmptyRequest; res: EmojisResponse };
 	'endpoint': { req: EndpointRequest; res: EndpointResponse };
 	'endpoints': { req: EmptyRequest; res: EndpointsResponse };

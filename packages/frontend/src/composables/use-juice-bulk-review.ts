@@ -13,7 +13,7 @@ import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 type Kind = 'emoji' | 'avatarDecoration';
-type Item = { id: string; name: string; status: string };
+type Item = { id: string; name: string; status: string; fileId: string | null };
 
 const endpoints = {
 	emoji: { approve: 'admin/emoji-requests/approve', reject: 'admin/emoji-requests/reject' },
@@ -85,7 +85,7 @@ export function useJuiceBulkReview(kind: Kind, items: Ref<Item[]>, state: Ref<st
 			text: i18n.tsx._juice.bulkApproveConfirm({ n: targets.length }),
 		});
 		if (canceled) return;
-		await run(targets, item => misskeyApi(endpoints[kind].approve, { requestId: item.id }));
+		await run(targets, item => misskeyApi(endpoints[kind].approve, { requestId: item.id, expectedFileId: item.fileId }));
 	}
 
 	async function bulkReject(): Promise<void> {
@@ -98,7 +98,7 @@ export function useJuiceBulkReview(kind: Kind, items: Ref<Item[]>, state: Ref<st
 			maxLength: 1024,
 		});
 		if (canceled || !reason) return;
-		await run(targets, item => misskeyApi(endpoints[kind].reject, { requestId: item.id, reason }));
+		await run(targets, item => misskeyApi(endpoints[kind].reject, { requestId: item.id, expectedFileId: item.fileId, reason }));
 	}
 
 	return { selecting, selected, selectedItems, allSelected, pendingItems, toggleSelecting, toggleAll, forget, bulkApprove, bulkReject };

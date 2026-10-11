@@ -67,7 +67,6 @@ import type { GridSetting } from '@/components/grid/grid.js';
 import type { GridRow } from '@/components/grid/row.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import {
-	emptyStrToEmptyArray,
 	emptyStrToNull,
 	roleIdsParser,
 } from '@/pages/admin/custom-emojis-manager.impl.js';
@@ -86,6 +85,7 @@ import { copyGridDataToClipboard } from '@/components/grid/grid-utils.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
 
 import { prefer } from '@/preferences.js';
+import { splitEmojiTags } from '@/utility/emoji-tags.js';
 
 const MAXIMUM_EMOJI_REGISTER_COUNT = 100;
 
@@ -256,7 +256,7 @@ async function onRegistryClicked() {
 					'admin/emoji/add', {
 						name: item.name,
 						category: emptyStrToNull(item.category),
-						aliases: emptyStrToEmptyArray(item.aliases),
+						aliases: splitEmojiTags(item.aliases),
 						license: emptyStrToNull(item.license),
 						isSensitive: item.isSensitive,
 						localOnly: item.localOnly,

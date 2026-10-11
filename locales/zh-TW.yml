@@ -4651,6 +4651,7 @@ _emojiRequestPage:
   replacementRequestBadge: "替換申請"
   cancelRequest: "取消"
   cancelRequestConfirm: "要取消「{name}」的申請嗎？將撤回等待審核狀態，不再進行審核"
+  replaceImage: "更換圖片"
 _emojiRequestApprovals:
   title: "表情符號申請"
   menuTitle: "查看表情符號申請"
@@ -4710,6 +4711,7 @@ _avatarDecorationRequestPage:
   replacementRequestBadge: "替換申請"
   cancelRequest: "取消"
   cancelRequestConfirm: "要取消「{name}」的申請嗎？將撤回等待審核狀態，不再進行審核"
+  replaceImage: "更換圖片"
 _avatarDecorationRequestApprovals:
   title: "頭像裝飾申請"
   menuTitle: "查看頭像裝飾申請"

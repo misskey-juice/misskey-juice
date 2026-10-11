@@ -36,6 +36,12 @@ export const meta = {
 			code: 'ALREADY_REVIEWED',
 			id: '4699dbd2-11cf-48be-b7e2-d6738ab490d0',
 		},
+		// JUICE: 申請者が画像を差し替えたため、見ていた申請と中身が変わった(もう一度確かめてもらう)
+		requestModified: {
+			message: 'The image of this avatar decoration request has been replaced. Please check it again.',
+			code: 'REQUEST_MODIFIED',
+			id: '1409ef48-ae42-4606-b866-dd552d7d7bbd',
+		},
 		noSuchFile: {
 			message: 'The attached file no longer exists.',
 			code: 'NO_SUCH_FILE',
@@ -72,6 +78,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		requestId: { type: 'string', format: 'misskey:id' },
+		// JUICE: モデレーターが見ていた申請の画像。申請者がその後に差し替えていたら断る(見ていない画像を公開・却下しないため)
+		expectedFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		// JUICE: 承認時にモデレーターが申請内容を編集する場合に指定する(差し替え申請では無視される)。
 		// 各上限はavatar-decoration-requests/createと同じ(avatar_decoration_requestテーブルの
 		// 列定義に合わせる)。いずれか1つでも申請時点の値と異なる場合、editReasonの指定が必須になる
@@ -112,6 +120,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const request = await this.avatarDecorationRequestsRepository.findOneBy({ id: ps.requestId });
 			if (request == null) throw new ApiError(meta.errors.noSuchRequest);
 			if (request.status !== 'pending') throw new ApiError(meta.errors.alreadyReviewed);
+			if (ps.expectedFileId !== undefined && ps.expectedFileId !== request.fileId) throw new ApiError(meta.errors.requestModified);
 
 			const driveFile = request.fileId == null ? null : await this.driveFilesRepository.findOneBy({ id: request.fileId });
 			if (driveFile == null) throw new ApiError(meta.errors.noSuchFile);
@@ -144,6 +153,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// JUICE: 差し替え申請なら対象デコレーションの画像のみを差し替え、そうでなければ従来通り新規作成
 			let decoration: { id: string; name: string };
+			// JUICE: 承認の処理の間に画像が差し替えられて承認できなかったとき、差し替え申請の対象のデコレーションを元の画像に戻す
+			let revertReplacement: (() => Promise<void>) | null = null;
 			if (request.targetAvatarDecorationId != null) {
 				const targetDecoration = await this.avatarDecorationsRepository.findOneBy({ id: request.targetAvatarDecorationId });
 				if (targetDecoration == null) throw new ApiError(meta.errors.noSuchTargetAvatarDecoration);
@@ -151,6 +162,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await this.avatarDecorationService.update(targetDecoration.id, {
 					url: decorationFile.url,
 				}, me);
+				revertReplacement = async () => {
+					await this.avatarDecorationService.update(targetDecoration.id, {
+						url: targetDecoration.url,
+					});
+				};
 
 				decoration = targetDecoration;
 			} else {
@@ -166,7 +182,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// JUICE: 冒頭のstatusチェックとこの更新の間(ファイル複製・デコレーション作成という低速な処理を挟む)に
 			// 同時に別の審査(承認/却下)が割り込むTOCTOUを防ぐため、WHERE句にstatus='pending'を含めた
 			// 条件付きUPDATEで原子的に排他する。負けた側は既にデコレーションを作成済みだが後続の通知・メールは送らない
-			const updateResult = await this.avatarDecorationRequestsRepository.update({ id: request.id, status: 'pending' }, {
+			const updateResult = await this.avatarDecorationRequestsRepository.update({ id: request.id, status: 'pending', fileId: driveFile.id }, {
 				status: 'approved',
 				reviewerId: me.id,
 				reviewedAt: new Date(),
@@ -179,7 +195,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					editReason: ps.editReason,
 				} : {}),
 			});
-			if (updateResult.affected === 0) throw new ApiError(meta.errors.alreadyReviewed);
+			if (updateResult.affected === 0) {
+				// JUICE: 承認の処理の間に申請者が画像を差し替えていたら(まだ審査待ちのまま)、作ったデコレーションを消して
+				// (差し替え申請なら元の画像に戻して)断る。見ていない画像の申請を承認済みにしないため
+				const current = await this.avatarDecorationRequestsRepository.findOneBy({ id: request.id });
+				if (current?.status === 'pending') {
+					if (revertReplacement != null) await revertReplacement();
+					else await this.avatarDecorationService.delete(decoration.id);
+					throw new ApiError(meta.errors.requestModified);
+				}
+				throw new ApiError(meta.errors.alreadyReviewed);
+			}
 
 			this.moderationLogService.log(me, 'approveAvatarDecorationRequest', {
 				requestId: request.id,

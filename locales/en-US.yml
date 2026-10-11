@@ -3824,6 +3824,7 @@ _avatarDecorationRequestApprovals:
 _avatarDecorationRequestPage:
   cancelRequest: "Cancel"
   cancelRequestConfirm: "Cancel the request for \"{name}\"? This will withdraw it from the pending review queue and it will no longer be reviewed"
+  replaceImage: "Replace image"
   category: "Category"
   changeTarget: "Change"
   dailyLimitExceededDescription: "You've reached the daily submission limit for avatar decoration requests. This is a separate limit from the pending request limit. Please try again in a while."
@@ -4271,6 +4272,7 @@ _emojiRequestApprovals:
 _emojiRequestPage:
   cancelRequest: "Cancel"
   cancelRequestConfirm: "Cancel the request for \"{name}\"? This will withdraw it from the pending review queue and it will no longer be reviewed"
+  replaceImage: "Replace image"
   category: "Category"
   changeTarget: "Change"
   dailyLimitExceededDescription: "You've reached the daily submission limit for emoji requests. This is a separate limit from the pending request limit. Please try again in a while."

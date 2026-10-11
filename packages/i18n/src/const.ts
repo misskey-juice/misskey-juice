@@ -16,6 +16,8 @@ export const languages = [
 	'it-IT',
 	'ja-JP',
 	'ja-KS',
+	// JUICE: 文字化け(ja-JPの文言をビルドのときに文字化けさせる。src/index.tsのmojibake)
+	'ja-MB',
 	'kab-KAB',
 	'kn-IN',
 	'ko-KR',

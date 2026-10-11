@@ -161,6 +161,8 @@ async function approve() {
 
 	os.apiWithDialog('admin/avatar-decoration-requests/approve', {
 		requestId: props.request.id,
+		// JUICE: 見ていた画像。申請者がその後に差し替えていたら、サーバーが断る
+		expectedFileId: props.request.fileId,
 		...(editMode.value ? {
 			name: editName.value,
 			description: editDescription.value,
@@ -180,6 +182,7 @@ async function reject() {
 
 	os.apiWithDialog('admin/avatar-decoration-requests/reject', {
 		requestId: props.request.id,
+		expectedFileId: props.request.fileId,
 		reason,
 	}).then(() => {
 		emit('resolved', props.request.id);
