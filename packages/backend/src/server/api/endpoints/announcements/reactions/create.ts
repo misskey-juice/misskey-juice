@@ -70,7 +70,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isActive: true,
 			});
 
-			if (announcement == null) {
+			// 自動アーカイブ日時を過ぎたものは、アーカイブのジョブが動く前でもアーカイブ済みとして扱う
+			if (announcement == null || (announcement.autoArchiveAt != null && announcement.autoArchiveAt <= new Date())) {
 				throw new ApiError(meta.errors.noSuchAnnouncement);
 			}
 
