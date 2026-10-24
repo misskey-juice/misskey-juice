@@ -51,7 +51,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
-import { userPage } from '@/filters/user.js';
+import { userPage } from '@@/js/user.js';
 import bytes from '@/filters/bytes.js';
 
 const props = defineProps<{

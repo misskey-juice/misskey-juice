@@ -810,7 +810,7 @@ import { url } from '@@/js/config.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { haptic } from '@/utility/haptic.js';
 import { juicePublicSettingsCache } from '@/cache.js';
-import { userPage } from '@/filters/user.js';
+import { userPage } from '@@/js/user.js';
 import type { MenuItem } from '@/types/menu.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';

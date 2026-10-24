@@ -975,6 +975,16 @@ export type Channels = {
         };
         receives: null;
     };
+    clip: {
+        params: {
+            clipId: string;
+        };
+        events: {
+            updated: () => void;
+            deleted: () => void;
+        };
+        receives: null;
+    };
     drive: {
         params: null;
         events: {
@@ -4551,10 +4561,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:296:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:311:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:321:4 - (ae-forgotten-export) The symbol "DrawRoomStrokePart" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:328:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:306:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:321:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:331:4 - (ae-forgotten-export) The symbol "DrawRoomStrokePart" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:338:52 - (ae-forgotten-export) The symbol "DrawStrokesPatchStep" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
