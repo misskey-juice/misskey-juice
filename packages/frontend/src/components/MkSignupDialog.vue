@@ -71,6 +71,8 @@ const juicePublicSettings = ref<Misskey.entities.JuicePublicSettingsResponse>({
 	midiPlayerMaxSize: 500 * 1024,
 	drawRoomEnabled: true,
 	drawRoomMaxRoomMegabytes: 256,
+	followApprovalDefaultLocalSeconds: 0,
+	followApprovalDefaultRemoteSeconds: 0,
 	importApprovalRequiredTypes: [],
 });
 misskeyApi('juice/public-settings').then(res => {

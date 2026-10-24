@@ -12,6 +12,7 @@ import { UserFollowingService } from '@/core/UserFollowingService.js';
 import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { IdService } from '@/core/IdService.js';
+import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 
 describe('鍵解除時のフォローリクエスト承認', () => {
 	let service: UserFollowingService;
@@ -42,6 +43,8 @@ describe('鍵解除時のフォローリクエスト承認', () => {
 				{ provide: DI.followingsRepository, useValue: followings },
 				{ provide: UserEntityService, useValue: userEntity },
 				{ provide: IdService, useValue: idService },
+				// JUICE: フォローの承認制の既定値を読むため。何も設定していない状態にする
+				{ provide: JuiceSettingsService, useValue: { fetch: async () => ({}) } },
 			],
 		}).useMocker(() => mockDeep()).compile();
 		service = module.get(UserFollowingService);

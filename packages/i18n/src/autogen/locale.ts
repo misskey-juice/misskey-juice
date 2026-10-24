@@ -16122,25 +16122,29 @@ export interface Locale extends ILocale {
          */
         "invitationRegistrationEnabledCaption": string;
         /**
-         * 新規アカウントのフォロー制限
+         * 新しいアカウントからのフォローの承認制(既定値)
          */
-        "newAccountFollowRequest": string;
+        "followApprovalDefault": string;
         /**
-         * 新規アカウントからのフォローをリクエスト化する
+         * ユーザーが設定の「新しいアカウントからのフォローを承認制にする」で「既定値を使う」を選んでいるときの期間です。作成から日が浅いアカウントからのフォローを、フォローリクエストとして保留します。ユーザーが自分で期間を決めたり、無効にしたりしたときは、そちらが優先されます。
          */
-        "newAccountFollowRequestEnabled": string;
+        "followApprovalDefaultDescription": string;
         /**
-         * 作成から一定時間が経過していないアカウント(ローカル・リモート問わず)からのフォローを、フォロー先が承認制フォローを有効にしていなくても、承認が必要なフォローリクエストとして扱います。登録直後の荒らし・スパムアカウントによる一括フォロー対策です。
+         * 既定値を使う
          */
-        "newAccountFollowRequestEnabledCaption": string;
+        "followApprovalUseDefault": string;
         /**
-         * 対象にするアカウントの経過期間未満
+         * 既定値を使う（現在は無効）
          */
-        "newAccountFollowRequestThresholdValue": string;
+        "followApprovalUseDefaultDisabled": string;
         /**
-         * 単位
+         * 既定値を使う（現在は{n}日）
          */
-        "newAccountFollowRequestThresholdUnit": string;
+        "followApprovalUseDefaultDays": ParameterizedString<"n">;
+        /**
+         * 既定値を使う（現在は{n}時間）
+         */
+        "followApprovalUseDefaultHours": ParameterizedString<"n">;
         /**
          * 他のサーバーを探すボタン
          */

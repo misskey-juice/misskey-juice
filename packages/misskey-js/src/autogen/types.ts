@@ -12167,8 +12167,8 @@ export interface operations {
                             isDefault: boolean;
                         }[];
                         customSplashText: string[];
-                        newAccountFollowRequestEnabled: boolean;
-                        newAccountFollowRequestThresholdMs: number;
+                        followApprovalDefaultLocalSeconds: number;
+                        followApprovalDefaultRemoteSeconds: number;
                         importApprovalRequiredTypes: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                         reportCategories: {
                             key: string;
@@ -12378,8 +12378,8 @@ export interface operations {
                         isDefault: boolean;
                     }[];
                     customSplashText?: string[];
-                    newAccountFollowRequestEnabled?: boolean;
-                    newAccountFollowRequestThresholdMs?: number;
+                    followApprovalDefaultLocalSeconds?: number;
+                    followApprovalDefaultRemoteSeconds?: number;
                     importApprovalRequiredTypes?: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                     reportCategories?: {
                         key: string;
@@ -34741,6 +34741,8 @@ export interface operations {
                         midiPlayerMaxSize: number;
                         drawRoomEnabled: boolean;
                         drawRoomMaxRoomMegabytes: number;
+                        followApprovalDefaultLocalSeconds: number;
+                        followApprovalDefaultRemoteSeconds: number;
                     };
                 };
             };

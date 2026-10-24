@@ -29,7 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkDisableSection :disabled="isLocked">
 								<div class="_gaps_m">
 									<div v-for="setting in followApprovalSettings" :key="setting.key" class="_gaps_s">
-										<MkSelect v-model="setting.mode" :items="followApprovalModes" @update:modelValue="saveFollowApproval(setting)">
+										<MkSelect v-model="setting.mode" :items="followApprovalModesFor(setting.key)" @update:modelValue="saveFollowApproval(setting)">
 											<template #label><SearchLabel>{{ setting.label }}</SearchLabel></template>
 											<template #caption><SearchText>{{ setting.caption }}</SearchText></template>
 										</MkSelect>
@@ -264,6 +264,7 @@ import { FOLLOW_APPROVAL_MAX_SECONDS, FOLLOW_APPROVAL_UNIT_SECONDS, followApprov
 import * as os from '@/os.js';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
+import { juicePublicSettingsCache } from '@/cache.js';
 
 const $i = ensureSignin();
 
@@ -301,6 +302,33 @@ const followApprovalModes = [
 	{ label: i18n.ts.disabled, value: 'disabled' },
 	{ label: i18n.ts._followApproval.custom, value: 'custom' },
 ];
+
+// JUICE: 「既定値を使う」に、管理者がJUICE設定で決めた今の既定値を出す(読み込むまでは期間を出さない)
+const followApprovalDefaultSeconds = ref<Record<FollowApprovalSetting['key'], number> | null>(null);
+juicePublicSettingsCache.fetch().then(res => {
+	followApprovalDefaultSeconds.value = {
+		followApprovalLocalSeconds: res.followApprovalDefaultLocalSeconds,
+		followApprovalRemoteSeconds: res.followApprovalDefaultRemoteSeconds,
+	};
+}).catch(() => { /* empty */ });
+
+function followApprovalModesFor(key: FollowApprovalSetting['key']) {
+	const seconds = followApprovalDefaultSeconds.value?.[key];
+	let label: string;
+	if (seconds == null) {
+		label = i18n.ts._juice.followApprovalUseDefault;
+	} else if (seconds === 0) {
+		label = i18n.ts._juice.followApprovalUseDefaultDisabled;
+	} else {
+		const { amount, unit } = followApprovalPeriodFromSeconds(seconds);
+		// 前のJUICEの設定は分単位で決められたため、時間にすると割り切れないことがある
+		const n = Math.round(amount * 100) / 100;
+		label = unit === 'day'
+			? i18n.tsx._juice.followApprovalUseDefaultDays({ n })
+			: i18n.tsx._juice.followApprovalUseDefaultHours({ n });
+	}
+	return [{ label, value: 'default' }, ...followApprovalModes.slice(1)];
+}
 
 const followApprovalUnits = [
 	{ label: i18n.ts._time.hour, value: 'hour' },

@@ -62,10 +62,18 @@ export interface JuiceSettingsValue {
 	contactFormContentMaxLength?: number;
 	/** 起動時のスプラッシュ画面にロゴの下へランダム表示する文言一覧(misskey-tempuraのcustomSplashTextを参考) */
 	customSplashText?: string[];
-	/** 作成から一定時間経過していないアカウントからのフォローを、フォロー先の鍵設定に関わらずフォローリクエスト化するか */
+	/**
+	 * @deprecated 2026.10.1から、本家の「新しいアカウントからのフォローを承認制にする」の既定値
+	 * (followApprovalDefaultLocalSeconds・followApprovalDefaultRemoteSeconds)に置き換えた。
+	 * 新しい設定がまだ保存されていないときだけ、既定値として読む
+	 */
 	newAccountFollowRequestEnabled?: boolean;
-	/** 上記が有効な場合の、フォローリクエスト化の対象となるアカウント年齢のしきい値(ミリ秒) */
+	/** @deprecated newAccountFollowRequestEnabledと同じ。しきい値(ミリ秒) */
 	newAccountFollowRequestThresholdMs?: number;
+	/** ユーザーが「既定値を使う」にしているときの、ローカルユーザーからのフォローを承認制にする期間(秒)。0なら無効 */
+	followApprovalDefaultLocalSeconds?: number;
+	/** 同じく、リモートユーザーからのフォローの期間(秒)。0なら無効 */
+	followApprovalDefaultRemoteSeconds?: number;
 	/** 運営の承認が要るインポートの種類(設定 → アカウントのデータ)。following・muting・blocking・userLists・antennas */
 	importApprovalRequiredTypes?: string[];
 	/** 通報(ユーザー通報)時に選べるカテゴリ一覧 */
@@ -373,17 +381,39 @@ export function resolveContactFormSettings(settings: JuiceSettingsValue): {
 	};
 }
 
+/** 本家のi/updateのfollowApproval*Secondsの上限と同じ(30日) */
+export const FOLLOW_APPROVAL_DEFAULT_MAX_SECONDS = 30 * 24 * 60 * 60;
+
 /**
  * jsonb には存在しないキーがありうるため、デフォルト値を解決してから返す。
- * admin/juice/settings・UserFollowingServiceの2箇所で共通利用する。
+ * 新しい設定がまだ無ければ、前の「新規アカウントからのフォローをリクエスト化する」の値を、ローカル・リモートの両方に使う。
+ * admin/juice/settings・juice/public-settings・UserFollowingServiceで共通利用する。
  */
-export function resolveNewAccountFollowRequestSettings(settings: JuiceSettingsValue): {
-	newAccountFollowRequestEnabled: boolean;
-	newAccountFollowRequestThresholdMs: number;
+export function resolveFollowApprovalDefaultSettings(settings: JuiceSettingsValue): {
+	followApprovalDefaultLocalSeconds: number;
+	followApprovalDefaultRemoteSeconds: number;
 } {
+	const legacySeconds = settings.newAccountFollowRequestEnabled
+		? Math.min(FOLLOW_APPROVAL_DEFAULT_MAX_SECONDS, Math.max(1, Math.round((settings.newAccountFollowRequestThresholdMs ?? 24 * 60 * 60 * 1000) / 1000)))
+		: 0;
 	return {
-		newAccountFollowRequestEnabled: settings.newAccountFollowRequestEnabled ?? false,
-		newAccountFollowRequestThresholdMs: settings.newAccountFollowRequestThresholdMs ?? 24 * 60 * 60 * 1000,
+		followApprovalDefaultLocalSeconds: settings.followApprovalDefaultLocalSeconds ?? legacySeconds,
+		followApprovalDefaultRemoteSeconds: settings.followApprovalDefaultRemoteSeconds ?? legacySeconds,
+	};
+}
+
+/**
+ * ユーザーが「既定値を使う」(null)にしている期間を、サーバーの既定値で埋める。
+ * 本家のshouldRequireFollowApprovalByAccountAgeは、nullを無効として扱うため
+ */
+export function applyFollowApprovalDefaults<T extends { followApprovalLocalSeconds: number | null; followApprovalRemoteSeconds: number | null }>(
+	profile: T,
+	settings: JuiceSettingsValue,
+): Pick<T, 'followApprovalLocalSeconds' | 'followApprovalRemoteSeconds'> {
+	const defaults = resolveFollowApprovalDefaultSettings(settings);
+	return {
+		followApprovalLocalSeconds: profile.followApprovalLocalSeconds ?? defaults.followApprovalDefaultLocalSeconds,
+		followApprovalRemoteSeconds: profile.followApprovalRemoteSeconds ?? defaults.followApprovalDefaultRemoteSeconds,
 	};
 }
 

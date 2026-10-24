@@ -29,7 +29,7 @@ import type { Config } from '@/config.js';
 import { AccountMoveService } from '@/core/AccountMoveService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveNewAccountFollowRequestSettings } from '@/models/JuiceSettings.js';
+import { applyFollowApprovalDefaults } from '@/models/JuiceSettings.js';
 import type { ThinUser } from '@/queue/types.js';
 import Logger from '../logger.js';
 
@@ -166,19 +166,9 @@ export class UserFollowingService implements OnModuleInit {
 
 		const followeeProfile = await this.userProfilesRepository.findOneByOrFail({ userId: followee.id });
 
-		// JUICE: 作成から日が浅いアカウントからのフォローを、フォロー先の鍵設定に関わらずフォローリクエスト化する(荒らし対策)。
-		// ローカル・リモート問わずidから生成日時を算出する(リモートの場合はこのサーバーが初めて検知した日時になる)。
-		// 注意: アカウント移行(AccountMoveService)による自動再フォローもこのfollow()を経由するため、
-		// 移行先が作成間もない新規アカウントの場合はこの判定に引っかかり、旧アカウントのフォロワーからの
-		// 再フォローもリクエスト化されうる。能動的な新規フォローではないが、意図的にこの分岐は設けない
-		// (フォロー先が承認すれば従来通り成立するため、機能停止にはならない)
-		const juiceSettings = await this.juiceSettingsService.fetch();
-		const { newAccountFollowRequestEnabled, newAccountFollowRequestThresholdMs } = resolveNewAccountFollowRequestSettings(juiceSettings);
-		const followerIsNewAccount = newAccountFollowRequestEnabled
-			&& (Date.now() - this.idService.parse(follower.id).date.getTime()) < newAccountFollowRequestThresholdMs;
-
 		const requiresApprovalByAccountAge = this.userEntityService.isLocalUser(followee) && shouldRequireFollowApprovalByAccountAge(
-			followeeProfile,
+			// JUICE: 「既定値を使う」にしているユーザーには、管理者がJUICE設定で決めた既定値を使う
+			applyFollowApprovalDefaults(followeeProfile, await this.juiceSettingsService.fetch()),
 			this.userEntityService.isRemoteUser(follower),
 			// For remote users, the ID records when this server first discovered them.
 			this.idService.parse(follower.id).date,
@@ -187,16 +177,14 @@ export class UserFollowingService implements OnModuleInit {
 		// フォロー対象の設定でフォロワーのアカウント作成後の期間が不足している or
 		// フォロワーがBotであり、フォロー対象がBotからのフォローに慎重である or
 		// フォロワーがローカルユーザーであり、フォロー対象がリモートユーザーである or
-		// フォロワーがローカルユーザーであり、フォロー対象がサイレンスされているサーバーである or
-		// フォロワーが作成から日が浅いアカウントである(JUICE独自)
+		// フォロワーがローカルユーザーであり、フォロー対象がサイレンスされているサーバーである
 		// 上記のいずれかに当てはまる場合はすぐフォローせずにフォローリクエストを発行しておく
 		if (
 			followee.isLocked ||
 			requiresApprovalByAccountAge ||
 			(followeeProfile.carefulBot && follower.isBot) ||
 			(this.userEntityService.isLocalUser(follower) && this.userEntityService.isRemoteUser(followee) && process.env.FORCE_FOLLOW_REMOTE_USER_FOR_TESTING !== 'true') ||
-			(this.userEntityService.isLocalUser(followee) && this.userEntityService.isRemoteUser(follower) && this.utilityService.isSilencedHost(this.meta.silencedHosts, follower.host)) ||
-			followerIsNewAccount
+			(this.userEntityService.isLocalUser(followee) && this.userEntityService.isRemoteUser(follower) && this.utilityService.isSilencedHost(this.meta.silencedHosts, follower.host))
 		) {
 			let autoAccept = false;
 
@@ -656,6 +644,8 @@ export class UserFollowingService implements OnModuleInit {
 			})
 			: [];
 		const followedIds = new Set(followed.map(following => following.followeeId));
+		// JUICE: 「既定値を使う」にしているユーザーには、管理者がJUICE設定で決めた既定値を使う
+		const followApproval = applyFollowApprovalDefaults(profile, await this.juiceSettingsService.fetch());
 
 		for (const request of requests) {
 			const follower = request.follower;
@@ -664,7 +654,7 @@ export class UserFollowingService implements OnModuleInit {
 			}
 
 			if (shouldRequireFollowApprovalByAccountAge(
-				profile,
+				followApproval,
 				this.userEntityService.isRemoteUser(follower),
 				this.idService.parse(follower.id).date,
 			)) {

@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DisposableEmailDomainService, normalizeDisposableEmailAllowDomains } from '@/core/DisposableEmailDomainService.js';
 import type { JuiceSettingsValue } from '@/models/JuiceSettings.js';
+import { FOLLOW_APPROVAL_DEFAULT_MAX_SECONDS } from '@/models/JuiceSettings.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 
 export const meta = {
@@ -64,8 +65,8 @@ export const paramDef = {
 			maxItems: 20,
 			items: { type: 'string', maxLength: 256 },
 		},
-		newAccountFollowRequestEnabled: { type: 'boolean' },
-		newAccountFollowRequestThresholdMs: { type: 'integer', minimum: 1, maximum: 2592000000 }, // 30日
+		followApprovalDefaultLocalSeconds: { type: 'integer', minimum: 0, maximum: FOLLOW_APPROVAL_DEFAULT_MAX_SECONDS },
+		followApprovalDefaultRemoteSeconds: { type: 'integer', minimum: 0, maximum: FOLLOW_APPROVAL_DEFAULT_MAX_SECONDS },
 		// JUICE: 運営の承認が要るインポートの種類
 		importApprovalRequiredTypes: {
 			type: 'array',
@@ -155,9 +156,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.contactFormContentMaxLength !== undefined) set.contactFormContentMaxLength = ps.contactFormContentMaxLength;
 			if (ps.contactFormCategories !== undefined) set.contactFormCategories = ps.contactFormCategories;
 			if (ps.customSplashText !== undefined) set.customSplashText = ps.customSplashText;
-			if (ps.newAccountFollowRequestEnabled !== undefined) set.newAccountFollowRequestEnabled = ps.newAccountFollowRequestEnabled;
 			if (ps.importApprovalRequiredTypes !== undefined) set.importApprovalRequiredTypes = ps.importApprovalRequiredTypes;
-			if (ps.newAccountFollowRequestThresholdMs !== undefined) set.newAccountFollowRequestThresholdMs = ps.newAccountFollowRequestThresholdMs;
+			if (ps.followApprovalDefaultLocalSeconds !== undefined) set.followApprovalDefaultLocalSeconds = ps.followApprovalDefaultLocalSeconds;
+			if (ps.followApprovalDefaultRemoteSeconds !== undefined) set.followApprovalDefaultRemoteSeconds = ps.followApprovalDefaultRemoteSeconds;
 			if (ps.reportCategories !== undefined) set.reportCategories = ps.reportCategories;
 			if (ps.blockEmailDotAliasRegistration !== undefined) set.blockEmailDotAliasRegistration = ps.blockEmailDotAliasRegistration;
 			if (ps.blockEmailPlusAliasRegistration !== undefined) set.blockEmailPlusAliasRegistration = ps.blockEmailPlusAliasRegistration;

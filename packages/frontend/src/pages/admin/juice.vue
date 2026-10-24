@@ -43,27 +43,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<SearchMarker v-slot="slotProps">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
-						<template #label><SearchLabel>{{ i18n.ts._juice.newAccountFollowRequest }}</SearchLabel></template>
+						<template #label><SearchLabel>{{ i18n.ts._juice.followApprovalDefault }}</SearchLabel></template>
 
 						<div class="_gaps_m">
-							<SearchMarker>
-								<MkSwitch v-model="newAccountFollowRequestEnabled">
-									<template #label><SearchLabel>{{ i18n.ts._juice.newAccountFollowRequestEnabled }}</SearchLabel></template>
-									<template #caption>{{ i18n.ts._juice.newAccountFollowRequestEnabledCaption }}</template>
-								</MkSwitch>
-							</SearchMarker>
-
-							<SearchMarker>
-								<MkInput v-model="newAccountFollowRequestThresholdValue" type="number" :min="1" :disabled="!newAccountFollowRequestEnabled">
-									<template #label><SearchLabel>{{ i18n.ts._juice.newAccountFollowRequestThresholdValue }}</SearchLabel></template>
-								</MkInput>
-							</SearchMarker>
-
-							<SearchMarker>
-								<MkSelect v-model="newAccountFollowRequestThresholdUnit" :items="newAccountFollowRequestThresholdUnitDef" :disabled="!newAccountFollowRequestEnabled">
-									<template #label><SearchLabel>{{ i18n.ts._juice.newAccountFollowRequestThresholdUnit }}</SearchLabel></template>
+							<div><SearchText>{{ i18n.ts._juice.followApprovalDefaultDescription }}</SearchText></div>
+							<!-- JUICE: v-forの中ではSearchMarker・SearchLabelを使わない(検索インデックスの作成は式を静的に評価するため、setting.labelを読めない) -->
+							<div v-for="setting in followApprovalDefaults" :key="setting.key" class="_gaps_s">
+								<MkSelect v-model="setting.mode" :items="followApprovalDefaultModes">
+									<template #label>{{ setting.label }}</template>
+									<template #caption>{{ setting.caption }}</template>
 								</MkSelect>
-							</SearchMarker>
+								<MkInput v-if="setting.mode === 'custom'" v-model="setting.amount" type="number" :min="1 / FOLLOW_APPROVAL_UNIT_SECONDS[setting.unit]" :max="FOLLOW_APPROVAL_MAX_SECONDS / FOLLOW_APPROVAL_UNIT_SECONDS[setting.unit]" step="any">
+									<template #label>{{ i18n.ts._followApproval.period }}</template>
+									<template #suffix>{{ setting.unit === 'day' ? i18n.ts._time.day : i18n.ts._time.hour }}</template>
+									<template v-if="followApprovalPeriodToSeconds(setting.amount, setting.unit) == null" #caption>{{ i18n.ts._followApproval.invalidPeriod }}</template>
+								</MkInput>
+								<MkSelect v-if="setting.mode === 'custom'" v-model="setting.unit" :items="followApprovalDefaultUnits">
+									<template #label>{{ i18n.ts._followApproval.unit }}</template>
+								</MkSelect>
+							</div>
 						</div>
 					</MkFolder>
 				</SearchMarker>
@@ -477,7 +475,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
-				<MkButton primary :disabled="customSplashTextTooManyLines || customSplashTextTooLongLineCount > 0" @click="save">{{ i18n.ts.save }}</MkButton>
+				<MkButton primary :disabled="customSplashTextTooManyLines || customSplashTextTooLongLineCount > 0 || followApprovalDefaultInvalid" @click="save">{{ i18n.ts.save }}</MkButton>
 			</div>
 		</SearchMarker>
 	</div>
@@ -487,7 +485,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { ref, computed } from 'vue';
 import { langs, apiUrl } from '@@/js/config.js';
-import { useMkSelect } from '@/composables/use-mkselect.js';
 import MkFolder from '@/components/MkFolder.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -497,6 +494,9 @@ import MkSelect from '@/components/MkSelect.vue';
 import MkButton from '@/components/MkButton.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { juicePublicSettingsCache } from '@/cache.js';
+import { FOLLOW_APPROVAL_MAX_SECONDS, FOLLOW_APPROVAL_UNIT_SECONDS, followApprovalPeriodFromSeconds, followApprovalPeriodToSeconds } from '@/utility/follow-approval.js';
+import type { FollowApprovalPeriodUnit } from '@/utility/follow-approval.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 
@@ -530,7 +530,6 @@ const contactFormEnabled = ref(settings.contactFormEnabled);
 const contactFormLimit = ref(settings.contactFormLimit);
 const contactFormRequireAuth = ref(settings.contactFormRequireAuth);
 const contactFormContentMaxLength = ref(settings.contactFormContentMaxLength);
-const newAccountFollowRequestEnabled = ref(settings.newAccountFollowRequestEnabled);
 // JUICE: 運営の承認が要るインポートの種類
 const IMPORT_APPROVAL_TYPES = ['following', 'muting', 'blocking', 'userLists', 'antennas'] as const;
 const importApprovalRequiredTypes = ref<(typeof IMPORT_APPROVAL_TYPES)[number][]>([...settings.importApprovalRequiredTypes]);
@@ -540,28 +539,46 @@ function setImportApprovalRequired(type: (typeof IMPORT_APPROVAL_TYPES)[number],
 	importApprovalRequiredTypes.value = required ? [...others, type] : others;
 }
 
-// JUICE: しきい値はミリ秒でやり取りするが、入力しやすいよう数値+単位(投票の期限指定と同じ構成)で編集する。
-// 単位変換は保存時にのみ行い、MkPollEditorのafter/unitと同様、読み込み時は常に時間単位で表示する
-const newAccountFollowRequestThresholdValue = ref(settings.newAccountFollowRequestThresholdMs / (60 * 60 * 1000));
-const {
-	model: newAccountFollowRequestThresholdUnit,
-	def: newAccountFollowRequestThresholdUnitDef,
-} = useMkSelect({
-	items: [
-		{ label: i18n.ts._time.minute, value: 'minute' },
-		{ label: i18n.ts._time.hour, value: 'hour' },
-		{ label: i18n.ts._time.day, value: 'day' },
-	],
-	initialValue: 'hour',
-});
-const newAccountFollowRequestThresholdUnitMs: Record<'minute' | 'hour' | 'day', number> = {
-	minute: 60 * 1000,
-	hour: 60 * 60 * 1000,
-	day: 24 * 60 * 60 * 1000,
+// JUICE: 「新しいアカウントからのフォローを承認制にする」の既定値。設定の「プライバシー」と同じ形(無効・期間を指定する)で編集する
+type FollowApprovalDefaultSetting = {
+	key: 'followApprovalDefaultLocalSeconds' | 'followApprovalDefaultRemoteSeconds';
+	mode: 'disabled' | 'custom';
+	amount: number | null;
+	unit: FollowApprovalPeriodUnit;
+	label: string;
+	caption: string;
 };
-const newAccountFollowRequestThresholdMs = computed(() => Math.round(
-	newAccountFollowRequestThresholdValue.value * newAccountFollowRequestThresholdUnitMs[newAccountFollowRequestThresholdUnit.value],
-));
+const followApprovalDefaults = ref<FollowApprovalDefaultSetting[]>([
+	{
+		key: 'followApprovalDefaultLocalSeconds',
+		mode: settings.followApprovalDefaultLocalSeconds === 0 ? 'disabled' : 'custom',
+		...followApprovalPeriodFromSeconds(settings.followApprovalDefaultLocalSeconds || 86400),
+		label: i18n.ts._followApproval.local,
+		caption: i18n.ts._followApproval.localDescription,
+	},
+	{
+		key: 'followApprovalDefaultRemoteSeconds',
+		mode: settings.followApprovalDefaultRemoteSeconds === 0 ? 'disabled' : 'custom',
+		...followApprovalPeriodFromSeconds(settings.followApprovalDefaultRemoteSeconds || 86400),
+		label: i18n.ts._followApproval.remote,
+		caption: i18n.ts._followApproval.remoteDescription,
+	},
+]);
+const followApprovalDefaultModes = [
+	{ label: i18n.ts.disabled, value: 'disabled' },
+	{ label: i18n.ts._followApproval.custom, value: 'custom' },
+];
+const followApprovalDefaultUnits = [
+	{ label: i18n.ts._time.hour, value: 'hour' },
+	{ label: i18n.ts._time.day, value: 'day' },
+];
+
+function followApprovalDefaultSeconds(key: FollowApprovalDefaultSetting['key']): number | null {
+	const setting = followApprovalDefaults.value.find(x => x.key === key)!;
+	return setting.mode === 'disabled' ? 0 : followApprovalPeriodToSeconds(setting.amount, setting.unit);
+}
+
+const followApprovalDefaultInvalid = computed(() => followApprovalDefaults.value.some(x => followApprovalDefaultSeconds(x.key) == null));
 // JUICE: 配列を1行1件のテキストエリアとして編集する(空行は無視する)。
 // 上限(行数・1行あたりの文字数)はadmin/juice/update-settingsのparamDefと合わせている
 const customSplashTextInput = ref(settings.customSplashText.join('\n'));
@@ -684,9 +701,9 @@ function save() {
 		contactFormRequireAuth: contactFormRequireAuth.value,
 		contactFormContentMaxLength: contactFormContentMaxLength.value,
 		customSplashText: customSplashTextLines.value,
-		newAccountFollowRequestEnabled: newAccountFollowRequestEnabled.value,
 		importApprovalRequiredTypes: importApprovalRequiredTypes.value,
-		newAccountFollowRequestThresholdMs: newAccountFollowRequestThresholdMs.value,
+		followApprovalDefaultLocalSeconds: followApprovalDefaultSeconds('followApprovalDefaultLocalSeconds') ?? undefined,
+		followApprovalDefaultRemoteSeconds: followApprovalDefaultSeconds('followApprovalDefaultRemoteSeconds') ?? undefined,
 		blockEmailDotAliasRegistration: blockEmailDotAliasRegistration.value,
 		blockEmailPlusAliasRegistration: blockEmailPlusAliasRegistration.value,
 		disposableEmailBlocklistEnabled: disposableEmailBlocklistEnabled.value,
@@ -709,6 +726,8 @@ function save() {
 		microsoftOauthClientId: oauthSettings.microsoft.clientId.value || null,
 		microsoftOauthClientSecret: oauthSettings.microsoft.clientSecret.value || null,
 	}).then(async () => {
+		// JUICE: 設定の画面が、新しい既定値(フォローの承認制など)をすぐ読むように
+		juicePublicSettingsCache.delete();
 		// JUICE: 保存した後の値を読み直す(許可するドメインは、サーバーが形の正しいものだけにそろえて保存する。
 		// 入れたものが保存されなかったときに気付けるよう、欄にも反映する)
 		const saved = await misskeyApi('admin/juice/settings');
