@@ -4826,6 +4826,8 @@ export type components = {
             autoSensitive: boolean;
             carefulBot: boolean;
             autoAcceptFollowed: boolean;
+            followApprovalLocalSeconds: number | null;
+            followApprovalRemoteSeconds: number | null;
             noCrawle: boolean;
             preventAiLearning: boolean;
             isExplorable: boolean;
@@ -7956,6 +7958,8 @@ export interface operations {
                         /** @default null */
                         expiredAfter?: number | null;
                     } | null;
+                    /** @default null */
+                    autoArchiveAt?: number | null;
                 };
             };
         };
@@ -8148,6 +8152,8 @@ export interface operations {
                         /** @enum {string} */
                         display: 'normal' | 'banner' | 'dialog';
                         isActive: boolean;
+                        /** Format: date-time */
+                        autoArchiveAt: string | null;
                         forExistingUsers: boolean;
                         silence: boolean;
                         needConfirmationToRead: boolean;
@@ -8230,6 +8236,7 @@ export interface operations {
                     silence?: boolean;
                     needConfirmationToRead?: boolean;
                     isActive?: boolean;
+                    autoArchiveAt?: number | null;
                 };
             };
         };
@@ -12160,8 +12167,8 @@ export interface operations {
                             isDefault: boolean;
                         }[];
                         customSplashText: string[];
-                        newAccountFollowRequestEnabled: boolean;
-                        newAccountFollowRequestThresholdMs: number;
+                        followApprovalDefaultLocalSeconds: number;
+                        followApprovalDefaultRemoteSeconds: number;
                         importApprovalRequiredTypes: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                         reportCategories: {
                             key: string;
@@ -12371,8 +12378,8 @@ export interface operations {
                         isDefault: boolean;
                     }[];
                     customSplashText?: string[];
-                    newAccountFollowRequestEnabled?: boolean;
-                    newAccountFollowRequestThresholdMs?: number;
+                    followApprovalDefaultLocalSeconds?: number;
+                    followApprovalDefaultRemoteSeconds?: number;
                     importApprovalRequiredTypes?: ('following' | 'muting' | 'blocking' | 'userLists' | 'antennas')[];
                     reportCategories?: {
                         key: string;
@@ -33550,6 +33557,8 @@ export interface operations {
                     publicReactions?: boolean;
                     carefulBot?: boolean;
                     autoAcceptFollowed?: boolean;
+                    followApprovalLocalSeconds?: number | null;
+                    followApprovalRemoteSeconds?: number | null;
                     noCrawle?: boolean;
                     preventAiLearning?: boolean;
                     requireSigninToViewContents?: boolean;
@@ -34732,6 +34741,8 @@ export interface operations {
                         midiPlayerMaxSize: number;
                         drawRoomEnabled: boolean;
                         drawRoomMaxRoomMegabytes: number;
+                        followApprovalDefaultLocalSeconds: number;
+                        followApprovalDefaultRemoteSeconds: number;
                     };
                 };
             };

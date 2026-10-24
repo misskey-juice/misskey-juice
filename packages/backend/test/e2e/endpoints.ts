@@ -430,12 +430,15 @@ describe('Endpoints', () => {
 			assert.strictEqual(res.status, 400);
 		});
 
-		test('新規アカウントからのフォローをリクエスト化する設定が有効な場合、鍵アカウントでなくてもフォローリクエストになる(JUICE独自)', async () => {
+		test('フォローの承認制の既定値を決めると、「既定値を使う」のユーザーへの新規アカウントからのフォローはリクエストになる(JUICE独自)', async () => {
 			const troll = await signup({ username: 'newFollowTroll' });
+			// 自分で無効にしているユーザーには、既定値を当てない
+			const optedOut = await signup({ username: 'approvalOptOut' });
+			const optOut = await api('i/update', { followApprovalLocalSeconds: 0 }, optedOut);
+			assert.strictEqual(optOut.status, 200);
 
 			const enable = await api('admin/juice/update-settings', {
-				newAccountFollowRequestEnabled: true,
-				newAccountFollowRequestThresholdMs: 24 * 60 * 60 * 1000,
+				followApprovalDefaultLocalSeconds: 24 * 60 * 60,
 			}, alice);
 			assert.strictEqual(enable.status, 204);
 
@@ -444,25 +447,31 @@ describe('Endpoints', () => {
 					userId: carol.id,
 				}, troll);
 				assert.strictEqual(res.status, 200);
+				const res2 = await api('following/create', {
+					userId: optedOut.id,
+				}, troll);
+				assert.strictEqual(res2.status, 200);
 
 				const connection = await initTestDb(true);
 				const Followings = connection.getRepository(MiFollowing);
 				const FollowRequests = connection.getRepository(MiFollowRequest);
 				const isFollowing = await Followings.exists({ where: { followerId: troll.id, followeeId: carol.id } });
 				const hasRequest = await FollowRequests.exists({ where: { followerId: troll.id, followeeId: carol.id } });
+				const isFollowingOptedOut = await Followings.exists({ where: { followerId: troll.id, followeeId: optedOut.id } });
 				connection.destroy();
 
 				assert.strictEqual(isFollowing, false);
 				assert.strictEqual(hasRequest, true);
+				assert.strictEqual(isFollowingOptedOut, true);
 			} finally {
 				const reset = await api('admin/juice/update-settings', {
-					newAccountFollowRequestEnabled: false,
+					followApprovalDefaultLocalSeconds: 0,
 				}, alice);
 				assert.strictEqual(reset.status, 204);
 			}
 		});
 
-		test('新規アカウントからのフォローをリクエスト化する設定が無効な場合は、新規アカウントでも即座にフォローできる(JUICE独自)', async () => {
+		test('フォローの承認制の既定値が無効なら、新規アカウントでも即座にフォローできる(JUICE独自)', async () => {
 			const freshUser = await signup({ username: 'freshFollowerDefault' });
 
 			const res = await api('following/create', {
@@ -1679,8 +1688,8 @@ describe('Endpoints', () => {
 					{ key: 'other', text: 'その他', enabled: true, order: 7, isDefault: false },
 				],
 				customSplashText: [],
-				newAccountFollowRequestEnabled: false,
-				newAccountFollowRequestThresholdMs: 24 * 60 * 60 * 1000,
+				followApprovalDefaultLocalSeconds: 0,
+				followApprovalDefaultRemoteSeconds: 0,
 				importApprovalRequiredTypes: ['following'],
 				reportCategories: [
 					{ key: 'spam', text: 'スパム', enabled: true, order: 1, isDefault: false },
@@ -2831,6 +2840,8 @@ describe('Endpoints', () => {
 				midiPlayerMaxSize: 500 * 1024,
 				drawRoomEnabled: true,
 				drawRoomMaxRoomMegabytes: 256,
+				followApprovalDefaultLocalSeconds: 0,
+				followApprovalDefaultRemoteSeconds: 0,
 			});
 		});
 

@@ -58,7 +58,7 @@ import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
-import { updateCurrentAccountPartial } from '@/accounts.js';
+import { updateCurrentAccount } from '@/accounts.js';
 import { juicePublicSettingsCache } from '@/cache.js';
 
 const $i = ensureSignin();
@@ -148,7 +148,7 @@ async function unlink(provider: OauthProvider) {
 	await os.apiWithDialog('oauth-login/unlink', { provider });
 	await load();
 	if (connections.value.length === 0) {
-		updateCurrentAccountPartial({ useOauthLogin: false });
+		updateCurrentAccount({ useOauthLogin: false });
 	}
 }
 

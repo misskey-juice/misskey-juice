@@ -51,6 +51,7 @@ import { ClientLoggerService } from './ClientLoggerService.js';
 import { HtmlTemplateService } from './HtmlTemplateService.js';
 
 import { BasePage } from './views/base.js';
+import { htmlToPlainText } from '@/misc/html-to-plain-text.js';
 import { UserPage } from './views/user.js';
 import { NotePage } from './views/note.js';
 import { PagePage } from './views/page.js';
@@ -453,11 +454,11 @@ export class ClientServerService {
 			reply.header('Cache-Control', 'public, max-age=30');
 			return await HtmlTemplateService.replyHtml(reply, BasePage({
 				img: this.meta.bannerUrl ?? undefined,
-				// JUICE: <title>・og:title・og:description・opensearchのtitle属性等
+				// JUICE: <title>・og:title・opensearchのtitle属性等
 				// プレーンテキスト表示箇所(埋め込みURLプレビューカードの元にもなる)へ渡るため、
 				// HTMLタグを除去しておく(info-card.tsxのようにHTML表示を意図した場所は対象外)
 				title: stripHtmlTags(this.meta.name ?? 'Misskey'),
-				desc: this.meta.description != null ? stripHtmlTags(this.meta.description) : undefined,
+				desc: this.meta.description == null ? undefined : htmlToPlainText(this.meta.description),
 				...(await this.htmlTemplateService.getCommonData()),
 				...data,
 			}));

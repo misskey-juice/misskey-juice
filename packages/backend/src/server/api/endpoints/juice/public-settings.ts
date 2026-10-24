@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveImportApprovalSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveImportApprovalSettings, resolveContactFormSettings, resolveReportCategorySettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveDrawRoomLimitSettings, resolveFollowApprovalDefaultSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -165,6 +165,15 @@ export const meta = {
 				type: 'number',
 				optional: false, nullable: false,
 			},
+			// JUICE: 「新しいアカウントからのフォローを承認制にする」の既定値(秒。0なら無効)
+			followApprovalDefaultLocalSeconds: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
+			followApprovalDefaultRemoteSeconds: {
+				type: 'integer',
+				optional: false, nullable: false,
+			},
 		},
 	},
 } as const;
@@ -209,6 +218,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveMidiPlayerSettings(settings),
 				...resolveDrawRoomSettings(settings),
 				...resolveDrawRoomLimitSettings(settings),
+				// JUICE: 設定の「新しいアカウントからのフォローを承認制にする」で、「既定値を使う」の期間を出すため
+				...resolveFollowApprovalDefaultSettings(settings),
 			};
 		});
 	}

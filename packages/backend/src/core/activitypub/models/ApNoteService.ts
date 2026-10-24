@@ -27,7 +27,7 @@ import { checkHttps } from '@/misc/check-https.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { SearchService } from '@/core/SearchService.js';
-import { normalizeForSearch } from '@/misc/normalize-for-search.js';
+import { normalizeTag } from '@/misc/normalize-tag.js';
 import { RoleService } from '@/core/RoleService.js';
 import { isQuote, isRenote } from '@/misc/is-renote.js';
 import { DB_MAX_NOTE_TEXT_LENGTH } from '@/const.js';
@@ -417,7 +417,7 @@ export class ApNoteService {
 		});
 		const mentionedUsers = await this.apMentionService.extractApMentions(note.tag, resolver);
 		const apMentionRawCount = new Set(this.apMentionService.extractApMentionObjects(note.tag).map(x => x.href)).size;
-		const tags = unique(extractApHashtags(note.tag).map(tag => normalizeForSearch(tag))).filter(tag => Array.from(tag).length <= 128).slice(0, 32);
+		const tags = unique(extractApHashtags(note.tag).map(tag => normalizeTag(tag))).filter(tag => Array.from(tag).length <= 128).slice(0, 32);
 
 		// 返信先の人と、指名した相手は、本文でメンションしていなくてもメンションに入れておく(作成時と同じ)
 		const keepUserIds = [

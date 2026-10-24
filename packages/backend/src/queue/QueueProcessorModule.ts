@@ -16,6 +16,7 @@ import { UserWebhookDeliverProcessorService } from './processors/UserWebhookDeli
 import { SystemWebhookDeliverProcessorService } from './processors/SystemWebhookDeliverProcessorService.js';
 import { CheckExpiredMutingsProcessorService } from './processors/CheckExpiredMutingsProcessorService.js';
 import { CleanDrawRoomsProcessorService } from './processors/CleanDrawRoomsProcessorService.js';
+import { ArchiveAnnouncementProcessorService } from './processors/ArchiveAnnouncementProcessorService.js';
 import { BakeBufferedReactionsProcessorService } from './processors/BakeBufferedReactionsProcessorService.js';
 import { CleanChartsProcessorService } from './processors/CleanChartsProcessorService.js';
 import { CleanProcessorService } from './processors/CleanProcessorService.js';
@@ -57,6 +58,7 @@ import { RelationshipProcessorService } from './processors/RelationshipProcessor
 		CleanChartsProcessorService,
 		CheckExpiredMutingsProcessorService,
 		CleanDrawRoomsProcessorService,
+		ArchiveAnnouncementProcessorService,
 		BakeBufferedReactionsProcessorService,
 		CleanProcessorService,
 		DeleteDriveFilesProcessorService,

@@ -43,6 +43,7 @@ export const columnTypes = [
 	'antenna',
 	'list',
 	'channel',
+	'clip',
 	'mentions',
 	'direct',
 	'roleTimeline',
@@ -64,6 +65,7 @@ export type Column = {
 	antennaId?: string;
 	listId?: string;
 	channelId?: string;
+	clipId?: string;
 	roleId?: string;
 	excludeTypes?: typeof notificationTypes[number][];
 	// JUICE: 'relay'/'media'は本家に無いJUICE独自のタイムライン種別(リレータイムライン/メディアタイムライン)
@@ -79,7 +81,7 @@ export type Column = {
 	// JUICE: tl==='home'時にホームタイムラインをローカルユーザーの投稿だけに絞り込む(カラムごとに独立して選べる)
 	localOnly?: boolean;
 	soundSetting?: SoundStore;
-	// The cache for the name of the antenna, channel, list, or role
+	// The cache for the name of the antenna, channel, list, clip, or role
 	timelineNameCache?: string;
 };
 

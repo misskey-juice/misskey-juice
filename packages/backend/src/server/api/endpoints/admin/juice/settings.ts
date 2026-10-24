@@ -7,7 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { JuiceSettingsService } from '@/core/JuiceSettingsService.js';
 import { DisposableEmailDomainService } from '@/core/DisposableEmailDomainService.js';
-import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveNewAccountFollowRequestSettings, resolveImportApprovalSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveDisposableEmailSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
+import { resolveSignupApprovalSettings, resolveExploreOtherServersSettings, resolveEmailSettings, resolveEmojiRequestSettings, resolveAvatarDecorationRequestSettings, resolveRankingSettings, resolveRelayTimelineSettings, resolveMediaTimelineSettings, resolveLatexSettings, resolveReactionPiggybackSettings, resolveContactFormSettings, resolveCustomSplashTextSettings, resolveFollowApprovalDefaultSettings, resolveImportApprovalSettings, resolveReportCategorySettings, resolveEmailAliasSettings, resolveDisposableEmailSettings, resolveAiGeneratedFallbackCwSettings, resolveNovelFallbackCwSettings, resolveOauthLoginSettings, resolveMidiPlayerSettings, resolveDrawRoomSettings, resolveRemoteAvatarDecorationSettings, resolveDrawRoomLimitSettings } from '@/models/JuiceSettings.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -139,12 +139,12 @@ export const meta = {
 				optional: false, nullable: false,
 				items: { type: 'string', optional: false, nullable: false },
 			},
-			newAccountFollowRequestEnabled: {
-				type: 'boolean',
+			followApprovalDefaultLocalSeconds: {
+				type: 'integer',
 				optional: false, nullable: false,
 			},
-			newAccountFollowRequestThresholdMs: {
-				type: 'number',
+			followApprovalDefaultRemoteSeconds: {
+				type: 'integer',
 				optional: false, nullable: false,
 			},
 			importApprovalRequiredTypes: {
@@ -309,7 +309,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...resolveReactionPiggybackSettings(settings),
 				...resolveContactFormSettings(settings),
 				...resolveCustomSplashTextSettings(settings),
-				...resolveNewAccountFollowRequestSettings(settings),
+				...resolveFollowApprovalDefaultSettings(settings),
 				...resolveImportApprovalSettings(settings),
 				...resolveReportCategorySettings(settings),
 				...resolveEmailAliasSettings(settings),
