@@ -1,3 +1,20 @@
+## 2026.10.1-juice+4.10
+
+### Note
+- 本家Misskey 2026.10.1で、パッケージマネージャーがpnpm 12(`packageManager: pnpm@12.14.0`)に、Node.jsの最低バージョンが22.23.4・24.22.1・26.12.1になった。更新の前に確かめること。Sentryの`sendDefaultPii`・`profilesSampleRate`を設定している場合の変更は、下記の「2026.10.1」を参照
+
+### General
+- 本家Misskey 2026.10.1の変更をすべて取り込み(お知らせの自動アーカイブ日時・作成から日が浅いアカウントからのフォローを申請にする設定・デッキのクリップのカラムなど、セキュリティ修正を含む)。詳細は下記の「2026.10.1」を参照
+
+### Client
+- Enhance: 設定の「新しいアカウントからのフォローを承認制にする」で、「既定値を使う」に、サーバーで決めている今の既定値を出すように(JUICE独自)
+- Enhance: コントロールパネルのJUICE設定の「新規アカウントのフォロー制限」を、「新しいアカウントからのフォローの承認制(既定値)」に変更(JUICE独自)。ローカル・リモートからのフォローについて、ユーザーが「既定値を使う」にしているときの期間を決める。ユーザーが自分で期間を決めたり無効にしたりしたときは、そちらが優先される
+
+### Server
+- Change: JUICEの「新規アカウントからのフォローをリクエスト化する」を、本家の`followApprovalLocalSeconds`・`followApprovalRemoteSeconds`の既定値に置き換え。`admin/juice/update-settings`の`newAccountFollowRequestEnabled`・`newAccountFollowRequestThresholdMs`を外し、`followApprovalDefaultLocalSeconds`・`followApprovalDefaultRemoteSeconds`(秒、0なら無効)を追加。新しい値をまだ保存していなければ、前の設定の値をローカル・リモートの両方に使う
+- Enhance: `juice/public-settings`に`followApprovalDefaultLocalSeconds`・`followApprovalDefaultRemoteSeconds`を追加
+- Fix: 自動アーカイブ日時を過ぎたお知らせに、アーカイブのジョブが動くまでの間は投票・リアクションできたのを修正
+
 ## 2026.10.0-juice+4.9
 
 ### Client
