@@ -1,3 +1,25 @@
+## 2026.10.1-juice+4.11
+
+### Note
+- セキュリティの修正を含む。早めに更新すること
+
+### General
+- Fix: 依存パッケージの既知の脆弱性を修正(undici・ip-address・nodemailer・fast-uri・uuid・summalyのfastify・happy-dom)
+
+### Client
+- Fix: 連携ログインのあとの移動先を、サーバーが確かめた同じサイトの中の場所だけにするように
+
+### Server
+- Fix: 2段階認証を解除したときの、連携ログインの扱いを修正。本人の解除・モデレーターのリセットのどちらでも、連携ログインも無効にする。前の版で残った設定はmigrationで無効に戻す
+- Fix: 連携ログイン・アカウントの連携のコールバックで、管理者が無効にしたプロバイダを断るように
+- Enhance: `signin-with-oauth`の完了のレスポンスに、サーバーが確かめた`returnTo`を追加
+- Fix: 絵文字・アバターデコレーション申請の1日の回数(`emojiRequestDailyLimit`・`avatarDecorationRequestDailyLimit`)を、1件ずつの申請とまとめての申請で合わせて数えるように
+- Fix: `juice/signup-check-status`で、captchaを省けるかどうかをサーバー側で決めるように。登録のときに出したコードと、一度captchaを通ったコードは、今まで通りcaptchaなしで確認できる
+- Fix: インポート申請を同時に送ると、同じ種類の審査待ちが2件できることがあったのを修正
+- Fix: お問い合わせを任されたモデレーター以外の人に、名前・Misskeyのユーザー名・ユーザー・User-Agentも見せないように
+- Fix: 無効・アーカイブ済みのお知らせのリアクションを消せたのを修正
+- Fix: 埋め込みで、親のウィンドウ以外からのメッセージで識別子を決めていたのを修正
+
 ## 2026.10.1-juice+4.10
 
 ### Note
