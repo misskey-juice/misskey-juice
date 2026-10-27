@@ -119,9 +119,11 @@ export class SigninWithOAuthApiService {
 		};
 
 		if (!profile.twoFactorEnabled) {
-			// useOauthLogin=trueにできるのは2FA有効なアカウントのみだが、念のための防御的分岐
+			// useOauthLogin=trueにできるのは2FA有効なアカウントのみ。
+			// 2FA無効なのにコンテキストが発行されているのは不整合な状態（2FA解除時に
+			// useOauthLogin が残存していた等）なので、サインインさせず fail-closed に倒す。
 			await this.oAuthLoginService.consumeSigninContext(context);
-			return this.signinService.signin(request, reply, user);
+			return await fail(403, { id: '1a05cc1b-65e8-42c2-966a-dfa66f692999' });
 		}
 
 		if (!token) {
@@ -139,6 +141,9 @@ export class SigninWithOAuthApiService {
 		}
 
 		await this.oAuthLoginService.consumeSigninContext(context);
-		return this.signinService.signin(request, reply, user);
+		const res = this.signinService.signin(request, reply, user);
+		// JUICE: 遷移先はURLクエリではなく、開始時にサーバー側で検証して
+		// コンテキストに保存した returnTo を返す(オープンリダイレクト対策)
+		return { ...res, returnTo: ctx.returnTo } satisfies Misskey.entities.SigninWithOAuthResponse;
 	}
 }

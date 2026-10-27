@@ -31,7 +31,6 @@ import { definePage } from '@/page.js';
 const props = defineProps<{
 	context?: string;
 	error?: string;
-	returnTo?: string;
 }>();
 
 const phase = ref<'loading' | 'totp' | 'error'>('loading');
@@ -52,7 +51,8 @@ async function proceed(token?: string) {
 	}
 
 	if (res.finished) {
-		await login(res.i, props.returnTo ?? '/');
+		// 遷移先はURLクエリを信用せず、サーバーが検証して返した returnTo を使う
+		await login(res.i, res.returnTo ?? '/');
 		return;
 	}
 

@@ -216,7 +216,16 @@ export type SigninWithOAuthRequest = {
 };
 
 // JUICE
-export type SigninWithOAuthResponse = SigninFlowResponse;
+export type SigninWithOAuthResponse = {
+	finished: true;
+	id: User['id'];
+	i: string;
+	// サーバー側で検証済みの遷移先(同一オリジンの相対パスのみ)。無い場合はnull
+	returnTo: string | null;
+} | {
+	finished: false;
+	next: 'totp';
+};
 
 export type I2faRegisterKeyResponse = PublicKeyCredentialCreationOptionsJSON;
 

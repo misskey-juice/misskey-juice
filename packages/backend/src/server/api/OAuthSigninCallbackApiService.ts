@@ -119,9 +119,10 @@ export class OAuthSigninCallbackApiService {
 		}
 
 		const settings = resolveOauthLoginSettings(await this.juiceSettingsService.fetch());
+		const enabled = settings[`${state.provider}OauthEnabled`];
 		const clientId = settings[`${state.provider}OauthClientId`];
 		const clientSecret = settings[`${state.provider}OauthClientSecret`];
-		if (clientId == null || clientSecret == null) {
+		if (!enabled || clientId == null || clientSecret == null) {
 			this.failRedirect(reply, state.returnTo, 'providerDisabled');
 			return;
 		}
@@ -156,7 +157,7 @@ export class OAuthSigninCallbackApiService {
 		}
 
 		const userProfile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
-		if (!userProfile.useOauthLogin) {
+		if (!userProfile.useOauthLogin || !userProfile.twoFactorEnabled) {
 			await this.notifyFailure(user.id);
 			await this.signinsRepository.insert({
 				id: this.idService.gen(),

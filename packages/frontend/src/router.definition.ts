@@ -317,7 +317,6 @@ export const ROUTE_DEF = [{
 	query: {
 		context: 'context',
 		error: 'error',
-		returnTo: 'returnTo',
 	},
 }, {
 	path: '/miauth/:session',

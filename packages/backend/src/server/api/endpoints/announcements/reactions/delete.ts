@@ -60,9 +60,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			const announcement = await this.announcementsRepository.findOneBy({
 				id: ps.announcementId,
+				isActive: true,
 			});
 
-			if (announcement == null) {
+			// 自動アーカイブ日時を過ぎたものは、アーカイブのジョブが動く前でもアーカイブ済みとして扱う(create/voteと条件を揃える)
+			if (announcement == null || (announcement.autoArchiveAt != null && announcement.autoArchiveAt <= new Date())) {
 				throw new ApiError(meta.errors.noSuchAnnouncement);
 			}
 

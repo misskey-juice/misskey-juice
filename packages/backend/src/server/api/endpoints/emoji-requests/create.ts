@@ -30,6 +30,8 @@ export const meta = {
 	kind: 'write:emoji-requests',
 
 	limit: {
+		// JUICE: create/create-many でバケットを共有し、日次上限を合算で効かせる
+		key: 'emoji-requests/create',
 		duration: ms('1day'),
 		max: 10,
 	},

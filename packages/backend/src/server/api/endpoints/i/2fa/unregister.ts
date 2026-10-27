@@ -72,6 +72,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				twoFactorBackupSecret: null,
 				twoFactorEnabled: false,
 				usePasswordLessLogin: false,
+				useOauthLogin: false,
 			});
 
 			// Publish meUpdated event
