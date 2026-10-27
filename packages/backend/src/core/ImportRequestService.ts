@@ -4,10 +4,12 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { AntennasRepository, DriveFilesRepository, ImportRequestsRepository, MiAntenna, MiDriveFile, MiUser, UsersRepository } from '@/models/_.js';
-import type { ImportRequestType, MiImportRequest } from '@/models/ImportRequest.js';
+import type { ImportRequestType } from '@/models/ImportRequest.js';
+import { MiImportRequest } from '@/models/ImportRequest.js';
 import { resolveImportApprovalSettings } from '@/models/JuiceSettings.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { IdService } from '@/core/IdService.js';
@@ -40,6 +42,9 @@ export class ImportRequestService {
 	public static readonly REQUESTER_UNAVAILABLE = 'e2b4d6f8-7a9c-4b1d-9e3f-8a0c2e4b6d79';
 
 	constructor(
+		@Inject(DI.db)
+		private db: DataSource,
+
 		@Inject(DI.importRequestsRepository)
 		private importRequestsRepository: ImportRequestsRepository,
 
@@ -80,18 +85,25 @@ export class ImportRequestService {
 	 */
 	@bindThis
 	public async createRequest(user: MiUser, type: ImportRequestType, file: MiDriveFile, options: { withReplies?: boolean } = {}): Promise<MiImportRequest> {
-		const pending = await this.importRequestsRepository.existsBy({ userId: user.id, type, status: 'pending' });
-		if (pending) throw new IdentifiableError(ImportRequestService.ALREADY_REQUESTED, 'There is already a pending import request of this kind.');
+		// JUICE: 重複チェック(exists)とINSERTを、ユーザー単位のadvisory lockで直列化した
+		// 同一トランザクション内で行う。同時送信で両方のチェックをすり抜け、同じ種類の
+		// 審査待ち申請が2件できてしまう競合(TOCTOU)を防ぐ(絵文字申請と同じ方式)
+		const request = await this.db.transaction(async em => {
+			await em.query('SELECT pg_advisory_xact_lock(hashtext($1))', [user.id]);
 
-		const request = await this.importRequestsRepository.insertOne({
-			id: this.idService.gen(),
-			userId: user.id,
-			type,
-			fileId: file.id,
-			fileName: file.name.slice(0, 256),
-			fileSize: file.size,
-			withReplies: type === 'following' ? (options.withReplies ?? null) : null,
-			status: 'pending',
+			const pending = await em.existsBy(MiImportRequest, { userId: user.id, type, status: 'pending' });
+			if (pending) throw new IdentifiableError(ImportRequestService.ALREADY_REQUESTED, 'There is already a pending import request of this kind.');
+
+			return await em.save(MiImportRequest, {
+				id: this.idService.gen(),
+				userId: user.id,
+				type,
+				fileId: file.id,
+				fileName: file.name.slice(0, 256),
+				fileSize: file.size,
+				withReplies: type === 'following' ? (options.withReplies ?? null) : null,
+				status: 'pending',
+			});
 		});
 
 		const requester = await this.userEntityService.pack(user, null, { schema: 'UserLite' });
