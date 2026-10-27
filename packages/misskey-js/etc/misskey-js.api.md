@@ -4206,7 +4206,15 @@ type SigninWithOAuthRequest = {
 };
 
 // @public (undocumented)
-type SigninWithOAuthResponse = SigninFlowResponse;
+type SigninWithOAuthResponse = {
+    finished: true;
+    id: User['id'];
+    i: string;
+    returnTo: string | null;
+} | {
+    finished: false;
+    next: 'totp';
+};
 
 // @public (undocumented)
 type SigninWithPasskeyInitResponse = {

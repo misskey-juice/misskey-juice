@@ -156,10 +156,23 @@ describe('SigninWithOAuthApiService', () => {
 		const res = new DummyFastifyReply() as unknown as FastifyReply;
 		const body = await service.signin(req, res);
 		expect((body as any).finished).toBe(true);
+		expect((body as any).returnTo).toBeNull();
 
 		// JUICE: contextは1回きりで消費済みになっているため、同じcontextを再送しても無効になる
 		const consumed = await oAuthLoginService.getSigninContext(context);
 		expect(consumed).toBeNull();
+	});
+
+	it('サインインが確定すると、開始時に保存した遷移先(returnTo)を返す', async () => {
+		const uid = await setupUser(true);
+		const context = await oAuthLoginService.issueSigninContext({ userId: uid, returnTo: '/settings/profile' });
+		vi.spyOn(userAuthService, 'twoFactorAuthenticate').mockResolvedValue(undefined);
+
+		const req = new DummyFastifyRequest({ context, token: '123456' }) as ApiFastifyRequestType;
+		const res = new DummyFastifyReply() as unknown as FastifyReply;
+		const body = await service.signin(req, res);
+		expect((body as any).finished).toBe(true);
+		expect((body as any).returnTo).toBe('/settings/profile');
 	});
 
 	it('誤ったTOTPトークンはサインインを確定させない(2FAバイパス防止)', async () => {

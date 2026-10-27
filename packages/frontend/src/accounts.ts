@@ -174,6 +174,18 @@ export async function refreshCurrentAccount() {
 	});
 }
 
+// 遷移先は同一オリジンの相対パスだけを許可する(オープンリダイレクト対策)。
+// URLとして解釈してオリジンを比較するため、"//evil" や制御文字混じりの値も弾ける
+function toSameOriginPath(redirect: string): string {
+	try {
+		const url = new URL(redirect, window.location.origin);
+		if (url.origin !== window.location.origin) return '/';
+		return url.pathname + url.search + url.hash;
+	} catch (_) {
+		return '/';
+	}
+}
+
 export async function login(token: AccountWithToken['token'], redirect?: string) {
 	const showing = ref(true);
 	const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkWaitingDialog.vue')), {
@@ -198,8 +210,8 @@ export async function login(token: AccountWithToken['token'], redirect?: string)
 	if (redirect) {
 		// 他のタブは再読み込みするだけ
 		reloadChannel.postMessage(null);
-		// このページはredirectで指定された先に移動
-		window.location.href = redirect;
+		// このページはredirectで指定された先に移動(同一オリジン内のみ)
+		window.location.href = toSameOriginPath(redirect);
 		return;
 	}
 

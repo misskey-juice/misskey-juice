@@ -141,6 +141,9 @@ export class SigninWithOAuthApiService {
 		}
 
 		await this.oAuthLoginService.consumeSigninContext(context);
-		return this.signinService.signin(request, reply, user);
+		const res = this.signinService.signin(request, reply, user);
+		// JUICE: 遷移先はURLクエリではなく、開始時にサーバー側で検証して
+		// コンテキストに保存した returnTo を返す(オープンリダイレクト対策)
+		return { ...res, returnTo: ctx.returnTo } satisfies Misskey.entities.SigninWithOAuthResponse;
 	}
 }
