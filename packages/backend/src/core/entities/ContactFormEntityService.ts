@@ -45,16 +45,18 @@ export class ContactFormEntityService {
 			updatedAt: contactForm.updatedAt?.toISOString() ?? null,
 			subject: contactForm.subject,
 			content: contactForm.content,
-			name: contactForm.name,
+			// JUICE: 送信者を特定できる情報はメールアドレス・IP以外(氏名・Misskeyユーザー名・
+			// 連携アカウント・User-Agent)もマスクする。返信に必要な場合はモデレーターへ回す
+			name: maskPii ? null : contactForm.name,
 			email: maskPii ? null : contactForm.email,
-			misskeyUsername: contactForm.misskeyUsername,
+			misskeyUsername: maskPii ? null : contactForm.misskeyUsername,
 			replyMethod: contactForm.replyMethod,
 			category: contactForm.category,
 			status: contactForm.status,
 			adminNote: contactForm.adminNote,
 			ipAddress: maskPii ? null : contactForm.ipAddress,
-			userAgent: contactForm.userAgent,
-			user: contactForm.user ? await this.userEntityService.pack(contactForm.user, undefined, { schema: 'UserLite' }) : null,
+			userAgent: maskPii ? null : contactForm.userAgent,
+			user: maskPii ? null : (contactForm.user ? await this.userEntityService.pack(contactForm.user, undefined, { schema: 'UserLite' }) : null),
 			assignedUser: contactForm.assignedUser ? await this.userEntityService.pack(contactForm.assignedUser, undefined, { schema: 'UserLite' }) : null,
 			assignedNickname: contactForm.assignedNickname,
 		};
