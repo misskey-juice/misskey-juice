@@ -76,9 +76,10 @@ export class OAuthLinkCallbackApiService {
 		}
 
 		const settings = resolveOauthLoginSettings(await this.juiceSettingsService.fetch());
+		const enabled = settings[`${state.provider}OauthEnabled`];
 		const clientId = settings[`${state.provider}OauthClientId`];
 		const clientSecret = settings[`${state.provider}OauthClientSecret`];
-		if (clientId == null || clientSecret == null) {
+		if (!enabled || clientId == null || clientSecret == null) {
 			this.failRedirect(reply, state.returnTo, 'providerDisabled');
 			return;
 		}
