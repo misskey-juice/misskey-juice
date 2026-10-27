@@ -37,6 +37,8 @@ export const meta = {
 	// 考える必要がある)。maxItemsとのバランスを取り、1日あたりの理論上限が単体版から極端に
 	// 増えすぎない範囲に絞っている
 	limit: {
+		// JUICE: create/create-many でバケットを共有し、日次上限を合算で効かせる
+		key: 'avatar-decoration-requests/create',
 		duration: ms('1day'),
 		max: 5,
 	},

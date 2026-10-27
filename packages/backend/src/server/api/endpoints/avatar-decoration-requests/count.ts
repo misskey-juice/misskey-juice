@@ -82,7 +82,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const policies = await this.roleService.getUserPolicies(me.id);
 			const usage = await this.rateLimiterService.peekUsage({
-				key: 'avatar-decoration-requests/create-many',
+				key: 'avatar-decoration-requests/create',
 				duration: ms('1day'),
 				max: policies.avatarDecorationRequestDailyLimit,
 			}, me.id, policies.rateLimitFactor);
