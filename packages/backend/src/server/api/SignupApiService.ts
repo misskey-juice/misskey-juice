@@ -5,6 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
+import * as Redis from 'ioredis';
 import { IsNull, LessThanOrEqual } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { RegistrationTicketsRepository, SignupApprovalChecksRepository, UsedUsernamesRepository, UserPendingsRepository, UserProfilesRepository, UsersRepository, MiRegistrationTicket, MiMeta } from '@/models/_.js';
@@ -22,6 +23,7 @@ import { MiLocalUser } from '@/models/User.js';
 import { FastifyReplyError } from '@/misc/fastify-reply-error.js';
 import { bindThis } from '@/decorators.js';
 import { L_CHARS, secureRndstr } from '@/misc/secure-rndstr.js';
+import { markSignupCheckCodeSeen } from '@/misc/signup-check-seen.js';
 import { SigninService } from './SigninService.js';
 import type { FindOptionsWhere } from 'typeorm';
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -55,6 +57,9 @@ export class SignupApiService {
 		@Inject(DI.signupApprovalChecksRepository)
 		private signupApprovalChecksRepository: SignupApprovalChecksRepository,
 
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
+
 		private userEntityService: UserEntityService,
 		private idService: IdService,
 		private captchaService: CaptchaService,
@@ -82,6 +87,8 @@ export class SignupApiService {
 			username,
 			signupReason,
 		});
+		// JUICE: 申請した本人の端末はこのコードを保存して、あとでcaptchaなしで確認する(juice/signup-check-status)
+		await markSignupCheckCodeSeen(this.redisClient, code);
 		return code;
 	}
 

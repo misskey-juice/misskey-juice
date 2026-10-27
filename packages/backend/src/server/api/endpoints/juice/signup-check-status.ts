@@ -4,12 +4,14 @@
  */
 
 import ms from 'ms';
+import * as Redis from 'ioredis';
 import { Inject, Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { MiMeta, SignupApprovalChecksRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { CaptchaService } from '@/core/CaptchaService.js';
 import { ApiError } from '@/server/api/error.js';
+import { markSignupCheckCodeSeen, touchSignupCheckCodeSeen } from '@/misc/signup-check-seen.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -54,8 +56,9 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		code: { type: 'string', minLength: 1 },
-		// JUICE: 端末に保存済みのコードを画面表示のたびに黙って再確認する経路(isNewSubmission省略)ではcaptchaを要求しない。
-		// 新規にコードを追加して確認するとき(isNewSubmission: true)のみcaptchaを必須にする。
+		// JUICE: 端末に保存済みのコードを画面表示のたびに黙って再確認する経路ではcaptchaを要求しない。
+		// 「新規かどうか」はこの申告だけでは判定できないため、サーバー側でコードの初出を記録し、
+		// 初出のコードについては申告の有無によらずcaptchaを必須にする(下記ハンドラ参照)。
 		isNewSubmission: { type: 'boolean', default: false },
 		'hcaptcha-response': { type: 'string', nullable: true },
 		'g-recaptcha-response': { type: 'string', nullable: true },
@@ -75,11 +78,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.signupApprovalChecksRepository)
 		private signupApprovalChecksRepository: SignupApprovalChecksRepository,
 
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
+
 		private captchaService: CaptchaService,
 	) {
 		super(meta, paramDef, async (ps) => {
-			// JUICE
-			if (ps.isNewSubmission) {
+			// JUICE: isNewSubmission は呼び出し側の自己申告であり、攻撃者は常に false を送れる。
+			// そのため「一度見たコード」をサーバー側(Redis)で記録し、記録の無いコードでは申告によらず
+			// captcha を必須にする。登録のときに発行したコードも記録するので、端末に保存したコードの
+			// 再確認は captcha なしで通り、未知のコードの総当たりには毎回 captcha が要る
+			const seen = !ps.isNewSubmission && await touchSignupCheckCodeSeen(this.redisClient, ps.code);
+
+			if (!seen) {
 				await this.captchaService.verifyRequestCaptcha(this.serverSettings, {
 					hcaptcha: ps['hcaptcha-response'],
 					mcaptcha: ps['m-captcha-response'],
@@ -89,6 +100,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}).catch(err => {
 					throw new ApiError(meta.errors.captchaFailed, { message: err.message });
 				});
+
+				await markSignupCheckCodeSeen(this.redisClient, ps.code);
 			}
 
 			const check = await this.signupApprovalChecksRepository.findOneBy({ code: ps.code });
