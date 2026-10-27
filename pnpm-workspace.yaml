@@ -38,6 +38,8 @@ minimumReleaseAgeExclude:
   - '@misskey-dev/*'
   - '@syuilo/aiscript'
   - buraha
+  # happy-dom 21.0.4(セキュリティ修正、2026-10-20 18:05 UTC公開)が7日たつ前に入れるための一時的な除外。7日たったら消す
+  - happy-dom
   - mfm-js
   - slacc
   - slacc-android-arm-eabi
@@ -57,8 +59,15 @@ overrides:
   '@aiscript-dev/aiscript-languageserver': '-'
   chokidar: 5.0.0
   lodash: 4.18.1
-  undici@^7: 7.29.1
-  undici@^6: 6.28.1
+  undici@^7: 7.30.1
+  undici@^6: 6.29.1
+  undici@^8: 8.12.2
+  fast-uri@^3: 3.1.9
+  fast-uri@^4: 4.2.3
+  ip-address@^9: 10.7.4
+  uuid@^9: 11.1.1
+  uuid@^11: 11.1.1
+  '@misskey-dev/summaly>fastify': 5.12.6
   '@tabler/icons-webfont>sharp': '-'
 engineStrict: true
 saveExact: true
