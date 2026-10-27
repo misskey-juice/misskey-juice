@@ -116,14 +116,19 @@ describe('SigninWithOAuthApiService', () => {
 		expect((body as any).error?.id).toStrictEqual('2d16e51c-007b-4edd-afd2-f7dd02c947f6');
 	});
 
-	it('2段階認証が無効なアカウントは(念のための防御的分岐として)即座にサインインする', async () => {
+	it('2段階認証が無効なアカウントは不整合な状態としてサインインを拒否する', async () => {
 		const uid = await setupUser(false);
 		const context = await oAuthLoginService.issueSigninContext({ userId: uid, returnTo: null });
 
 		const req = new DummyFastifyRequest({ context }) as ApiFastifyRequestType;
 		const res = new DummyFastifyReply() as unknown as FastifyReply;
 		const body = await service.signin(req, res);
-		expect((body as any).finished).toBe(true);
+		expect(res.statusCode).toBe(403);
+		expect((body as any).error?.id).toStrictEqual('1a05cc1b-65e8-42c2-966a-dfa66f692999');
+
+		// 不整合な状態で発行されたcontextは消費され、再利用できない
+		const consumed = await oAuthLoginService.getSigninContext(context);
+		expect(consumed).toBeNull();
 	});
 
 	it('2段階認証が有効なアカウントは、tokenが無ければ next: totp を返す(サインインは確定しない)', async () => {

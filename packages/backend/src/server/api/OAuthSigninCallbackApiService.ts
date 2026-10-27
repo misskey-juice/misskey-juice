@@ -156,7 +156,7 @@ export class OAuthSigninCallbackApiService {
 		}
 
 		const userProfile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
-		if (!userProfile.useOauthLogin) {
+		if (!userProfile.useOauthLogin || !userProfile.twoFactorEnabled) {
 			await this.notifyFailure(user.id);
 			await this.signinsRepository.insert({
 				id: this.idService.gen(),

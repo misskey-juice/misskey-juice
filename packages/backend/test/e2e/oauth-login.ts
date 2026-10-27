@@ -6,6 +6,7 @@
 import * as assert from 'node:assert';
 import { describe, beforeAll, afterEach, test } from 'vitest';
 import { DataSource } from 'typeorm';
+import * as OTPAuth from 'otpauth';
 import { SignupSuccessResponse } from 'misskey-js/entities.js';
 import { MiUserOauthConnection } from '@/models/UserOauthConnection.js';
 import { MiUserProfile } from '@/models/UserProfile.js';
@@ -288,6 +289,46 @@ describe('連携ログイン(OAuth) (JUICE)', () => {
 			await successfulApiCall({ endpoint: 'i/oauth/set-login-enabled', parameters: { value: false }, user: alice }, { status: 204 });
 			const me2 = await successfulApiCall({ endpoint: 'i', parameters: {}, user: alice });
 			assert.strictEqual((me2 as any).useOauthLogin, false);
+		});
+	});
+
+	describe('2段階認証を解除したとき', () => {
+		// 2段階認証(TOTP)と連携ログインを両方有効にしたユーザーを作る
+		async function signupWithOauthLogin(providerUserId: string) {
+			const user = await signup();
+			const secret = new OTPAuth.Secret();
+			await db.getRepository(MiUserProfile).update({ userId: user.id }, { twoFactorEnabled: true, twoFactorSecret: secret.base32 });
+			await db.getRepository(MiUserOauthConnection).insert({
+				id: idService.gen(),
+				userId: user.id,
+				provider: 'github',
+				providerUserId,
+				providerUsername: `${user.username}-gh`,
+				linkedAt: new Date(),
+			});
+			await successfulApiCall({ endpoint: 'i/oauth/set-login-enabled', parameters: { value: true }, user }, { status: 204 });
+			return { user, secret };
+		}
+
+		test('本人が解除すると、連携ログインも無効になる', async () => {
+			const { user: alice, secret } = await signupWithOauthLogin('gh-uid-unregister');
+			const token = OTPAuth.TOTP.generate({ secret, digits: 6, period: 30, algorithm: 'SHA1' });
+
+			await successfulApiCall({ endpoint: 'i/2fa/unregister', parameters: { password: 'test', token }, user: alice }, { status: 204 });
+
+			const profile = await db.getRepository(MiUserProfile).findOneByOrFail({ userId: alice.id });
+			assert.strictEqual(profile.twoFactorEnabled, false);
+			assert.strictEqual(profile.useOauthLogin, false);
+		});
+
+		test('モデレーターがリセットすると、連携ログインも無効になる', async () => {
+			const { user: alice } = await signupWithOauthLogin('gh-uid-unset-mfa');
+
+			await successfulApiCall({ endpoint: 'admin/unset-mfa', parameters: { userId: alice.id }, user: root }, { status: 204 });
+
+			const profile = await db.getRepository(MiUserProfile).findOneByOrFail({ userId: alice.id });
+			assert.strictEqual(profile.twoFactorEnabled, false);
+			assert.strictEqual(profile.useOauthLogin, false);
 		});
 	});
 
