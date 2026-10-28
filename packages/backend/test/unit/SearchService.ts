@@ -9,7 +9,7 @@ import type { Index, Meilisearch } from 'meilisearch';
 import { type Config, loadConfig } from '@/config.js';
 import { GlobalModule } from '@/GlobalModule.js';
 import { CoreModule } from '@/core/CoreModule.js';
-import { buildPgroongaKeywordClauses, SearchService } from '@/core/SearchService.js';
+import { buildPgroongaKeywordClauses, SEARCH_MAX_EXCLUDE_KEYWORDS, SEARCH_MAX_KEYWORDS, SearchService } from '@/core/SearchService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { IdService } from '@/core/IdService.js';
 import { DI } from '@/di-symbols.js';
@@ -823,5 +823,22 @@ describe('buildPgroongaKeywordClauses', () => {
 		]);
 		const allParamNames = [...mainClauses, ...excludeClauses].map(c => Object.keys(c.param)[0]);
 		expect(new Set(allParamNames).size).toBe(allParamNames.length);
+	});
+
+	test('drops duplicate keywords', () => {
+		const clauses = buildPgroongaKeywordClauses('foo bar foo');
+		expect(clauses.map(c => c.param[Object.keys(c.param)[0]])).toEqual(['foo', 'bar']);
+	});
+
+	test('caps the number of keywords', () => {
+		const keywords = Array.from({ length: SEARCH_MAX_KEYWORDS + 10 }, (_, i) => `k${i}`);
+		const clauses = buildPgroongaKeywordClauses(keywords.join(' '));
+		expect(clauses.map(c => c.param[Object.keys(c.param)[0]])).toEqual(keywords.slice(0, SEARCH_MAX_KEYWORDS));
+	});
+
+	test('accepts a larger cap for exclude words', () => {
+		const keywords = Array.from({ length: SEARCH_MAX_EXCLUDE_KEYWORDS + 10 }, (_, i) => `k${i}`);
+		const clauses = buildPgroongaKeywordClauses(keywords.join(' '), 'pgroongaExcludeKeyword', SEARCH_MAX_EXCLUDE_KEYWORDS);
+		expect(clauses.length).toBe(SEARCH_MAX_EXCLUDE_KEYWORDS);
 	});
 });

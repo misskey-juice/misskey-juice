@@ -73,6 +73,16 @@ export type SearchPagination = {
 	limit: number;
 };
 
+// JUICE: キーワードの数だけ検索の条件が増えて重くなるため、重複を除いたうえで先頭から一定数までにする
+export const SEARCH_MAX_KEYWORDS = 16;
+// 除外ワードは1個に空白を含められ(フロントはカンマ区切りで送る)、pgroongaでは空白で分けた語ごとに条件を作るため、
+// APIの30個より多めにする。普通の使い方で切られることは無く、極端に長い入力だけを抑える
+export const SEARCH_MAX_EXCLUDE_KEYWORDS = 128;
+
+export function splitSearchKeywords(q: string, maxKeywords = SEARCH_MAX_KEYWORDS): string[] {
+	return [...new Set(q.split(/\s+/).filter(keyword => keyword.length > 0))].slice(0, maxKeywords);
+}
+
 // JUICE: `&@~`(PGroongaのクエリ構文演算子)はユーザー入力をそのままクエリ構文としてパースするため、
 // 単語に`-`や`(`等の記号が混ざっただけで構文エラーになりうる。単純な「含む」判定の`&@`演算子を
 // キーワードごとにAND連結することで、構文パースを経由せず(=構文エラーが起きえない)従来通りの
@@ -80,9 +90,8 @@ export type SearchPagination = {
 // JUICE: 除外ワード(NOT句)にも同じ関数を使い回せるよう、パラメータ名のプレフィックスを引数化できる
 // ようにしてある。本文検索節と除外節を同じプレフィックスで呼ぶとバインドパラメータ名が衝突し、
 // 片方の値がもう片方を上書きしてしまう(実際に踏んだ不具合)ため、呼び出し側で必ず別々のプレフィックスを渡すこと。
-export function buildPgroongaKeywordClauses(q: string, paramPrefix = 'pgroongaKeyword'): { sql: string, param: Record<string, string> }[] {
-	return q.split(/\s+/)
-		.filter(keyword => keyword.length > 0)
+export function buildPgroongaKeywordClauses(q: string, paramPrefix = 'pgroongaKeyword', maxKeywords = SEARCH_MAX_KEYWORDS): { sql: string, param: Record<string, string> }[] {
+	return splitSearchKeywords(q, maxKeywords)
 		.map((keyword, i) => ({
 			sql: `note.text &@ :${paramPrefix}${i}`,
 			param: { [`${paramPrefix}${i}`]: keyword },
@@ -350,13 +359,13 @@ export class SearchService {
 				// JUICE: 本文検索節と同じパラメータ名プレフィックスを使うと、TypeORMの
 				// バインドパラメータが衝突して片方の値がもう片方を上書きしてしまうため、
 				// 除外ワード側は別プレフィックスを使う
-				for (const clause of buildPgroongaKeywordClauses(excludeWords.join(' '), 'pgroongaExcludeKeyword')) {
+				for (const clause of buildPgroongaKeywordClauses(excludeWords.join(' '), 'pgroongaExcludeKeyword', SEARCH_MAX_EXCLUDE_KEYWORDS)) {
 					query.andWhere(`NOT (${clause.sql})`, clause.param);
 				}
 			}
 		} else if (q !== '' || excludeWords.length > 0) {
 			if (q !== '') {
-				const keywords = q.split(/\s+/).filter(keyword => keyword.length > 0);
+				const keywords = splitSearchKeywords(q);
 				if (opts.searchOperator === 'or' && keywords.length > 0) {
 					const params: Record<string, string> = {};
 					const sql = keywords.map((keyword, i) => {
