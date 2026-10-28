@@ -38,8 +38,6 @@ minimumReleaseAgeExclude:
   - '@misskey-dev/*'
   - '@syuilo/aiscript'
   - buraha
-  # happy-dom 21.0.4(セキュリティ修正、2026-10-20 18:05 UTC公開)が7日たつ前に入れるための一時的な除外。7日たったら消す
-  - happy-dom
   - mfm-js
   - slacc
   - slacc-android-arm-eabi
