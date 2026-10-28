@@ -4,8 +4,10 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { AnnouncementReactionsRepository, EmojisRepository, MiAnnouncement, MiAnnouncementReaction, MiUser } from '@/models/_.js';
+import { MiAnnouncementReaction } from '@/models/AnnouncementReaction.js';
+import type { AnnouncementReactionsRepository, EmojisRepository, MiAnnouncement, MiUser } from '@/models/_.js';
 import { IdService } from '@/core/IdService.js';
 import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { ReactionService } from '@/core/ReactionService.js';
@@ -23,6 +25,9 @@ const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
 @Injectable()
 export class AnnouncementReactionService {
 	constructor(
+		@Inject(DI.db)
+		private db: DataSource,
+
 		@Inject(DI.announcementReactionsRepository)
 		private announcementReactionsRepository: AnnouncementReactionsRepository,
 
@@ -68,6 +73,20 @@ export class AnnouncementReactionService {
 		return `:${name}:`;
 	}
 
+	/**
+	 * リクエストされたリアクション文字列を、保存されている形(`:name:` またはUnicode絵文字)に変換する。
+	 * 絵文字があるか・使えるかは確かめない。
+	 */
+	@bindThis
+	private toStoredReaction(reaction: string | null | undefined): string {
+		if (reaction == null) return FALLBACK;
+
+		const custom = reaction.match(isCustomEmojiRegexp);
+		if (custom != null) return `:${custom[1]}:`;
+
+		return this.reactionService.normalize(reaction);
+	}
+
 	@bindThis
 	public async create(user: { id: MiUser['id']; host: MiUser['host'] }, announcement: MiAnnouncement, _reaction?: string | null): Promise<void> {
 		const reaction = await this.normalizeReaction(user, _reaction);
@@ -75,15 +94,6 @@ export class AnnouncementReactionService {
 		// JUICE: 1件のお知らせに付けられるリアクションの種類数をロールポリシーで制限する。
 		// 既に付いている種類への追加(誰かがもう使っている絵文字への相乗り)は上限に関わらず許可する
 		const { announcementReactionTypeLimit } = await this.roleService.getUserPolicies(user.id);
-		const existingReactionTypes = await this.announcementReactionsRepository
-			.createQueryBuilder('reaction')
-			.select('DISTINCT reaction.reaction', 'reaction')
-			.where('reaction.announcementId = :announcementId', { announcementId: announcement.id })
-			.getRawMany<{ reaction: string }>();
-
-		if (!existingReactionTypes.some(r => r.reaction === reaction) && existingReactionTypes.length >= announcementReactionTypeLimit) {
-			throw new IdentifiableError('dc1dd554-8eee-4558-a6d6-9b325b993dde', 'Too many reaction types on that announcement.');
-		}
 
 		const record: MiAnnouncementReaction = {
 			id: this.idService.gen(),
@@ -93,7 +103,23 @@ export class AnnouncementReactionService {
 		};
 
 		try {
-			await this.announcementReactionsRepository.insert(record);
+			// 種類数の確認から追加までの間に、別のリクエストが新しい種類を足して上限を超えないよう、
+			// お知らせごとのadvisory lockで直列化する
+			await this.db.transaction(async em => {
+				await em.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`announcementReaction:${announcement.id}`]);
+
+				const existingReactionTypes = await em
+					.createQueryBuilder(MiAnnouncementReaction, 'reaction')
+					.select('DISTINCT reaction.reaction', 'reaction')
+					.where('reaction.announcementId = :announcementId', { announcementId: announcement.id })
+					.getRawMany<{ reaction: string }>();
+
+				if (!existingReactionTypes.some(r => r.reaction === reaction) && existingReactionTypes.length >= announcementReactionTypeLimit) {
+					throw new IdentifiableError('dc1dd554-8eee-4558-a6d6-9b325b993dde', 'Too many reaction types on that announcement.');
+				}
+
+				await em.insert(MiAnnouncementReaction, record);
+			});
 		} catch (e) {
 			if (isDuplicateKeyValueError(e)) {
 				throw new IdentifiableError('0b0d5c9f-0c07-4f0e-8a3d-6f6a4a2b0a4f', 'You are already reacting to that announcement.');
@@ -110,13 +136,26 @@ export class AnnouncementReactionService {
 
 	@bindThis
 	public async delete(user: { id: MiUser['id'] }, announcement: MiAnnouncement, _reaction?: string | null): Promise<void> {
-		const reaction = await this.normalizeReaction(user, _reaction);
-
-		const exist = await this.announcementReactionsRepository.findOneBy({
+		// 付けた後に絵文字が消えたり使えなくなったりしても外せるよう、createと違って絵文字があるか・使えるかは確かめず、
+		// 保存したときと同じ形に変えるだけで探す
+		const storedReaction = this.toStoredReaction(_reaction);
+		let exist = await this.announcementReactionsRepository.findOneBy({
 			announcementId: announcement.id,
 			userId: user.id,
-			reaction,
+			reaction: storedReaction,
 		});
+
+		// 使えないカスタム絵文字で付けたものはFALLBACKで保存されているため、createと同じ正規化でも探す
+		if (exist == null) {
+			const normalizedReaction = await this.normalizeReaction(user, _reaction);
+			if (normalizedReaction !== storedReaction) {
+				exist = await this.announcementReactionsRepository.findOneBy({
+					announcementId: announcement.id,
+					userId: user.id,
+					reaction: normalizedReaction,
+				});
+			}
+		}
 
 		if (exist == null) {
 			throw new IdentifiableError('9f2b4d1e-3c8a-4b6f-9d0e-7a1c5b8e2f30', 'You are not reacting to that announcement.');
