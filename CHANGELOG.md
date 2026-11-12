@@ -1,3 +1,15 @@
+## 2026.11.0-juice+5.0
+
+### Note
+- 本家と同じく、Node.js v22では起動しなくなった。Node.js v24.22.3 / v26.13.1 以上が要る。起動は `node scripts/start.mjs`(`--migrate` を付けるとmigrationも流す)が新しい方法で、`pnpm start` / `pnpm migrateandstart` も使える。詳しくは下の「2026.11.0」を参照
+
+### General
+- 本家Misskey 2026.11.0の変更をすべて取り込み(メモリ使用量の削減・起動スクリプトの新設・Mastodonなどの引用の表示の改善など)。詳細は下記の「2026.11.0」を参照
+
+### Server
+- Enhance: ユーザーの情報を返すとき、自分が付けたニックネームを、表示するユーザーの分だけ読むように(本家のメモの読み方の変更に合わせた)
+- Migration: 本家の `1794385801836-FixMetaMigratedConfigColumnDefaults`
+
 ## 2026.10.1-juice+4.12
 
 ### Note
