@@ -290,8 +290,8 @@ const log = process.env.NODE_ENV !== 'production';
 
 export function createPostgresDataSource(config: Config) {
 	// NODE_ENV=testのときsynchronize/dropSchemaをtrueにするため、接続先が本当にtest用DBかを
-	// 確認しておく(JUICE)。built/.config.jsonはNODE_ENVによってdefault.yml/test.ymlどちらからでも
-	// 生成されるため、環境変数だけを信用すると設定と実際の接続先がズレたときに開発用DBを消してしまう。
+	// 確認しておく(JUICE)。読む設定ファイル(default.yml/test.yml)は環境変数で変わるため、
+	// 環境変数だけを信用すると設定と実際の接続先がズレたときに開発用DBを消してしまう。
 	if (process.env.NODE_ENV === 'test') {
 		assertTestDatabaseName(config.db.db, 'createPostgresDataSource');
 	}
