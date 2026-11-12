@@ -8,13 +8,13 @@ import type { DataSource } from 'typeorm';
 /**
  * 開発用DBを誤って消さないためのガード。
  *
- * `built/.config.json` は NODE_ENV によって default.yml / test.yml のどちらからでも
- * 生成されるため、環境変数だけを信用すると設定と実際の接続先がズレたときに
+ * 読む設定ファイル(default.yml / test.yml)は NODE_ENV や MISSKEY_CONFIG_YML で変わるため、
+ * 環境変数だけを信用すると設定と実際の接続先がズレたときに
  * 開発用DBを削除してしまう。実際の接続先DB名を検証しておく。
  */
 export function assertTestDatabaseName(database: unknown, context: string) {
 	if (typeof database !== 'string' || !database.includes('test')) {
-		throw new Error(`${context}: refusing to reset/sync a database that does not look like a test database (database=${String(database)}). Check built/.config.json — it may have been generated from default.yml.`);
+		throw new Error(`${context}: refusing to reset/sync a database that does not look like a test database (database=${String(database)}). Check which config file was loaded — it may be default.yml.`);
 	}
 }
 

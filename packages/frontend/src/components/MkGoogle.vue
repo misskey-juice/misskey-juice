@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import { buildSearchUrl, searchEngineName } from '@/utility/juice-search-engines.js';
@@ -24,6 +24,9 @@ const props = defineProps<{
 const query = ref(props.q);
 
 const engineName = computed(() => searchEngineName(prefer.r.mfmSearchEngine.value, prefer.r.mfmSearchEngineCustomUrl.value));
+watch(() => props.q, (v) => {
+	query.value = v;
+});
 
 const search = () => {
 	window.open(buildSearchUrl(prefer.s.mfmSearchEngine, prefer.s.mfmSearchEngineCustomUrl, query.value), '_blank', 'noopener');
