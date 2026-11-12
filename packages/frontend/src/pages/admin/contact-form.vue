@@ -61,7 +61,7 @@ fetchCategories({ includeDisabled: true });
 
 const status = ref('all');
 const category = ref('all');
-const assignedUser = ref<Misskey.entities.UserDetailed | null>(null);
+const assignedUser = ref<Misskey.entities.UserLite | null>(null);
 
 const statusOptions = [
 	{ value: 'all', label: i18n.ts.all },
