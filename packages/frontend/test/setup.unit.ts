@@ -62,9 +62,10 @@ export const preferState: Record<string, unknown> = {
 
 	// JUICE: MkMfmで読む(ネコの投稿をネコミミだけにする設定)
 	disableNoteNyaize: false,
+	mediaVolume: 0.25,
 };
 
-export let preferReactive: Record<string, Ref<unknown>> = {};
+export const preferReactive: Record<string, Ref<unknown>> = {};
 
 for (const key in preferState) {
 	if (preferState[key] !== undefined) {
@@ -74,7 +75,6 @@ for (const key in preferState) {
 
 // XXX: store somehow becomes undefined in vitest?
 vi.mock('@/preferences.js', () => {
-
 	return {
 		prefer: {
 			s: preferState,
